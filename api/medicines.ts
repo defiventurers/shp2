@@ -1,7 +1,7 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+// api/medicines.ts
 import { getMedicines } from "./storage-medicines";
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default function handler(req: any, res: any) {
   try {
     if (req.method !== "GET") {
       return res.status(405).json({ message: "Method not allowed" });
@@ -15,4 +15,3 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ message: "Failed to fetch medicines" });
   }
 }
-
