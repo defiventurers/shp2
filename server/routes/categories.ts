@@ -1,20 +1,10 @@
-import type { Express, Request, Response } from "express";
+import type { Express } from "express";
+import { db } from "../db";
+import { categories } from "@shared/schema";
 
 export function registerCategoryRoutes(app: Express) {
-  /**
-   * GET /api/categories
-   */
-  app.get("/api/categories", async (_req: Request, res: Response) => {
-    try {
-      // TODO: replace with Drizzle query later
-      res.json({
-        success: true,
-        categories: [],
-      });
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-      res.status(500).json({ message: "Failed to fetch categories" });
-    }
+  app.get("/api/categories", async (_req, res) => {
+    const data = await db.select().from(categories);
+    res.json({ success: true, categories: data });
   });
 }
-
