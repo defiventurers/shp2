@@ -76,12 +76,11 @@ app.use((req, res, next) => {
   });
 
   // Serve frontend assets
-  if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
-  } else {
-    const { setupVite } = await import("./vite");
-    await setupVite(httpServer, app);
-  }
+if (process.env.NODE_ENV !== "production") {
+  const { setupVite } = await import("./vite");
+  await setupVite(httpServer, app);
+}
+
 
   // Render-compatible port binding
   const port = parseInt(process.env.PORT || "3000", 10);
