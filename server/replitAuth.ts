@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 
 /**
- * Replit authentication is DISABLED outside Replit.
+ * Auth is disabled outside Replit.
  * This stub prevents openid-client from ever loading.
  */
 
