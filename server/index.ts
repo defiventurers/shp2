@@ -7,6 +7,19 @@ import { seedDatabase } from "./seed";
 const app = express();
 
 /* -----------------------------
+   ✅ CORS (MUST BE FIRST)
+------------------------------ */
+app.use(
+  cors({
+    origin: [
+      "https://shp2.vercel.app",
+      "http://localhost:5173"
+    ],
+    credentials: true,
+  })
+);
+
+/* -----------------------------
    Raw body support (payments)
 ------------------------------ */
 declare module "http" {
@@ -27,19 +40,6 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
-
-/* -----------------------------
-   ✅ CORS (CRITICAL FIX)
------------------------------- */
-app.use(
-  cors({
-    origin: [
-      "https://shp2.vercel.app",
-      "http://localhost:5173",
-    ],
-    credentials: true,
-  })
-);
 
 /* -----------------------------
    Logger
@@ -112,7 +112,6 @@ app.use((req, res, next) => {
 
   // ✅ Render-required port
   const port = parseInt(process.env.PORT || "10000", 10);
-
   const server = http.createServer(app);
 
   server.listen(port, "0.0.0.0", () => {
