@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import http from "http";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { seedDatabase } from "./seed";
 
@@ -14,6 +15,9 @@ declare module "http" {
   }
 }
 
+/* -----------------------------
+   Body parsers
+------------------------------ */
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -23,6 +27,19 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+/* -----------------------------
+   ✅ CORS (CRITICAL FIX)
+------------------------------ */
+app.use(
+  cors({
+    origin: [
+      "https://shp2.vercel.app",
+      "http://localhost:5173",
+    ],
+    credentials: true,
+  })
+);
 
 /* -----------------------------
    Logger
