@@ -9,6 +9,9 @@ import { MedicineCard } from "@/components/MedicineCard";
 import { InventorySkeleton } from "@/components/LoadingSpinner";
 import type { Medicine, Category } from "@shared/schema";
 
+/* -----------------------------
+   API response shapes
+------------------------------ */
 type MedicinesResponse = {
   success: boolean;
   medicines: Medicine[];
@@ -24,19 +27,28 @@ export default function Inventory() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
+  /* -----------------------------
+     Fetch medicines
+  ------------------------------ */
   const {
     data: medicines = [],
     isLoading: medicinesLoading,
   } = useQuery<MedicinesResponse>({
     queryKey: ["/api/medicines"],
-    select: (data) => data.medicines,
+    select: (res) => res.medicines,
   });
 
+  /* -----------------------------
+     Fetch categories
+  ------------------------------ */
   const { data: categories = [] } = useQuery<CategoriesResponse>({
     queryKey: ["/api/categories"],
-    select: (data) => data.categories,
+    select: (res) => res.categories,
   });
 
+  /* -----------------------------
+     Filtering logic
+  ------------------------------ */
   const filteredMedicines = useMemo(() => {
     return medicines.filter((medicine) => {
       const matchesSearch =
@@ -63,6 +75,9 @@ export default function Inventory() {
   const hasActiveFilters =
     Boolean(searchQuery) || Boolean(selectedCategory) || showOnlyInStock;
 
+  /* -----------------------------
+     Render
+  ------------------------------ */
   return (
     <div className="min-h-screen bg-background pb-20">
       <div className="sticky top-14 z-30 bg-background border-b border-border">
