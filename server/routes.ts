@@ -1,22 +1,34 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 export async function registerRoutes(app: Express) {
-  // Auth completely disabled outside Replit
-  console.log("Auth disabled (non-Replit environment)");
+  // Setup auth (safe in all environments)
+  setupAuth(app);
+
+  // -------------------------
+  // PUBLIC ROUTES (NO AUTH)
+  // -------------------------
 
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  // No auth guard
-  app.use("/api", (_req: Request, _res: Response, next: NextFunction) => next());
+  // IMPORTANT:
+  // Only enforce auth on Replit
+  if (process.env.REPL_ID) {
+    app.use("/api", isAuthenticated);
+  }
 
-  // KEEP ALL YOUR EXISTING ROUTES BELOW THIS COMMENT
+  // -------------------------
+  // API ROUTES (UNCHANGED)
+  // -------------------------
   // medicines
   // categories
   // orders
   // uploads
   // etc.
+  //
+  // (your existing routes stay exactly where they are)
 
   return app;
 }
