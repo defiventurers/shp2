@@ -1,19 +1,10 @@
-import type { Express, Request, Response } from "express";
+import type { Express } from "express";
+import { db } from "../db";
+import { orders } from "@shared/schema";
 
 export function registerOrderRoutes(app: Express) {
-  /**
-   * GET /api/orders
-   */
-  app.get("/api/orders", async (_req: Request, res: Response) => {
-    try {
-      // TODO: replace with Drizzle query later
-      res.json({
-        success: true,
-        orders: [],
-      });
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-      res.status(500).json({ message: "Failed to fetch orders" });
-    }
+  app.get("/api/orders", async (_req, res) => {
+    const data = await db.select().from(orders);
+    res.json({ success: true, orders: data });
   });
 }
