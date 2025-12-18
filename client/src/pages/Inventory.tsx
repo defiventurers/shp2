@@ -9,17 +9,32 @@ import { MedicineCard } from "@/components/MedicineCard";
 import { InventorySkeleton } from "@/components/LoadingSpinner";
 import type { Medicine, Category } from "@shared/schema";
 
+type MedicinesResponse = {
+  success: boolean;
+  medicines: Medicine[];
+};
+
+type CategoriesResponse = {
+  success: boolean;
+  categories: Category[];
+};
+
 export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
-  const { data: medicines = [], isLoading: medicinesLoading } = useQuery<Medicine[]>({
+  const {
+    data: medicines = [],
+    isLoading: medicinesLoading,
+  } = useQuery<MedicinesResponse>({
     queryKey: ["/api/medicines"],
+    select: (data) => data.medicines,
   });
 
-  const { data: categories = [] } = useQuery<Category[]>({
+  const { data: categories = [] } = useQuery<CategoriesResponse>({
     queryKey: ["/api/categories"],
+    select: (data) => data.categories,
   });
 
   const filteredMedicines = useMemo(() => {
@@ -45,7 +60,8 @@ export default function Inventory() {
     setShowOnlyInStock(false);
   };
 
-  const hasActiveFilters = searchQuery || selectedCategory || showOnlyInStock;
+  const hasActiveFilters =
+    Boolean(searchQuery) || Boolean(selectedCategory) || showOnlyInStock;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -59,7 +75,6 @@ export default function Inventory() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 pr-9"
-              data-testid="input-search"
             />
             {searchQuery && (
               <button
@@ -77,24 +92,23 @@ export default function Inventory() {
                 variant={showOnlyInStock ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowOnlyInStock(!showOnlyInStock)}
-                className="flex-shrink-0"
-                data-testid="filter-in-stock"
               >
                 <Filter className="w-3 h-3 mr-1" />
                 In Stock
               </Button>
-              
+
               {categories.map((category) => (
                 <Badge
                   key={category.id}
-                  variant={selectedCategory === category.id ? "default" : "secondary"}
-                  className="cursor-pointer flex-shrink-0"
+                  variant={
+                    selectedCategory === category.id ? "default" : "secondary"
+                  }
+                  className="cursor-pointer"
                   onClick={() =>
                     setSelectedCategory(
                       selectedCategory === category.id ? null : category.id
                     )
                   }
-                  data-testid={`filter-category-${category.id}`}
                 >
                   {category.name}
                 </Badge>
@@ -108,12 +122,7 @@ export default function Inventory() {
               <p className="text-xs text-muted-foreground">
                 {filteredMedicines.length} results found
               </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                className="text-xs h-7"
-              >
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
                 Clear all
               </Button>
             </div>
@@ -126,20 +135,11 @@ export default function Inventory() {
           <InventorySkeleton />
         ) : filteredMedicines.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-              <Search className="w-8 h-8 text-muted-foreground" />
-            </div>
+            <Search className="w-8 h-8 text-muted-foreground mb-4" />
             <h3 className="font-medium text-lg mb-1">No medicines found</h3>
-            <p className="text-muted-foreground text-sm max-w-xs">
-              {searchQuery
-                ? `No results for "${searchQuery}". Try a different search term.`
-                : "No medicines match your current filters."}
+            <p className="text-muted-foreground text-sm">
+              No medicines match your current filters.
             </p>
-            {hasActiveFilters && (
-              <Button variant="outline" onClick={clearFilters} className="mt-4">
-                Clear filters
-              </Button>
-            )}
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
