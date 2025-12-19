@@ -1,8 +1,8 @@
 import type { Express } from "express";
+import { registerAuthRoutes } from "./auth";
 import { registerMedicineRoutes } from "./medicines";
 import { registerCategoryRoutes } from "./categories";
 import { registerOrderRoutes } from "./orders";
-import { registerAuthRoutes } from "./auth";
 
 export function registerRoutes(app: Express) {
   registerAuthRoutes(app);
