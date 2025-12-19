@@ -1,3 +1,5 @@
+console.log("🔥 SERVER INDEX EXECUTED 🔥");
+
 import express, { type Request, Response, NextFunction } from "express";
 import http from "http";
 import cors from "cors";
@@ -91,8 +93,6 @@ app.use((req, res, next) => {
 
 /* -----------------------------
    🚨 PROBE ROUTE (TEMPORARY)
-   Confirms Render is running
-   the latest build
 ------------------------------ */
 app.get("/api/__probe", (_req, res) => {
   res.json({ probe: "ok" });
@@ -102,13 +102,15 @@ app.get("/api/__probe", (_req, res) => {
    Bootstrap server
 ------------------------------ */
 (async () => {
+  console.log("🔥 REGISTER ROUTES CALLED 🔥");
+
   try {
     await seedDatabase();
   } catch (err) {
     console.error("Failed to seed database:", err);
   }
 
-  // ✅ Register ALL API routes (auth, medicines, categories, orders)
+  // ✅ Register ALL API routes
   registerRoutes(app);
 
   // ✅ Express error handler (DO NOT throw)
