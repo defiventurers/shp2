@@ -1,60 +1,90 @@
 import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 
-const GOOGLE_JWT_AUD = process.env.GOOGLE_CLIENT_ID!;
-const APP_JWT_SECRET = process.env.JWT_SECRET!;
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+
+/* -----------------------------
+   Helpers
+------------------------------ */
+function setAuthCookie(res: Response, token: string) {
+  res.cookie("auth_token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+}
+
+/* -----------------------------
+   Routes
+------------------------------ */
 export function registerAuthRoutes(app: Express) {
+  /* Health */
+  app.get("/api/auth/health", (_req, res) => {
+    res.json({ status: "ok" });
+  });
+
+  /* Google login */
   app.post("/api/auth/google", async (req: Request, res: Response) => {
-    const { credential } = req.body;
-
-    if (!credential) {
-      return res.status(400).json({ message: "Missing credential" });
-    }
-
-    // Decode Google JWT (no network call needed)
-    const payload = JSON.parse(
-      Buffer.from(credential.split(".")[1], "base64").toString()
-    );
-
-    if (payload.aud !== GOOGLE_JWT_AUD) {
-      return res.status(401).json({ message: "Invalid Google token" });
-    }
-
-    const user = {
-      email: payload.email,
-      name: payload.name,
-      picture: payload.picture,
-    };
-
-    // Issue your own JWT
-    const token = jwt.sign(user, APP_JWT_SECRET, {
-      expiresIn: "7d",
-    });
-
-    res
-      .cookie("auth_token", token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      })
-      .json({ success: true });
-  });
-
-  app.post("/api/auth/logout", (_req, res) => {
-    res.clearCookie("auth_token").json({ success: true });
-  });
-
-  app.get("/api/auth/me", (req, res) => {
     try {
-      const token = req.cookies?.auth_token;
-      if (!token) return res.json(null);
+      const { credential } = req.body;
 
-      const user = jwt.verify(token, APP_JWT_SECRET);
+      if (!credential) {
+        return res.status(400).json({ error: "Missing credential" });
+      }
+
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+
+      const payload = ticket.getPayload();
+
+      if (!payload || !payload.email) {
+        return res.status(401).json({ error: "Invalid Google token" });
+      }
+
+      const user = {
+        id: payload.sub,
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+      };
+
+      const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+
+      setAuthCookie(res, token);
+
+      res.json({ success: true, user });
+    } catch (err) {
+      console.error("Google auth error:", err);
+      res.status(401).json({ error: "Authentication failed" });
+    }
+  });
+
+  /* Current user */
+  app.get("/api/auth/me", (req: Request, res: Response) => {
+    const token = req.cookies?.auth_token;
+
+    if (!token) {
+      return res.json(null);
+    }
+
+    try {
+      const user = jwt.verify(token, JWT_SECRET);
       res.json(user);
     } catch {
+      res.clearCookie("auth_token");
       res.json(null);
     }
+  });
+
+  /* Logout */
+  app.post("/api/auth/logout", (_req, res) => {
+    res.clearCookie("auth_token");
+    res.json({ success: true });
   });
 }
