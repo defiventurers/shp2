@@ -10,3 +10,4 @@ export function registerRoutes(app: Express) {
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
 }
+
