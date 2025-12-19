@@ -90,6 +90,15 @@ app.use((req, res, next) => {
 });
 
 /* -----------------------------
+   🚨 PROBE ROUTE (TEMPORARY)
+   Confirms Render is running
+   the latest build
+------------------------------ */
+app.get("/api/__probe", (_req, res) => {
+  res.json({ probe: "ok" });
+});
+
+/* -----------------------------
    Bootstrap server
 ------------------------------ */
 (async () => {
