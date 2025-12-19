@@ -1,16 +1,46 @@
 import type { Express } from "express";
 import passport from "passport";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import session from "express-session";
 
 export function registerAuthRoutes(app: Express) {
-  // Start Google OAuth
-  app.get(
-    "/api/auth/google",
-    passport.authenticate("google", {
-      scope: ["profile", "email"],
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "dev-secret",
+      resave: false,
+      saveUninitialized: false,
     })
   );
 
-  // Google OAuth callback
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  passport.serializeUser((user, done) => done(null, user));
+  passport.deserializeUser((user: any, done) => done(null, user));
+
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL!,
+      },
+      async (_accessToken, _refreshToken, profile, done) => {
+        return done(null, {
+          id: profile.id,
+          email: profile.emails?.[0]?.value,
+          name: profile.displayName,
+          avatar: profile.photos?.[0]?.value,
+        });
+      }
+    )
+  );
+
+  app.get(
+    "/api/auth/google",
+    passport.authenticate("google", { scope: ["profile", "email"] })
+  );
+
   app.get(
     "/api/auth/google/callback",
     passport.authenticate("google", {
@@ -18,24 +48,17 @@ export function registerAuthRoutes(app: Express) {
       session: true,
     }),
     (_req, res) => {
-      // Redirect back to frontend after successful login
       res.redirect("https://shp2.vercel.app");
     }
   );
 
-  // Current logged-in user
   app.get("/api/user", (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    res.json(req.user);
+    res.json({ user: req.user ?? null });
   });
 
-  // Logout
   app.post("/api/logout", (req, res) => {
     req.logout(() => {
       res.json({ success: true });
     });
   });
 }
-
