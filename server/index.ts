@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import http from "http";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { seedDatabase } from "./seed";
 
@@ -13,11 +14,16 @@ app.use(
   cors({
     origin: [
       "https://shp2.vercel.app",
-      "http://localhost:5173"
+      "http://localhost:5173",
     ],
     credentials: true,
   })
 );
+
+/* -----------------------------
+   ✅ Cookies (REQUIRED FOR AUTH)
+------------------------------ */
+app.use(cookieParser());
 
 /* -----------------------------
    Raw body support (payments)
@@ -93,7 +99,7 @@ app.use((req, res, next) => {
     console.error("Failed to seed database:", err);
   }
 
-  // ✅ Register ALL API routes
+  // ✅ Register ALL API routes (auth, medicines, categories, orders)
   registerRoutes(app);
 
   // ✅ Express error handler (DO NOT throw)
