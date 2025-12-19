@@ -1,11 +1,13 @@
 import type { Express } from "express";
-import { registerAuthRoutes } from "./auth";
 import { registerMedicineRoutes } from "./medicines";
 import { registerCategoryRoutes } from "./categories";
 import { registerOrderRoutes } from "./orders";
 
 export function registerRoutes(app: Express) {
-  registerAuthRoutes(app);
+  app.get("/api/auth/health", (_req, res) => {
+    res.json({ status: "probe-ok" });
+  });
+
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
