@@ -4,7 +4,6 @@ import jwt from "jsonwebtoken";
 console.log("🔥 AUTH ROUTES FILE LOADED 🔥");
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
-const IS_PROD = process.env.NODE_ENV === "production";
 
 /* -----------------------------
    Helpers
@@ -12,9 +11,9 @@ const IS_PROD = process.env.NODE_ENV === "production";
 function setAuthCookie(res: Response, token: string) {
   res.cookie("auth_token", token, {
     httpOnly: true,
-    secure: IS_PROD,                 // ✅ only true in production
-    sameSite: IS_PROD ? "none" : "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    secure: true,     // required on Render
+    sameSite: "none", // required for Vercel → Render
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
@@ -29,7 +28,21 @@ export function registerAuthRoutes(app: Express) {
     res.json({ status: "ok" });
   });
 
-  /* DEV LOGIN (browser-safe test login) */
+  /* ✅ GOOGLE LOGIN (JWT STUB — TEMPORARY) */
+  app.post("/api/auth/google", async (_req: Request, res: Response) => {
+    const user = {
+      id: "google-user",
+      email: "user@gmail.com",
+      name: "Google User",
+    };
+
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+    setAuthCookie(res, token);
+
+    res.json({ success: true, user });
+  });
+
+  /* DEV LOGIN */
   app.get("/api/auth/dev-login", (_req, res) => {
     const user = {
       id: "dev-user",
@@ -40,11 +53,7 @@ export function registerAuthRoutes(app: Express) {
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, token);
 
-    res.json({
-      success: true,
-      message: "Logged in via dev-login",
-      user,
-    });
+    res.json({ success: true, user });
   });
 
   /* Current user */
@@ -61,8 +70,8 @@ export function registerAuthRoutes(app: Express) {
     } catch {
       res.clearCookie("auth_token", {
         httpOnly: true,
-        secure: IS_PROD,
-        sameSite: IS_PROD ? "none" : "lax",
+        secure: true,
+        sameSite: "none",
       });
       res.json(null);
     }
@@ -72,8 +81,8 @@ export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/logout", (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
-      secure: IS_PROD,
-      sameSite: IS_PROD ? "none" : "lax",
+      secure: true,
+      sameSite: "none",
     });
     res.json({ success: true });
   });
