@@ -1,10 +1,37 @@
-import type { Express } from "express";
-import { db } from "../db";
-import { orders } from "@shared/schema";
+import type { Express, Request, Response } from "express";
+
+console.log("🔥 ORDER ROUTES FILE LOADED 🔥");
 
 export function registerOrderRoutes(app: Express) {
-  app.get("/api/orders", async (_req, res) => {
-    const data = await db.select().from(orders);
-    res.json({ success: true, orders: data });
+  console.log("🔥 ORDER ROUTES REGISTERED 🔥");
+
+  /* -----------------------------
+     CREATE ORDER
+  ------------------------------ */
+  app.post("/api/orders", async (req: Request, res: Response) => {
+    try {
+      const order = {
+        id: crypto.randomUUID(),
+        ...req.body,
+        status: "PLACED",
+        createdAt: new Date().toISOString(),
+      };
+
+      // TEMP: no DB yet — just echo back
+      res.json({
+        success: true,
+        order,
+      });
+    } catch (err) {
+      console.error("Create order error:", err);
+      res.status(500).json({ error: "Failed to place order" });
+    }
+  });
+
+  /* -----------------------------
+     GET ALL ORDERS (ADMIN / USER)
+  ------------------------------ */
+  app.get("/api/orders", async (_req: Request, res: Response) => {
+    res.json([]);
   });
 }
