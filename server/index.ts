@@ -1,17 +1,15 @@
 console.log("🔥 SERVER INDEX EXECUTED 🔥");
 
-/**
- * 🚨 FORCE-INCLUDE AUTH ROUTES IN BUILD
- * This guarantees auth routes exist in dist/
- */
-import "./routes/auth";
-
 import express, { type Request, Response, NextFunction } from "express";
 import http from "http";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+
 import { registerRoutes } from "./routes";
 import { seedDatabase } from "./seed";
+
+// 🔴 IMPORTANT: force-load auth routes (prevents esbuild tree-shaking)
+import { registerAuthRoutes } from "./routes/auth";
 
 const app = express();
 
@@ -98,7 +96,7 @@ app.use((req, res, next) => {
 });
 
 /* -----------------------------
-   🚨 PROBE ROUTE (TEMPORARY)
+   🚨 PROBE ROUTE (CONFIRM DEPLOY)
 ------------------------------ */
 app.get("/api/__probe", (_req, res) => {
   res.json({ probe: "ok" });
@@ -108,18 +106,20 @@ app.get("/api/__probe", (_req, res) => {
    Bootstrap server
 ------------------------------ */
 (async () => {
-  console.log("🔥 REGISTER ROUTES CALLED 🔥");
-
   try {
     await seedDatabase();
   } catch (err) {
     console.error("Failed to seed database:", err);
   }
 
-  // ✅ Register ALL API routes (auth, medicines, categories, orders)
+  // 🔥 register non-auth routes
   registerRoutes(app);
 
-  // ✅ Express error handler (DO NOT throw)
+  // 🔥 FORCE auth routes registration
+  console.log("🔥 REGISTERING AUTH ROUTES 🔥");
+  registerAuthRoutes(app);
+
+  // Express error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err?.status || err?.statusCode || 500;
     const message = err?.message || "Internal Server Error";
@@ -127,13 +127,13 @@ app.get("/api/__probe", (_req, res) => {
     res.status(status).json({ message });
   });
 
-  // ✅ Vite only in development
+  // Vite dev only
   if (process.env.NODE_ENV !== "production") {
     const { setupVite } = await import("./vite");
     await setupVite(http.createServer(app), app);
   }
 
-  // ✅ Render-required port
+  // Render-required port
   const port = parseInt(process.env.PORT || "10000", 10);
   const server = http.createServer(app);
 
