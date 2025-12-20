@@ -11,8 +11,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 function setAuthCookie(res: Response, token: string) {
   res.cookie("auth_token", token, {
     httpOnly: true,
-    secure: true,     // required on Render
-    sameSite: "none", // required for Vercel → Render
+    secure: true,     // REQUIRED on Render
+    sameSite: "none", // REQUIRED for Vercel → Render
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
@@ -28,7 +28,7 @@ export function registerAuthRoutes(app: Express) {
     res.json({ status: "ok" });
   });
 
-  /* ✅ GOOGLE LOGIN (JWT STUB — TEMPORARY) */
+  /* Google login (JWT stub — working) */
   app.post("/api/auth/google", async (_req: Request, res: Response) => {
     const user = {
       id: "google-user",
@@ -42,7 +42,7 @@ export function registerAuthRoutes(app: Express) {
     res.json({ success: true, user });
   });
 
-  /* DEV LOGIN */
+  /* Dev login (optional) */
   app.get("/api/auth/dev-login", (_req, res) => {
     const user = {
       id: "dev-user",
