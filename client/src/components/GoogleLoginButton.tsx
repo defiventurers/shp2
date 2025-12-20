@@ -10,19 +10,14 @@ export function GoogleLoginButton() {
     window.google.accounts.id.initialize({
       client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID!,
       callback: async (response) => {
-        // 🔐 Send Google credential to backend
         await fetch("/api/auth/google", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({
-            credential: response.credential,
-          }),
+          body: JSON.stringify({ credential: response.credential }),
         });
 
-        // ✅ THIS updates login state (NO reload)
+        // ✅ THIS IS THE CRITICAL LINE
         await queryClient.invalidateQueries({
           queryKey: ["/api/auth/me"],
         });
