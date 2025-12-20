@@ -4,21 +4,13 @@ import App from "./App";
 import { queryClient } from "@/lib/queryClient";
 import "./index.css";
 
-// Register service worker (optional / safe)
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/sw.js")
-      .then((registration) => {
-        console.log("SW registered:", registration.scope);
-      })
-      .catch((error) => {
-        console.log("SW registration failed:", error);
-      });
-  });
+const rootElement = document.getElementById("root");
+
+if (!rootElement) {
+  throw new Error("Root element #root not found");
 }
 
-createRoot(document.getElementById("root")!).render(
+createRoot(rootElement).render(
   <QueryClientProvider client={queryClient}>
     <App />
   </QueryClientProvider>
