@@ -16,6 +16,10 @@ const allowlist = [
   "express-rate-limit",
   "express-session",
   "jsonwebtoken",
+
+  // ✅ ADD THIS LINE (CRITICAL FIX)
+  "google-auth-library",
+
   "memorystore",
   "multer",
   "nanoid",
@@ -44,6 +48,7 @@ async function buildAll() {
     ...Object.keys(pkg.dependencies || {}),
     ...Object.keys(pkg.devDependencies || {}),
   ];
+
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
   await esbuild({
