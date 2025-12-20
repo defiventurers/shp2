@@ -2,26 +2,14 @@ import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
-
-/* -----------------------------
-   Helpers
------------------------------- */
-function setAuthCookie(res: Response, token: string) {
-  res.cookie("auth_token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  });
-}
 
 /* -----------------------------
    Routes
 ------------------------------ */
 export function registerAuthRoutes(app: Express) {
+  console.log("🔥 AUTH ROUTES REGISTERED 🔥");
+
   /* Health */
   app.get("/api/auth/health", (_req, res) => {
     res.json({ status: "ok" });
@@ -35,6 +23,12 @@ export function registerAuthRoutes(app: Express) {
       if (!credential) {
         return res.status(400).json({ error: "Missing credential" });
       }
+
+      if (!process.env.GOOGLE_CLIENT_ID) {
+        return res.status(500).json({ error: "Google auth not configured" });
+      }
+
+      const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
       const ticket = await googleClient.verifyIdToken({
         idToken: credential,
@@ -56,7 +50,12 @@ export function registerAuthRoutes(app: Express) {
 
       const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
 
-      setAuthCookie(res, token);
+      res.cookie("auth_token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
 
       res.json({ success: true, user });
     } catch (err) {
