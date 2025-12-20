@@ -17,7 +17,7 @@ export function GoogleLoginButton() {
           body: JSON.stringify({ credential: response.credential }),
         });
 
-        // ✅ THIS IS THE CRITICAL LINE
+        // 🔥 FORCE AUTH REFRESH
         await queryClient.invalidateQueries({
           queryKey: ["/api/auth/me"],
         });
