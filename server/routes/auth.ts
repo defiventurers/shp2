@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 console.log("🔥 AUTH ROUTES FILE LOADED 🔥");
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+const IS_PROD = process.env.NODE_ENV === "production";
 
 /* -----------------------------
    Helpers
@@ -11,9 +12,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 function setAuthCookie(res: Response, token: string) {
   res.cookie("auth_token", token, {
     httpOnly: true,
-    secure: true,      // REQUIRED on Render
-    sameSite: "none",  // REQUIRED for Vercel → Render
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: IS_PROD,                 // ✅ only true in production
+    sameSite: IS_PROD ? "none" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 }
 
@@ -28,7 +29,7 @@ export function registerAuthRoutes(app: Express) {
     res.json({ status: "ok" });
   });
 
-  /* DEV LOGIN (GET for browser testing) */
+  /* DEV LOGIN (browser-safe test login) */
   app.get("/api/auth/dev-login", (_req, res) => {
     const user = {
       id: "dev-user",
@@ -39,21 +40,11 @@ export function registerAuthRoutes(app: Express) {
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, token);
 
-    res.json({ success: true, user });
-  });
-
-  /* ALSO KEEP POST (for future use) */
-  app.post("/api/auth/dev-login", (_req, res) => {
-    const user = {
-      id: "dev-user",
-      email: "dev@example.com",
-      name: "Dev User",
-    };
-
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
-    setAuthCookie(res, token);
-
-    res.json({ success: true, user });
+    res.json({
+      success: true,
+      message: "Logged in via dev-login",
+      user,
+    });
   });
 
   /* Current user */
@@ -70,8 +61,8 @@ export function registerAuthRoutes(app: Express) {
     } catch {
       res.clearCookie("auth_token", {
         httpOnly: true,
-        secure: true,
-        sameSite: "none",
+        secure: IS_PROD,
+        sameSite: IS_PROD ? "none" : "lax",
       });
       res.json(null);
     }
@@ -81,8 +72,8 @@ export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/logout", (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
-      secure: true,
-      sameSite: "none",
+      secure: IS_PROD,
+      sameSite: IS_PROD ? "none" : "lax",
     });
     res.json({ success: true });
   });
