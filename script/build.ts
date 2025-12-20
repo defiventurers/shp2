@@ -16,10 +16,6 @@ const allowlist = [
   "express-rate-limit",
   "express-session",
   "jsonwebtoken",
-
-  // ✅ ADD THIS LINE (CRITICAL FIX)
-  "google-auth-library",
-
   "memorystore",
   "multer",
   "nanoid",
@@ -49,11 +45,17 @@ async function buildAll() {
     ...Object.keys(pkg.devDependencies || {}),
   ];
 
-  const externals = allDeps.filter((dep) => !allowlist.includes(dep));
+  // ✅ FORCE google-auth-library to be external
+  const externals = allDeps.filter(
+    (dep) =>
+      !allowlist.includes(dep) ||
+      dep === "google-auth-library"
+  );
 
   await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
+    target: "node18",
     bundle: true,
     format: "cjs",
     outfile: "dist/index.cjs",
