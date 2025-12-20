@@ -1,5 +1,11 @@
 console.log("🔥 SERVER INDEX EXECUTED 🔥");
 
+/**
+ * 🚨 FORCE-INCLUDE AUTH ROUTES IN BUILD
+ * This guarantees auth routes exist in dist/
+ */
+import "./routes/auth";
+
 import express, { type Request, Response, NextFunction } from "express";
 import http from "http";
 import cors from "cors";
@@ -110,7 +116,7 @@ app.get("/api/__probe", (_req, res) => {
     console.error("Failed to seed database:", err);
   }
 
-  // ✅ Register ALL API routes
+  // ✅ Register ALL API routes (auth, medicines, categories, orders)
   registerRoutes(app);
 
   // ✅ Express error handler (DO NOT throw)
