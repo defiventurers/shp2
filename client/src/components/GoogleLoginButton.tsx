@@ -1,49 +1,31 @@
-import { useEffect } from "react";
-import { saveToken } from "@/lib/auth";
-
-declare global {
-  interface Window {
-    google: any;
-  }
-}
+import { useEffect, useRef } from "react";
 
 export function GoogleLoginButton() {
+  const buttonRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (!window.google) return;
+    if (!window.google || !buttonRef.current) return;
 
     window.google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      callback: async (response: any) => {
-        const res = await fetch("/api/auth/google", {
+      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID!,
+      callback: async (response) => {
+        await fetch("/api/auth/google", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            credential: response.credential,
-          }),
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ credential: response.credential }),
         });
 
-        const data = await res.json();
-
-        if (data.token) {
-          saveToken(data.token);
-          window.location.reload();
-        } else {
-          alert("Login failed");
-        }
+        // force refetch of /api/auth/me
+        window.location.reload();
       },
     });
 
-    window.google.accounts.id.renderButton(
-      document.getElementById("google-login")!,
-      {
-        theme: "outline",
-        size: "large",
-      }
-    );
+    window.google.accounts.id.renderButton(buttonRef.current, {
+      theme: "outline",
+      size: "large",
+    });
   }, []);
 
-  return <div id="google-login" />;
+  return <div ref={buttonRef} />;
 }
-
