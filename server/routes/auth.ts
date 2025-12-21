@@ -11,9 +11,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 function setAuthCookie(res: Response, token: string) {
   res.cookie("auth_token", token, {
     httpOnly: true,
-    secure: true,     // REQUIRED on Render
-    sameSite: "none", // REQUIRED for Vercel → Render
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: true,       // REQUIRED on Render
+    sameSite: "none",   // REQUIRED for Vercel → Render
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 }
 
@@ -23,13 +23,19 @@ function setAuthCookie(res: Response, token: string) {
 export function registerAuthRoutes(app: Express) {
   console.log("🔥 AUTH ROUTES REGISTERED 🔥");
 
-  /* Health */
+  /* -----------------------------
+     Health Check
+  ------------------------------ */
   app.get("/api/auth/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  /* Google login (JWT stub — working) */
+  /* -----------------------------
+     GOOGLE LOGIN (JWT STUB)
+     (Replace later with real Google token verification)
+  ------------------------------ */
   app.post("/api/auth/google", async (_req: Request, res: Response) => {
+    // TEMP: stub user (used only until Google verification is finalized)
     const user = {
       id: "google-user",
       email: "user@gmail.com",
@@ -42,7 +48,9 @@ export function registerAuthRoutes(app: Express) {
     res.json({ success: true, user });
   });
 
-  /* Dev login (optional) */
+  /* -----------------------------
+     DEV LOGIN (for testing)
+  ------------------------------ */
   app.get("/api/auth/dev-login", (_req, res) => {
     const user = {
       id: "dev-user",
@@ -56,7 +64,9 @@ export function registerAuthRoutes(app: Express) {
     res.json({ success: true, user });
   });
 
-  /* Current user */
+  /* -----------------------------
+     CURRENT USER
+  ------------------------------ */
   app.get("/api/auth/me", (req: Request, res: Response) => {
     const token = req.cookies?.auth_token;
 
@@ -67,7 +77,7 @@ export function registerAuthRoutes(app: Express) {
     try {
       const user = jwt.verify(token, JWT_SECRET);
       res.json(user);
-    } catch {
+    } catch (err) {
       res.clearCookie("auth_token", {
         httpOnly: true,
         secure: true,
@@ -77,7 +87,9 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  /* Logout */
+  /* -----------------------------
+     LOGOUT
+  ------------------------------ */
   app.post("/api/auth/logout", (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
