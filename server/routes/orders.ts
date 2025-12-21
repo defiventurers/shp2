@@ -1,69 +1,68 @@
-import type { Express, Request, Response } from "express";
-import { requireAuth } from "../middleware/requireAuth";
+import type { Express } from "express";
+import { requireAuth, AuthRequest } from "../middleware/auth";
 import { db } from "../db";
 import { orders, orderItems } from "@shared/schema";
+
+console.log("🔥 ORDER ROUTES FILE LOADED 🔥");
 
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
-  // CREATE ORDER
-  app.post("/api/orders", requireAuth, async (req: Request, res: Response) => {
-    try {
-      // @ts-ignore
-      const user = req.user;
+  // CREATE ORDER (AUTH REQUIRED)
+  app.post("/api/orders", requireAuth, async (req: AuthRequest, res) => {
+    const user = req.user;
 
-      const {
-        items,
-        subtotal,
-        deliveryFee,
-        total,
-        deliveryType,
-        deliveryAddress,
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const {
+      items,
+      subtotal,
+      deliveryFee,
+      total,
+      deliveryType,
+      deliveryAddress,
+      customerName,
+      customerPhone,
+      customerEmail,
+      notes,
+      prescriptionId,
+    } = req.body;
+
+    const [order] = await db
+      .insert(orders)
+      .values({
+        userId: user.id,
         customerName,
         customerPhone,
         customerEmail,
+        deliveryType,
+        deliveryAddress,
+        subtotal,
+        deliveryFee,
+        total,
         notes,
-      } = req.body;
+        prescriptionId,
+        status: "pending",
+      })
+      .returning();
 
-      const [order] = await db
-        .insert(orders)
-        .values({
-          userId: user.id,
-          customerName,
-          customerPhone,
-          customerEmail,
-          deliveryType,
-          deliveryAddress,
-          subtotal,
-          deliveryFee,
-          total,
-          status: "pending",
-        })
-        .returning();
-
-      const orderItemsData = items.map((item: any) => ({
+    await db.insert(orderItems).values(
+      items.map((item: any) => ({
         orderId: order.id,
         medicineId: item.medicineId,
         medicineName: item.medicineName,
         quantity: item.quantity,
         price: item.price,
-      }));
+      }))
+    );
 
-      await db.insert(orderItems).values(orderItemsData);
-
-      res.json({
-        success: true,
-        orderNumber: order.id,
-      });
-    } catch (err) {
-      console.error("Order creation failed:", err);
-      res.status(500).json({ error: "Failed to place order" });
-    }
+    res.json(order);
   });
 
   // GET USER ORDERS
-  app.get("/api/orders", requireAuth, async (req: Request, res: Response) => {
-    // @ts-ignore
+  app.get("/api/orders", requireAuth, async (req: AuthRequest, res) => {
     const user = req.user;
 
     const userOrders = await db.query.orders.findMany({
@@ -71,7 +70,7 @@ export function registerOrderRoutes(app: Express) {
       with: {
         items: true,
       },
-      orderBy: (orders, { desc }) => desc(orders.createdAt),
+      orderBy: (orders, { desc }) => [desc(orders.createdAt)],
     });
 
     res.json(userOrders);
