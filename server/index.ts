@@ -10,33 +10,36 @@ import { seedDatabase } from "./seed";
 
 const app = express();
 
-/* =====================================================
-   CORS — MUST BE FIRST, SINGLE EXACT ORIGIN
-===================================================== */
+/* -----------------------------
+   ✅ CORS (MUST BE FIRST)
+------------------------------ */
 app.use(
   cors({
-    origin: "https://shp2.vercel.app", // ⚠️ EXACT MATCH ONLY
+    origin: [
+      "https://shp2.vercel.app",
+      "http://localhost:5173",
+    ],
     credentials: true,
   })
 );
 
-/* =====================================================
-   COOKIES — REQUIRED FOR JWT AUTH
-===================================================== */
+/* -----------------------------
+   ✅ Cookies (REQUIRED FOR AUTH)
+------------------------------ */
 app.use(cookieParser());
 
-/* =====================================================
-   RAW BODY SUPPORT (payments / webhooks safe)
-===================================================== */
+/* -----------------------------
+   Raw body support (payments)
+------------------------------ */
 declare module "http" {
   interface IncomingMessage {
     rawBody?: Buffer;
   }
 }
 
-/* =====================================================
-   BODY PARSERS
-===================================================== */
+/* -----------------------------
+   Body parsers
+------------------------------ */
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -47,9 +50,9 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-/* =====================================================
-   REQUEST LOGGER
-===================================================== */
+/* -----------------------------
+   Logger
+------------------------------ */
 export function log(message: string, source = "express") {
   const time = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -57,38 +60,53 @@ export function log(message: string, source = "express") {
     second: "2-digit",
     hour12: true,
   });
+
   console.log(`${time} [${source}] ${message}`);
 }
 
+/* -----------------------------
+   Request logging middleware
+------------------------------ */
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  let capturedJsonResponse: any;
 
-  const originalJson = res.json.bind(res);
-  res.json = (body: any) => originalJson(body);
+  const originalResJson = res.json.bind(res);
+  res.json = (body: any) => {
+    capturedJsonResponse = body;
+    return originalResJson(body);
+  };
 
   res.on("finish", () => {
+    const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      log(`${req.method} ${path} ${res.statusCode} in ${Date.now() - start}ms`);
+      let line = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        line += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+      log(line);
     }
   });
 
   next();
 });
 
-/* =====================================================
-   🔍 DEBUG ROUTE — DO NOT REMOVE UNTIL FIXED
-===================================================== */
-app.get("/api/debug-cookie", (req, res) => {
+/* -----------------------------
+   🚨 PROBE ROUTE (DEPLOY CHECK)
+------------------------------ */
+app.get("/api/__probe", (req, res) => {
   res.json({
-    cookies: req.cookies,
-    hasAuthToken: !!req.cookies?.auth_token,
+    probe: "ok",
+    cookies: req.headers.cookie || null,
+    env: process.env.NODE_ENV,
+    time: new Date().toISOString(),
   });
 });
 
-/* =====================================================
-   BOOTSTRAP SERVER
-===================================================== */
+/* -----------------------------
+   Bootstrap server
+------------------------------ */
 (async () => {
   try {
     await seedDatabase();
@@ -97,31 +115,23 @@ app.get("/api/debug-cookie", (req, res) => {
   }
 
   console.log("🔥 REGISTERING ROUTES 🔥");
-
-  // ⬇️ Registers auth, medicines, categories, orders
   registerRoutes(app);
 
-  /* ---------------------------------------------------
-     GLOBAL ERROR HANDLER
-  ---------------------------------------------------- */
+  // Express error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err?.status || err?.statusCode || 500;
+    const message = err?.message || "Internal Server Error";
     console.error(err);
-    res.status(err?.status || 500).json({
-      message: err?.message || "Internal Server Error",
-    });
+    res.status(status).json({ message });
   });
 
-  /* ---------------------------------------------------
-     DEV ONLY — Vite
-  ---------------------------------------------------- */
+  // Vite dev only
   if (process.env.NODE_ENV !== "production") {
     const { setupVite } = await import("./vite");
     await setupVite(http.createServer(app), app);
   }
 
-  /* ---------------------------------------------------
-     START SERVER (Render requirement)
-  ---------------------------------------------------- */
+  // Render-required port
   const port = parseInt(process.env.PORT || "10000", 10);
   const server = http.createServer(app);
 
