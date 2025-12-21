@@ -8,9 +8,6 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { seedDatabase } from "./seed";
 
-// 🔴 IMPORTANT: force-load auth routes (prevents esbuild tree-shaking)
-import { registerAuthRoutes } from "./routes/auth";
-
 const app = express();
 
 /* -----------------------------
@@ -32,7 +29,7 @@ app.use(
 app.use(cookieParser());
 
 /* -----------------------------
-   Raw body support (payments)
+   Raw body support
 ------------------------------ */
 declare module "http" {
   interface IncomingMessage {
@@ -68,27 +65,15 @@ export function log(message: string, source = "express") {
 }
 
 /* -----------------------------
-   Request logging middleware
+   Request logging
 ------------------------------ */
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: any;
-
-  const originalResJson = res.json.bind(res);
-  res.json = (body: any) => {
-    capturedJsonResponse = body;
-    return originalResJson(body);
-  };
 
   res.on("finish", () => {
-    const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let line = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        line += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-      log(line);
+      log(`${req.method} ${path} ${res.statusCode} in ${Date.now() - start}ms`);
     }
   });
 
@@ -96,14 +81,14 @@ app.use((req, res, next) => {
 });
 
 /* -----------------------------
-   🚨 PROBE ROUTE (CONFIRM DEPLOY)
+   Probe route
 ------------------------------ */
 app.get("/api/__probe", (_req, res) => {
   res.json({ probe: "ok" });
 });
 
 /* -----------------------------
-   Bootstrap server
+   Bootstrap
 ------------------------------ */
 (async () => {
   try {
@@ -112,32 +97,16 @@ app.get("/api/__probe", (_req, res) => {
     console.error("Failed to seed database:", err);
   }
 
-  // 🔥 register non-auth routes
+  // ✅ SINGLE place where ALL routes are registered
   registerRoutes(app);
 
-  // 🔥 FORCE auth routes registration
-  console.log("🔥 REGISTERING AUTH ROUTES 🔥");
-  registerAuthRoutes(app);
-
-  // Express error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err?.status || err?.statusCode || 500;
-    const message = err?.message || "Internal Server Error";
     console.error(err);
-    res.status(status).json({ message });
+    res.status(500).json({ message: "Internal Server Error" });
   });
 
-  // Vite dev only
-  if (process.env.NODE_ENV !== "production") {
-    const { setupVite } = await import("./vite");
-    await setupVite(http.createServer(app), app);
-  }
-
-  // Render-required port
   const port = parseInt(process.env.PORT || "10000", 10);
-  const server = http.createServer(app);
-
-  server.listen(port, "0.0.0.0", () => {
+  http.createServer(app).listen(port, "0.0.0.0", () => {
     log(`Server running on port ${port}`);
   });
 })();
