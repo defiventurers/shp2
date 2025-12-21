@@ -1,17 +1,20 @@
-console.log("🔥 SERVER INDEX EXECUTED 🔥");
-
-import express, { type Request, Response, NextFunction } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import http from "http";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
-import { registerRoutes } from "./routes";
 import { seedDatabase } from "./seed";
+
+// 🔥 FORCE-IMPORT ROUTES (PREVENT TREE-SHAKING)
+import { registerAuthRoutes } from "./routes/auth";
+import { registerMedicineRoutes } from "./routes/medicines";
+import { registerCategoryRoutes } from "./routes/categories";
+import { registerOrderRoutes } from "./routes/orders";
 
 const app = express();
 
 /* -----------------------------
-   CORS (FIRST)
+   CORS — MUST BE FIRST
 ------------------------------ */
 app.use(
   cors({
@@ -24,46 +27,43 @@ app.use(
 );
 
 /* -----------------------------
-   Cookies
+   🔥 COOKIE PARSER — MUST BE HERE
 ------------------------------ */
 app.use(cookieParser());
 
 /* -----------------------------
-   Body parsers
+   BODY PARSERS
 ------------------------------ */
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 /* -----------------------------
-   Probe
+   PROBE
 ------------------------------ */
-app.get("/api/__probe", (req, res) => {
-  res.json({
-    probe: "ok",
-    cookies: req.headers.cookie || null,
-    time: new Date().toISOString(),
-  });
+app.get("/api/__probe", (_req, res) => {
+  res.json({ status: "ok" });
 });
 
 /* -----------------------------
-   Bootstrap
+   BOOTSTRAP
 ------------------------------ */
 (async () => {
-  try {
-    await seedDatabase();
-  } catch (err) {
-    console.error("Seed failed:", err);
-  }
+  await seedDatabase();
 
-  registerRoutes(app);
+  // 🔥 REGISTER ROUTES EXPLICITLY (NO index.ts indirection)
+  registerAuthRoutes(app);
+  registerMedicineRoutes(app);
+  registerCategoryRoutes(app);
+  registerOrderRoutes(app);
 
+  // Error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error(err);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ error: "Internal Server Error" });
   });
 
   const port = parseInt(process.env.PORT || "10000", 10);
   http.createServer(app).listen(port, "0.0.0.0", () => {
-    console.log(`Server running on port ${port}`);
+    console.log(`🚀 Server running on ${port}`);
   });
 })();
