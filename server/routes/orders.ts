@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { db } from "../db";
-import { orders, orderItems } from "../db/schema";
+import { orders, orderItems } from "../schema";
 
 console.log("🔥 ORDER ROUTES FILE LOADED 🔥");
 
@@ -41,12 +41,7 @@ export function registerOrderRoutes(app: Express) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const {
-      items,
-      total,
-      deliveryType,
-      address,
-    } = req.body;
+    const { items, total, deliveryType, address } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "No order items" });
@@ -57,7 +52,7 @@ export function registerOrderRoutes(app: Express) {
     const [order] = await db
       .insert(orders)
       .values({
-        userId: user.id, // ✅ CRITICAL FIX
+        userId: user.id,
         orderNumber,
         total,
         status: "pending",
@@ -67,7 +62,6 @@ export function registerOrderRoutes(app: Express) {
       })
       .returning();
 
-    // Insert order items
     for (const item of items) {
       await db.insert(orderItems).values({
         orderId: order.id,
