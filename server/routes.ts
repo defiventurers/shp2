@@ -10,7 +10,7 @@ console.log("🔥 ROUTES INDEX FILE LOADED 🔥");
 export function registerRoutes(app: Express) {
   console.log("🔥 REGISTER ROUTES CALLED 🔥");
 
-  // Auth (login, logout, me)
+  // Auth
   registerAuthRoutes(app);
 
   // Public data
