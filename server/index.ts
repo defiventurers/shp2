@@ -10,36 +10,33 @@ import { seedDatabase } from "./seed";
 
 const app = express();
 
-/* -----------------------------
-   ✅ CORS (MUST BE FIRST)
------------------------------- */
+/* =====================================================
+   CORS — MUST BE FIRST, SINGLE EXACT ORIGIN
+===================================================== */
 app.use(
   cors({
-    origin: [
-      "https://shp2.vercel.app",
-      "http://localhost:5173",
-    ],
+    origin: "https://shp2.vercel.app", // ⚠️ EXACT MATCH ONLY
     credentials: true,
   })
 );
 
-/* -----------------------------
-   ✅ Cookies (REQUIRED FOR AUTH)
------------------------------- */
+/* =====================================================
+   COOKIES — REQUIRED FOR JWT AUTH
+===================================================== */
 app.use(cookieParser());
 
-/* -----------------------------
-   Raw body support
------------------------------- */
+/* =====================================================
+   RAW BODY SUPPORT (payments / webhooks safe)
+===================================================== */
 declare module "http" {
   interface IncomingMessage {
     rawBody?: Buffer;
   }
 }
 
-/* -----------------------------
-   Body parsers
------------------------------- */
+/* =====================================================
+   BODY PARSERS
+===================================================== */
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -50,9 +47,9 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-/* -----------------------------
-   Logger
------------------------------- */
+/* =====================================================
+   REQUEST LOGGER
+===================================================== */
 export function log(message: string, source = "express") {
   const time = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -60,16 +57,15 @@ export function log(message: string, source = "express") {
     second: "2-digit",
     hour12: true,
   });
-
   console.log(`${time} [${source}] ${message}`);
 }
 
-/* -----------------------------
-   Request logging
------------------------------- */
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+
+  const originalJson = res.json.bind(res);
+  res.json = (body: any) => originalJson(body);
 
   res.on("finish", () => {
     if (path.startsWith("/api")) {
@@ -80,16 +76,19 @@ app.use((req, res, next) => {
   next();
 });
 
-/* -----------------------------
-   Probe route
------------------------------- */
-app.get("/api/__probe", (_req, res) => {
-  res.json({ probe: "ok" });
+/* =====================================================
+   🔍 DEBUG ROUTE — DO NOT REMOVE UNTIL FIXED
+===================================================== */
+app.get("/api/debug-cookie", (req, res) => {
+  res.json({
+    cookies: req.cookies,
+    hasAuthToken: !!req.cookies?.auth_token,
+  });
 });
 
-/* -----------------------------
-   Bootstrap
------------------------------- */
+/* =====================================================
+   BOOTSTRAP SERVER
+===================================================== */
 (async () => {
   try {
     await seedDatabase();
@@ -97,16 +96,36 @@ app.get("/api/__probe", (_req, res) => {
     console.error("Failed to seed database:", err);
   }
 
-  // ✅ SINGLE place where ALL routes are registered
+  console.log("🔥 REGISTERING ROUTES 🔥");
+
+  // ⬇️ Registers auth, medicines, categories, orders
   registerRoutes(app);
 
+  /* ---------------------------------------------------
+     GLOBAL ERROR HANDLER
+  ---------------------------------------------------- */
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error(err);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(err?.status || 500).json({
+      message: err?.message || "Internal Server Error",
+    });
   });
 
+  /* ---------------------------------------------------
+     DEV ONLY — Vite
+  ---------------------------------------------------- */
+  if (process.env.NODE_ENV !== "production") {
+    const { setupVite } = await import("./vite");
+    await setupVite(http.createServer(app), app);
+  }
+
+  /* ---------------------------------------------------
+     START SERVER (Render requirement)
+  ---------------------------------------------------- */
   const port = parseInt(process.env.PORT || "10000", 10);
-  http.createServer(app).listen(port, "0.0.0.0", () => {
+  const server = http.createServer(app);
+
+  server.listen(port, "0.0.0.0", () => {
     log(`Server running on port ${port}`);
   });
 })();
