@@ -1,73 +1,96 @@
 import type { Express, Request, Response } from "express";
 import { db } from "../db";
-import { orders, orderItems } from "../db";
-import { nanoid } from "nanoid";
+import { orders, orderItems } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import jwt from "jsonwebtoken";
 
 console.log("🔥 ORDER ROUTES FILE LOADED 🔥");
 
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+
+/* -----------------------------
+   Helper: get user from cookie
+------------------------------ */
+function getUser(req: Request) {
+  const token = req.cookies?.auth_token;
+  if (!token) return null;
+
+  try {
+    return jwt.verify(token, JWT_SECRET) as {
+      id: string;
+      email: string;
+      name?: string;
+    };
+  } catch {
+    return null;
+  }
+}
+
+/* -----------------------------
+   Routes
+------------------------------ */
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
-  // Create order
-  app.post("/api/orders", async (req: Request, res: Response) => {
-    try {
-      const {
-        items,
-        total,
-        deliveryType,
-        address,
-        phone,
-      } = req.body;
+  /* -----------------------------
+     GET /api/orders
+     (user order history)
+  ------------------------------ */
+  app.get("/api/orders", async (req: Request, res: Response) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json([]);
 
-      if (!items || items.length === 0) {
-        return res.status(400).json({ error: "No items in order" });
-      }
+    const userOrders = await db.query.orders.findMany({
+      where: eq(orders.userId, user.id),
+      with: {
+        items: true,
+      },
+      orderBy: (orders, { desc }) => [desc(orders.createdAt)],
+    });
 
-      const orderNumber = `ORD-${nanoid(8).toUpperCase()}`;
-
-      const [order] = await db
-        .insert(orders)
-        .values({
-          orderNumber,
-          total,
-          deliveryType,
-          address,
-          phone,
-          status: "pending",
-        })
-        .returning();
-
-      const itemsToInsert = items.map((item: any) => ({
-        orderId: order.id,
-        medicineId: item.medicine.id,
-        medicineName: item.medicine.name,
-        quantity: item.quantity,
-        price: item.medicine.price,
-      }));
-
-      await db.insert(orderItems).values(itemsToInsert);
-
-      res.json({ success: true, order });
-    } catch (err) {
-      console.error("Order creation failed:", err);
-      res.status(500).json({ error: "Failed to place order" });
-    }
+    res.json(userOrders);
   });
 
-  // Get orders (for frontend)
-  app.get("/api/orders", async (_req, res) => {
-    try {
-      const allOrders = await db.query.orders.findMany({
-        with: {
-          items: true,
-        },
-        orderBy: (orders, { desc }) => [desc(orders.createdAt)],
-      });
+  /* -----------------------------
+     POST /api/orders
+     (place order)
+  ------------------------------ */
+  app.post("/api/orders", async (req: Request, res: Response) => {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
 
-      res.json(allOrders);
-    } catch (err) {
-      console.error("Fetching orders failed:", err);
-      res.status(500).json({ error: "Failed to fetch orders" });
+    const {
+      items,
+      total,
+      deliveryType,
+      address,
+    } = req.body;
+
+    if (!items?.length) {
+      return res.status(400).json({ error: "No items in order" });
     }
+
+    const [order] = await db
+      .insert(orders)
+      .values({
+        userId: user.id,
+        total,
+        status: "pending",
+        deliveryType,
+        address,
+      })
+      .returning();
+
+    await db.insert(orderItems).values(
+      items.map((item: any) => ({
+        orderId: order.id,
+        medicineId: item.medicineId,
+        medicineName: item.medicineName,
+        quantity: item.quantity,
+        price: item.price,
+      }))
+    );
+
+    res.json({ success: true, orderId: order.id });
   });
 }
