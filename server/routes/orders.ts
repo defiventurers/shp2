@@ -1,75 +1,103 @@
 import type { Express, Request, Response } from "express";
 import { db } from "../db";
 import { orders, orderItems } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
+console.log("🔥 ORDER ROUTES FILE LOADED 🔥");
+
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
-  /* Create order */
+  /* -----------------------------
+     Create Order (AUTH REQUIRED)
+  ------------------------------ */
   app.post("/api/orders", async (req: Request, res: Response) => {
     try {
       const token = req.cookies?.auth_token;
       if (!token) {
-        return res.status(401).json({ error: "Unauthorized" });
+        return res.status(401).json({ error: "Unauthorised" });
       }
 
-      const user = jwt.verify(token, JWT_SECRET) as any;
+      const user = jwt.verify(token, JWT_SECRET) as {
+        id: string;
+        email: string;
+        name?: string;
+      };
 
-      const { items, total, deliveryType } = req.body;
+      const {
+        items,
+        total,
+        deliveryType,
+        address,
+        phone,
+      } = req.body;
 
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ error: "Invalid order items" });
+      if (!items || items.length === 0) {
+        return res.status(400).json({ error: "No items in order" });
       }
 
-      // Insert order
+      const orderId = nanoid(10);
+
+      /* -----------------------------
+         Insert Order
+      ------------------------------ */
       const [order] = await db
         .insert(orders)
         .values({
+          id: orderId,
+          orderNumber: `ORD-${Date.now()}`,
           userId: user.id,
-          total,
-          deliveryType,
+          total: total.toString(),
           status: "pending",
+          deliveryType,
+          address: address ?? null,
+          phone: phone ?? null,
+          createdAt: new Date(),
         })
         .returning();
 
-      // Insert order items
-      await db.insert(orderItems).values(
-        items.map((item: any) => ({
-          orderId: order.id,
-          medicineId: item.medicineId,
-          medicineName: item.name,
-          quantity: item.quantity,
-          price: item.price,
-        }))
-      );
+      /* -----------------------------
+         Insert Order Items
+      ------------------------------ */
+      const itemsToInsert = items.map((item: any) => ({
+        id: nanoid(10),
+        orderId: order.id,
+        medicineId: item.medicineId,
+        medicineName: item.medicineName,
+        quantity: item.quantity,
+        price: item.price.toString(),
+      }));
 
-      res.json({ success: true, orderId: order.id });
+      await db.insert(orderItems).values(itemsToInsert);
+
+      res.json({ success: true, order });
     } catch (err) {
       console.error("❌ ORDER CREATE FAILED:", err);
       res.status(500).json({ error: "Failed to place order" });
     }
   });
 
-  /* Get user orders */
+  /* -----------------------------
+     Get User Orders
+  ------------------------------ */
   app.get("/api/orders", async (req: Request, res: Response) => {
     try {
       const token = req.cookies?.auth_token;
       if (!token) {
-        return res.status(401).json({ error: "Unauthorized" });
+        return res.status(401).json({ error: "Unauthorised" });
       }
 
-      const user = jwt.verify(token, JWT_SECRET) as any;
+      const user = jwt.verify(token, JWT_SECRET) as { id: string };
 
       const userOrders = await db.query.orders.findMany({
-        where: eq(orders.userId, user.id),
+        where: (o, { eq }) => eq(o.userId, user.id),
         with: {
           items: true,
         },
-        orderBy: (orders, { desc }) => [desc(orders.createdAt)],
+        orderBy: (o, { desc }) => desc(o.createdAt),
       });
 
       res.json(userOrders);
