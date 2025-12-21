@@ -1,8 +1,7 @@
 import type { Express, Request, Response } from "express";
-import { db } from "../db";
-import { orders, orderItems } from "@shared/schema";
-import { nanoid } from "nanoid";
 import jwt from "jsonwebtoken";
+import { db } from "../db";
+import * as schema from "@shared/schema";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
@@ -12,76 +11,84 @@ export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
   /* -----------------------------
-     Create Order (AUTH REQUIRED)
+     CREATE ORDER
   ------------------------------ */
   app.post("/api/orders", async (req: Request, res: Response) => {
     try {
+      console.log("🧪 ORDER HIT");
+
+      /* ---- LOG COOKIES ---- */
+      console.log("🧪 COOKIES:", req.cookies);
+
       const token = req.cookies?.auth_token;
       if (!token) {
+        console.error("❌ NO AUTH TOKEN");
         return res.status(401).json({ error: "Unauthorised" });
       }
 
-      const user = jwt.verify(token, JWT_SECRET) as {
-        id: string;
-        email: string;
-        name?: string;
-      };
+      /* ---- VERIFY JWT ---- */
+      let user: any;
+      try {
+        user = jwt.verify(token, JWT_SECRET);
+        console.log("🧪 USER FROM TOKEN:", user);
+      } catch (err) {
+        console.error("❌ JWT VERIFY FAILED", err);
+        return res.status(401).json({ error: "Invalid token" });
+      }
+
+      /* ---- LOG BODY ---- */
+      console.log("🧪 BODY:", JSON.stringify(req.body, null, 2));
 
       const {
         items,
         total,
         deliveryType,
         address,
-        phone,
       } = req.body;
 
-      if (!items || items.length === 0) {
-        return res.status(400).json({ error: "No items in order" });
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        console.error("❌ INVALID ITEMS");
+        return res.status(400).json({ error: "Invalid order items" });
       }
 
-      const orderId = nanoid(10);
+      /* ---- CREATE ORDER ---- */
+      console.log("🧪 INSERTING ORDER...");
 
-      /* -----------------------------
-         Insert Order
-      ------------------------------ */
       const [order] = await db
-        .insert(orders)
+        .insert(schema.orders)
         .values({
-          id: orderId,
-          orderNumber: `ORD-${Date.now()}`,
           userId: user.id,
           total: total.toString(),
-          status: "pending",
           deliveryType,
-          address: address ?? null,
-          phone: phone ?? null,
-          createdAt: new Date(),
+          address,
+          status: "pending",
         })
         .returning();
 
-      /* -----------------------------
-         Insert Order Items
-      ------------------------------ */
-      const itemsToInsert = items.map((item: any) => ({
-        id: nanoid(10),
+      console.log("✅ ORDER INSERTED:", order);
+
+      /* ---- CREATE ORDER ITEMS ---- */
+      const orderItems = items.map((item: any) => ({
         orderId: order.id,
-        medicineId: item.medicineId,
-        medicineName: item.medicineName,
+        medicineId: item.medicine.id,
+        medicineName: item.medicine.name,
         quantity: item.quantity,
-        price: item.price.toString(),
+        price: item.medicine.price,
       }));
 
-      await db.insert(orderItems).values(itemsToInsert);
+      await db.insert(schema.orderItems).values(orderItems);
+
+      console.log("✅ ORDER ITEMS INSERTED");
 
       res.json({ success: true, order });
     } catch (err) {
-      console.error("❌ ORDER CREATE FAILED:", err);
+      console.error("❌ ORDER FAILED:", err);
       res.status(500).json({ error: "Failed to place order" });
     }
   });
 
   /* -----------------------------
-     Get User Orders
+     GET USER ORDERS
   ------------------------------ */
   app.get("/api/orders", async (req: Request, res: Response) => {
     try {
@@ -90,17 +97,17 @@ export function registerOrderRoutes(app: Express) {
         return res.status(401).json({ error: "Unauthorised" });
       }
 
-      const user = jwt.verify(token, JWT_SECRET) as { id: string };
+      const user: any = jwt.verify(token, JWT_SECRET);
 
-      const userOrders = await db.query.orders.findMany({
-        where: (o, { eq }) => eq(o.userId, user.id),
+      const orders = await db.query.orders.findMany({
+        where: (orders, { eq }) => eq(orders.userId, user.id),
         with: {
           items: true,
         },
-        orderBy: (o, { desc }) => desc(o.createdAt),
+        orderBy: (orders, { desc }) => desc(orders.createdAt),
       });
 
-      res.json(userOrders);
+      res.json(orders);
     } catch (err) {
       console.error("❌ FETCH ORDERS FAILED:", err);
       res.status(500).json({ error: "Failed to fetch orders" });
