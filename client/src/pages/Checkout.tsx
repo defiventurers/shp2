@@ -40,8 +40,8 @@ const PICKUP_ADDRESS =
 const DELIVERY_FEE = 30;
 
 const checkoutSchema = z.object({
-  customerName: z.string().min(2),
-  customerPhone: z.string().regex(/^[6-9]\d{9}$/),
+  customerName: z.string().min(2, "Name required"),
+  customerPhone: z.string().regex(/^[6-9]\d{9}$/, "Invalid phone"),
   customerEmail: z.string().email().optional().or(z.literal("")),
   deliveryType: z.enum(["pickup", "delivery"]),
   deliveryAddress: z.string().optional(),
@@ -98,14 +98,13 @@ export default function Checkout() {
       };
 
       const res = await apiRequest("POST", "/api/orders", payload);
-      return res.json(); // 🔥 FIX
+      return res.json();
     },
 
     onSuccess: (data) => {
-      setOrderId(data.orderNumber);
       setOrderPlaced(true);
+      setOrderId(data.orderNumber);
       clearCart();
-
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
 
       toast({
@@ -126,7 +125,7 @@ export default function Checkout() {
   const onSubmit = (data: CheckoutFormData) => {
     if (deliveryType === "delivery" && !data.deliveryAddress) {
       form.setError("deliveryAddress", {
-        message: "Delivery address is required",
+        message: "Delivery address required",
       });
       return;
     }
@@ -134,7 +133,7 @@ export default function Checkout() {
     if (requiresPrescription && !data.prescriptionId) {
       toast({
         title: "Prescription Required",
-        description: "Please select a prescription",
+        description: "Select a prescription",
         variant: "destructive",
       });
       return;
@@ -145,16 +144,13 @@ export default function Checkout() {
 
   if (orderPlaced) {
     return (
-      <div className="min-h-screen bg-background pb-20 flex items-center justify-center">
-        <div className="text-center">
-          <Check className="mx-auto mb-4 text-green-600" size={48} />
+      <div className="min-h-screen flex items-center justify-center text-center">
+        <div>
+          <Check size={48} className="mx-auto text-green-600 mb-4" />
           <h2 className="text-xl font-semibold">Order Placed</h2>
           <p className="mt-2">Order ID: {orderId}</p>
-
           <div className="mt-6 flex gap-3 justify-center">
-            <Button onClick={() => navigate("/orders")}>
-              View Orders
-            </Button>
+            <Button onClick={() => navigate("/orders")}>View Orders</Button>
             <Button variant="outline" onClick={() => navigate("/")}>
               Home
             </Button>
@@ -164,47 +160,69 @@ export default function Checkout() {
     );
   }
 
-  if (items.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Button onClick={() => navigate("/inventory")}>
-          Browse Inventory
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background pb-32">
-      <div className="px-4 py-4 max-w-lg mx-auto">
-        <h1 className="font-semibold text-lg mb-4">Checkout</h1>
+      <div className="max-w-lg mx-auto px-4 py-4">
+        <h1 className="text-lg font-semibold mb-4">Checkout</h1>
 
         <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-6"
-          >
-            {/* UI unchanged – left intact */}
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+
+            {/* CONTACT */}
+            <Card className="p-4 space-y-4">
+              <FormField control={form.control} name="customerName" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full Name</FormLabel>
+                  <FormControl><Input {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="customerPhone" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Mobile Number</FormLabel>
+                  <FormControl><Input {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </Card>
+
+            {/* DELIVERY */}
+            <Card className="p-4">
+              <RadioGroup
+                value={deliveryType}
+                onValueChange={(v) => form.setValue("deliveryType", v as any)}
+              >
+                <Label className="flex gap-3 items-start mb-3">
+                  <RadioGroupItem value="pickup" />
+                  <Store /> Store Pickup
+                </Label>
+                <Label className="flex gap-3 items-start">
+                  <RadioGroupItem value="delivery" />
+                  <Truck /> Home Delivery
+                </Label>
+              </RadioGroup>
+
+              {deliveryType === "delivery" && (
+                <FormField control={form.control} name="deliveryAddress" render={({ field }) => (
+                  <FormItem className="mt-4">
+                    <FormLabel>Delivery Address</FormLabel>
+                    <FormControl><Textarea {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+            </Card>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={createOrderMutation.isPending}
+            >
+              {createOrderMutation.isPending ? "Placing..." : `Place Order ₹${total}`}
+            </Button>
           </form>
         </Form>
-      </div>
-
-      <div className="fixed bottom-16 left-0 right-0 border-t p-4 bg-background">
-        <Button
-          className="w-full"
-          size="lg"
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={createOrderMutation.isPending}
-        >
-          {createOrderMutation.isPending ? (
-            <>
-              <LoadingSpinner size="sm" className="mr-2" />
-              Placing Order...
-            </>
-          ) : (
-            `Place Order • ₹${total.toFixed(0)}`
-          )}
-        </Button>
       </div>
     </div>
   );
