@@ -1,98 +1,73 @@
 import type { Express, Request, Response } from "express";
-import jwt from "jsonwebtoken";
 import { db } from "../db";
-import { orders, orderItems } from "../schema";
+import { orders, orderItems } from "../db";
+import { nanoid } from "nanoid";
 
 console.log("🔥 ORDER ROUTES FILE LOADED 🔥");
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
-
-/* -----------------------------
-   Helpers
------------------------------- */
-function getUserFromRequest(req: Request) {
-  const token = req.cookies?.auth_token;
-  if (!token) return null;
-
-  try {
-    return jwt.verify(token, JWT_SECRET) as {
-      id: string;
-      email: string;
-      name?: string;
-    };
-  } catch {
-    return null;
-  }
-}
-
-/* -----------------------------
-   Routes
------------------------------- */
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
-  /* -----------------------------
-     CREATE ORDER
-  ------------------------------ */
+  // Create order
   app.post("/api/orders", async (req: Request, res: Response) => {
-    const user = getUserFromRequest(req);
-
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const { items, total, deliveryType, address } = req.body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "No order items" });
-    }
-
-    const orderNumber = `ORD-${Date.now()}`;
-
-    const [order] = await db
-      .insert(orders)
-      .values({
-        userId: user.id,
-        orderNumber,
+    try {
+      const {
+        items,
         total,
-        status: "pending",
         deliveryType,
         address,
-        createdAt: new Date(),
-      })
-      .returning();
+        phone,
+      } = req.body;
 
-    for (const item of items) {
-      await db.insert(orderItems).values({
+      if (!items || items.length === 0) {
+        return res.status(400).json({ error: "No items in order" });
+      }
+
+      const orderNumber = `ORD-${nanoid(8).toUpperCase()}`;
+
+      const [order] = await db
+        .insert(orders)
+        .values({
+          orderNumber,
+          total,
+          deliveryType,
+          address,
+          phone,
+          status: "pending",
+        })
+        .returning();
+
+      const itemsToInsert = items.map((item: any) => ({
         orderId: order.id,
-        medicineId: item.medicineId,
-        medicineName: item.medicineName,
-        price: item.price,
+        medicineId: item.medicine.id,
+        medicineName: item.medicine.name,
         quantity: item.quantity,
-      });
-    }
+        price: item.medicine.price,
+      }));
 
-    res.json({ success: true, order });
+      await db.insert(orderItems).values(itemsToInsert);
+
+      res.json({ success: true, order });
+    } catch (err) {
+      console.error("Order creation failed:", err);
+      res.status(500).json({ error: "Failed to place order" });
+    }
   });
 
-  /* -----------------------------
-     GET MY ORDERS
-  ------------------------------ */
-  app.get("/api/orders", async (req: Request, res: Response) => {
-    const user = getUserFromRequest(req);
+  // Get orders (for frontend)
+  app.get("/api/orders", async (_req, res) => {
+    try {
+      const allOrders = await db.query.orders.findMany({
+        with: {
+          items: true,
+        },
+        orderBy: (orders, { desc }) => [desc(orders.createdAt)],
+      });
 
-    if (!user) {
-      return res.json([]);
+      res.json(allOrders);
+    } catch (err) {
+      console.error("Fetching orders failed:", err);
+      res.status(500).json({ error: "Failed to fetch orders" });
     }
-
-    const userOrders = await db.query.orders.findMany({
-      where: (orders, { eq }) => eq(orders.userId, user.id),
-      with: {
-        items: true,
-      },
-      orderBy: (orders, { desc }) => desc(orders.createdAt),
-    });
-
-    res.json(userOrders);
   });
 }
