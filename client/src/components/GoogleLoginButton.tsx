@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 export function GoogleLoginButton() {
   const buttonRef = useRef<HTMLDivElement>(null);
 
@@ -10,14 +12,13 @@ export function GoogleLoginButton() {
     window.google.accounts.id.initialize({
       client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID!,
       callback: async (response) => {
-        await fetch("/api/auth/google", {
+        await fetch(`${API_BASE_URL}/api/auth/google`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ credential: response.credential }),
         });
 
-        // 🔥 FORCE AUTH REFRESH
         await queryClient.invalidateQueries({
           queryKey: ["/api/auth/me"],
         });
