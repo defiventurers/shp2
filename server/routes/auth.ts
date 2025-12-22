@@ -5,31 +5,48 @@ console.log("🔥 AUTH ROUTES FILE LOADED 🔥");
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
-/* -----------------------------
-   Helpers
------------------------------- */
-function setAuthCookie(res: Response, token: string) {
-  res.cookie("auth_token", token, {
-    httpOnly: true,
-    secure: true,      // REQUIRED on Render
-    sameSite: "none",  // REQUIRED for Vercel → Render
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+function getAuthDebug(req: Request) {
+  const token = req.cookies?.auth_token;
+
+  if (!token) {
+    return {
+      hasCookie: false,
+      token: null,
+      user: null,
+    };
+  }
+
+  try {
+    const user = jwt.verify(token, JWT_SECRET);
+    return {
+      hasCookie: true,
+      tokenPresent: true,
+      user,
+    };
+  } catch (err) {
+    return {
+      hasCookie: true,
+      tokenPresent: true,
+      error: "JWT verification failed",
+    };
+  }
 }
 
-/* -----------------------------
-   ROUTE REGISTRAR (EXPORT IS CRITICAL)
------------------------------- */
 export function registerAuthRoutes(app: Express) {
   console.log("🔥 AUTH ROUTES REGISTERED 🔥");
 
-  /* Health */
+  /* HEALTH */
   app.get("/api/auth/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  /* Google login (stub for now) */
-  app.post("/api/auth/google", (_req: Request, res: Response) => {
+  /* 🔍 DEBUG AUTH — TEMPORARY */
+  app.get("/api/debug/auth", (req: Request, res: Response) => {
+    res.json(getAuthDebug(req));
+  });
+
+  /* GOOGLE LOGIN (STUB) */
+  app.post("/api/auth/google", (_req, res) => {
     const user = {
       id: "google-user",
       email: "user@gmail.com",
@@ -37,47 +54,18 @@ export function registerAuthRoutes(app: Express) {
     };
 
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
-    setAuthCookie(res, token);
+
+    res.cookie("auth_token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     res.json({ success: true, user });
   });
 
-  /* Dev login */
-  app.get("/api/auth/dev-login", (_req, res) => {
-    const user = {
-      id: "dev-user",
-      email: "dev@example.com",
-      name: "Dev User",
-    };
-
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
-    setAuthCookie(res, token);
-
-    res.json({ success: true, user });
-  });
-
-  /* Current user */
-  app.get("/api/auth/me", (req: Request, res: Response) => {
-    const token = req.cookies?.auth_token;
-
-    if (!token) {
-      return res.json(null);
-    }
-
-    try {
-      const user = jwt.verify(token, JWT_SECRET);
-      res.json(user);
-    } catch {
-      res.clearCookie("auth_token", {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-      });
-      res.json(null);
-    }
-  });
-
-  /* Logout */
+  /* LOGOUT */
   app.post("/api/auth/logout", (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
@@ -85,5 +73,18 @@ export function registerAuthRoutes(app: Express) {
       sameSite: "none",
     });
     res.json({ success: true });
+  });
+
+  /* CURRENT USER */
+  app.get("/api/auth/me", (req: Request, res: Response) => {
+    const token = req.cookies?.auth_token;
+    if (!token) return res.json(null);
+
+    try {
+      const user = jwt.verify(token, JWT_SECRET);
+      res.json(user);
+    } catch {
+      res.json(null);
+    }
   });
 }
