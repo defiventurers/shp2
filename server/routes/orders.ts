@@ -5,9 +5,7 @@ import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 import { eq } from "drizzle-orm";
 
 export function registerOrderRoutes(app: Express) {
-  console.log("🔥 ORDER ROUTES REGISTERED 🔥");
-
-  // CREATE ORDER
+  /* CREATE ORDER */
   app.post("/api/orders", requireAuth, async (req: AuthRequest, res: Response) => {
     try {
       const user = req.user;
@@ -37,6 +35,7 @@ export function registerOrderRoutes(app: Express) {
           subtotal,
           deliveryFee,
           total,
+          notes,
           status: "pending",
         })
         .returning();
@@ -55,12 +54,12 @@ export function registerOrderRoutes(app: Express) {
 
       res.json({ success: true, orderNumber: order.id });
     } catch (err) {
-      console.error("ORDER ERROR:", err);
+      console.error("ORDER CREATE ERROR:", err);
       res.status(500).json({ error: "Failed to place order" });
     }
   });
 
-  // GET USER ORDERS
+  /* GET USER ORDERS */
   app.get("/api/orders", requireAuth, async (req: AuthRequest, res) => {
     const user = req.user;
 
