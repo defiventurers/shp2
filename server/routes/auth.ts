@@ -4,33 +4,13 @@ import jwt from "jsonwebtoken";
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 export function registerAuthRoutes(app: Express) {
-  console.log("🔥 AUTH ROUTES REGISTERED (JWT HEADER MODE) 🔥");
-
-  /* Health */
+  /* HEALTH */
   app.get("/api/auth/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  /* Google login (stub for now) */
-  app.post("/api/auth/google", async (_req: Request, res: Response) => {
-    const user = {
-      id: "google-user",
-      email: "user@gmail.com",
-      name: "Google User",
-    };
-
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
-
-    // 🔥 TOKEN RETURNED IN JSON (NOT COOKIE)
-    res.json({
-      success: true,
-      token,
-      user,
-    });
-  });
-
-  /* Dev login */
-  app.post("/api/auth/dev-login", (_req, res) => {
+  /* DEV LOGIN */
+  app.post("/api/auth/dev-login", (_req: Request, res: Response) => {
     const user = {
       id: "dev-user",
       email: "dev@example.com",
@@ -46,16 +26,16 @@ export function registerAuthRoutes(app: Express) {
     });
   });
 
-  /* Current user (HEADER AUTH) */
+  /* CURRENT USER */
   app.get("/api/auth/me", (req: Request, res: Response) => {
-    const auth = req.headers.authorization;
+    const authHeader = req.headers.authorization;
 
-    if (!auth?.startsWith("Bearer ")) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return res.json(null);
     }
 
     try {
-      const token = auth.replace("Bearer ", "");
+      const token = authHeader.replace("Bearer ", "");
       const user = jwt.verify(token, JWT_SECRET);
       res.json(user);
     } catch {
