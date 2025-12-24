@@ -1,6 +1,6 @@
 const TOKEN_KEY = "shp_jwt";
 
-export function saveToken(token: string) {
+export function setToken(token: string) {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
@@ -10,8 +10,4 @@ export function getToken(): string | null {
 
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
-}
-
-export function isLoggedIn(): boolean {
-  return Boolean(getToken());
 }
