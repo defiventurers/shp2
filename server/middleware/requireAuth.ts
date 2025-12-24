@@ -14,16 +14,16 @@ export function requireAuth(
 ) {
   const auth = req.headers.authorization;
 
-  if (!auth?.startsWith("Bearer ")) {
+  if (!auth || !auth.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const token = auth.split(" ")[1];
+    const token = auth.replace("Bearer ", "");
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
-  } catch {
+  } catch (err) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 }
