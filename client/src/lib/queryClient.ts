@@ -1,59 +1,52 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://sacredheartpharma-backend.onrender.com";
-
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
-  }
-}
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown
 ): Promise<any> {
+  const token = localStorage.getItem("auth_token");
+
   const res = await fetch(`${API_BASE_URL}${url}`, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
   });
 
-  await throwIfResNotOk(res);
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+
   return res.json();
 }
 
-export const getQueryFn: <T>(options: {
-  on401: "throw" | "returnNull";
-}) => QueryFunction<T> =
-  ({ on401 }) =>
+export const getQueryFn: <T>() => QueryFunction<T> =
+  () =>
   async ({ queryKey }) => {
-    const res = await fetch(`${API_BASE_URL}${queryKey[0]}`, {
-      credentials: "include",
+    const token = localStorage.getItem("auth_token");
+
+    const res = await fetch(`${API_BASE_URL}${queryKey.join("")}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
 
-    if (on401 === "returnNull" && res.status === 401) {
-      return null as T;
+    if (!res.ok) {
+      throw new Error(await res.text());
     }
 
-    await throwIfResNotOk(res);
     return res.json();
   };
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
-      staleTime: Infinity,
+      queryFn: getQueryFn(),
+      retry: false,
       refetchOnWindowFocus: false,
-      retry: false,
-    },
-    mutations: {
-      retry: false,
     },
   },
 });
