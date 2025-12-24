@@ -1,43 +1,29 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { getToken } from "./auth";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown
-): Promise<any> {
-  const token = localStorage.getItem("auth_token");
-
-  const res = await fetch(`${API_BASE_URL}${url}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: data ? JSON.stringify(data) : undefined,
-  });
-
+async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    throw new Error(await res.text());
+    const text = await res.text();
+    throw new Error(`${res.status}: ${text}`);
   }
-
-  return res.json();
 }
 
 export const getQueryFn: <T>() => QueryFunction<T> =
   () =>
   async ({ queryKey }) => {
-    const token = localStorage.getItem("auth_token");
+    const token = getToken();
 
-    const res = await fetch(`${API_BASE_URL}${queryKey.join("")}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    const res = await fetch(`${API_BASE_URL}${queryKey.join("/")}`, {
+      headers: token
+        ? { Authorization: `Bearer ${token}` }
+        : undefined,
     });
 
-    if (!res.ok) {
-      throw new Error(await res.text());
-    }
+    if (res.status === 401) return null as any;
 
+    await throwIfResNotOk(res);
     return res.json();
   };
 
@@ -46,7 +32,10 @@ export const queryClient = new QueryClient({
     queries: {
       queryFn: getQueryFn(),
       retry: false,
-      refetchOnWindowFocus: false,
+      staleTime: Infinity,
+    },
+    mutations: {
+      retry: false,
     },
   },
 });
