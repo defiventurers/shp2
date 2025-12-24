@@ -12,18 +12,18 @@ export function requireAuth(
   res: Response,
   next: NextFunction
 ) {
-  const token = req.cookies?.auth_token;
+  const auth = req.headers.authorization;
 
-  if (!token) {
+  if (!auth?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
+    const token = auth.split(" ")[1];
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
-  } catch (err) {
-    console.error("AUTH VERIFY FAILED:", err);
+  } catch {
     return res.status(401).json({ error: "Unauthorized" });
   }
 }
