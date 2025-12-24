@@ -4,14 +4,14 @@ import jwt from "jsonwebtoken";
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 export function registerAuthRoutes(app: Express) {
-  console.log("🔥 AUTH ROUTES REGISTERED 🔥");
+  console.log("🔥 AUTH ROUTES REGISTERED (JWT HEADER MODE) 🔥");
 
-  // Health
+  /* Health */
   app.get("/api/auth/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  // GOOGLE LOGIN (STUB FOR NOW)
+  /* Google login (stub for now) */
   app.post("/api/auth/google", async (_req: Request, res: Response) => {
     const user = {
       id: "google-user",
@@ -21,6 +21,7 @@ export function registerAuthRoutes(app: Express) {
 
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
 
+    // 🔥 TOKEN RETURNED IN JSON (NOT COOKIE)
     res.json({
       success: true,
       token,
@@ -28,8 +29,8 @@ export function registerAuthRoutes(app: Express) {
     });
   });
 
-  // DEV LOGIN
-  app.get("/api/auth/dev-login", (_req, res) => {
+  /* Dev login */
+  app.post("/api/auth/dev-login", (_req, res) => {
     const user = {
       id: "dev-user",
       email: "dev@example.com",
@@ -45,7 +46,7 @@ export function registerAuthRoutes(app: Express) {
     });
   });
 
-  // CURRENT USER
+  /* Current user (HEADER AUTH) */
   app.get("/api/auth/me", (req: Request, res: Response) => {
     const auth = req.headers.authorization;
 
@@ -54,16 +55,11 @@ export function registerAuthRoutes(app: Express) {
     }
 
     try {
-      const token = auth.split(" ")[1];
+      const token = auth.replace("Bearer ", "");
       const user = jwt.verify(token, JWT_SECRET);
       res.json(user);
     } catch {
       res.json(null);
     }
-  });
-
-  // LOGOUT (frontend clears token)
-  app.post("/api/auth/logout", (_req, res) => {
-    res.json({ success: true });
   });
 }
