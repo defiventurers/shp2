@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { queryClient } from "@/lib/queryClient";
+import { setToken } from "@/lib/auth";
 
 export function GoogleLoginButton() {
   const ref = useRef<HTMLDivElement>(null);
@@ -20,9 +21,12 @@ export function GoogleLoginButton() {
         );
 
         const data = await res.json();
-        localStorage.setItem("auth_token", data.token);
 
-        await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+        setToken(data.token);
+
+        await queryClient.invalidateQueries({
+          queryKey: ["/api/auth/me"],
+        });
       },
     });
 
