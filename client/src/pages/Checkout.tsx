@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 export default function Checkout() {
   const { items, clearCart, requiresPrescription } = useCartContext();
@@ -15,12 +16,19 @@ export default function Checkout() {
 
   const [loading, setLoading] = useState(false);
 
+  // Customer
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
-  const [deliveryType, setDeliveryType] = useState<"pickup" | "delivery">("pickup");
+  // Delivery
+  const [deliveryType, setDeliveryType] =
+    useState<"pickup" | "delivery">("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+
+  // Prescription (selection only)
+  const [selectedPrescriptionId, setSelectedPrescriptionId] =
+    useState<string | null>(null);
 
   const subtotal = items.reduce(
     (sum, item) => sum + Number(item.medicine.price) * item.quantity,
@@ -49,29 +57,35 @@ export default function Checkout() {
       return;
     }
 
+    if (requiresPrescription && !selectedPrescriptionId) {
+      toast({
+        title: "Prescription required",
+        description: "Please select a valid prescription before placing order",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const data = await apiRequest(
-        "POST",
-        "/api/orders",
-        {
-          items: items.map((item) => ({
-            medicineId: item.medicine.id,
-            medicineName: item.medicine.name,
-            quantity: item.quantity,
-            price: item.medicine.price,
-          })),
-          subtotal,
-          deliveryFee,
-          total,
-          deliveryType,
-          deliveryAddress: deliveryType === "delivery" ? deliveryAddress : null,
-          customerName: name,
-          customerPhone: phone,
-          customerEmail: email || null,
-        }
-      );
+      const data = await apiRequest("POST", "/api/orders", {
+        items: items.map((item) => ({
+          medicineId: item.medicine.id,
+          medicineName: item.medicine.name,
+          quantity: item.quantity,
+          price: item.medicine.price,
+        })),
+        subtotal,
+        deliveryFee,
+        total,
+        deliveryType,
+        deliveryAddress: deliveryType === "delivery" ? deliveryAddress : null,
+        customerName: name,
+        customerPhone: phone,
+        customerEmail: email || null,
+        prescriptionId: selectedPrescriptionId,
+      });
 
       toast({
         title: "Order placed",
@@ -93,7 +107,6 @@ export default function Checkout() {
   return (
     <div className="min-h-screen bg-background pb-32">
       <div className="px-4 py-4 max-w-lg mx-auto space-y-5">
-
         <h2 className="text-lg font-semibold">Checkout</h2>
 
         {/* CUSTOMER DETAILS */}
@@ -132,26 +145,27 @@ export default function Checkout() {
 
           <RadioGroup
             value={deliveryType}
-            onValueChange={(v) => setDeliveryType(v as "pickup" | "delivery")}
+            onValueChange={(v) =>
+              setDeliveryType(v as "pickup" | "delivery")
+            }
             className="space-y-3"
           >
-            {/* STORE PICKUP */}
             <label className="flex items-start gap-3 border rounded-lg p-3 cursor-pointer">
               <RadioGroupItem value="pickup" />
-              <div className="flex-1">
-                <div className="font-medium">Store Pickup <span className="text-green-600">FREE</span></div>
+              <div>
+                <div className="font-medium">
+                  Store Pickup <span className="text-green-600">FREE</span>
+                </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  16, Campbell Rd, opposite to St. Philomena&apos;s Hospital,<br />
-                  Austin Town, Victoria Layout,<br />
-                  Bengaluru, Karnataka 560047
+                  16, Campbell Rd, opposite St. Philomena&apos;s Hospital,
+                  Bengaluru 560047
                 </p>
               </div>
             </label>
 
-            {/* HOME DELIVERY */}
             <label className="flex items-start gap-3 border rounded-lg p-3 cursor-pointer">
               <RadioGroupItem value="delivery" />
-              <div className="flex-1">
+              <div>
                 <div className="font-medium">Home Delivery ₹30</div>
                 <p className="text-sm text-muted-foreground">
                   Same day delivery in Bangalore
@@ -161,7 +175,7 @@ export default function Checkout() {
           </RadioGroup>
 
           {deliveryType === "delivery" && (
-            <div className="pt-2">
+            <div>
               <Label>Delivery Address *</Label>
               <Input
                 placeholder="Enter full address"
@@ -172,21 +186,37 @@ export default function Checkout() {
           )}
         </Card>
 
-        {/* PRESCRIPTION REQUIRED (UI ONLY) */}
+        {/* PRESCRIPTION */}
         {requiresPrescription && (
           <Card className="p-4 bg-amber-50 border-amber-200">
             <div className="flex gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-              <div>
+              <div className="flex-1">
                 <p className="font-medium text-sm text-amber-800">
                   Prescription Required
                 </p>
                 <p className="text-xs text-amber-700 mt-1">
-                  Some items require a valid prescription.
+                  Select a prescription uploaded earlier
                 </p>
-                <Button variant="outline" size="sm" className="mt-2">
-                  Select Prescription
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  asChild
+                >
+                  <Link href="/prescription">
+                    {selectedPrescriptionId
+                      ? "Change Prescription"
+                      : "Select Prescription"}
+                  </Link>
                 </Button>
+
+                {selectedPrescriptionId && (
+                  <p className="text-xs text-green-700 mt-2">
+                    Prescription selected
+                  </p>
+                )}
               </div>
             </div>
           </Card>
