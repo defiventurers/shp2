@@ -10,7 +10,7 @@ import { registerAuthRoutes } from "./routes/auth";
 import { registerMedicineRoutes } from "./routes/medicines";
 import { registerCategoryRoutes } from "./routes/categories";
 import { registerOrderRoutes } from "./routes/orders";
-import { registerPrescriptionRoutes } from "./routes/prescriptions"; // ✅ ADDED
+import { registerPrescriptionRoutes } from "./routes/prescriptions";
 
 console.log("🔥 SERVER INDEX EXECUTED 🔥");
 
@@ -37,7 +37,7 @@ app.use(cookieParser());
 /* -----------------------------
    BODY PARSERS
 ------------------------------ */
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 /* -----------------------------
@@ -71,12 +71,18 @@ app.get("/api/__probe", (_req, res) => {
     console.error("Seed failed:", err);
   }
 
+  console.log("🌤️ Cloudinary configured:", {
+    cloud: Boolean(process.env.CLOUDINARY_CLOUD_NAME),
+    key: Boolean(process.env.CLOUDINARY_API_KEY),
+    secret: Boolean(process.env.CLOUDINARY_API_SECRET),
+  });
+
   // 🔥 REGISTER ROUTES EXPLICITLY
   registerAuthRoutes(app);
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
-  registerPrescriptionRoutes(app); // ✅ ADDED
+  registerPrescriptionRoutes(app);
 
   /* -----------------------------
      ERROR HANDLER
