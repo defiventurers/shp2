@@ -11,28 +11,52 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect, useRef } from "react";
 
 interface HeaderProps {
   title?: string;
 }
 
 export function Header({ title }: HeaderProps) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const { toast } = useToast();
+
+  // 🔐 Prevent duplicate login toasts
+  const loginToastShown = useRef(false);
+
+  useEffect(() => {
+    if (isAuthenticated && user && !loginToastShown.current) {
+      toast({
+        title: "Login successful",
+        description: `Welcome, ${user.name || "User"}`,
+      });
+      loginToastShown.current = true;
+    }
+
+    if (!isAuthenticated) {
+      loginToastShown.current = false;
+    }
+  }, [isAuthenticated, user, toast]);
 
   async function handleLogout() {
-    // 1️⃣ Remove JWT
+    // 1️⃣ Remove JWT (defensive)
     localStorage.removeItem("auth_token");
 
-    // 2️⃣ Call backend (optional but clean)
-    await fetch(
-      `${import.meta.env.VITE_API_URL}/api/auth/logout`,
-      { method: "POST" }
-    );
+    // 2️⃣ Call backend logout (best practice)
+    try {
+      await fetch(
+        `${import.meta.env.VITE_API_URL}/api/auth/logout`,
+        { method: "POST", credentials: "include" }
+      );
+    } catch {
+      // ignore network failure on logout
+    }
 
-    // 3️⃣ Clear cached user & orders
+    // 3️⃣ Clear cache
     queryClient.clear();
 
-    // 4️⃣ Force UI reset
+    // 4️⃣ Reset UI
     window.location.href = "/";
   }
 
@@ -58,7 +82,7 @@ export function Header({ title }: HeaderProps) {
         )}
 
         <div className="flex items-center gap-2">
-          {isAuthenticated && user ? (
+          {!isLoading && isAuthenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">
@@ -101,12 +125,14 @@ export function Header({ title }: HeaderProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/">
-                <User className="w-4 h-4 mr-1" />
-                Login
-              </Link>
-            </Button>
+            !isLoading && (
+              <Button variant="ghost" size="sm" asChild>
+                <a href="/api/auth/dev-login">
+                  <User className="w-4 h-4 mr-1" />
+                  Login
+                </a>
+              </Button>
+            )
           )}
         </div>
       </div>
