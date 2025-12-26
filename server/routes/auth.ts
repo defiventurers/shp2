@@ -3,6 +3,17 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
+function setAuthCookie(res: Response, token: string) {
+  res.cookie("auth_token", token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    domain: ".vercel.app",   // 🔥 CRITICAL
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+}
+
 export function registerAuthRoutes(app: Express) {
   /* HEALTH */
   app.get("/api/auth/health", (_req, res) => {
@@ -19,27 +30,46 @@ export function registerAuthRoutes(app: Express) {
 
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
 
+    setAuthCookie(res, token);
+
     res.json({
       success: true,
-      token,
       user,
     });
   });
 
   /* CURRENT USER */
   app.get("/api/auth/me", (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization;
+    const token = req.cookies?.auth_token;
 
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!token) {
       return res.json(null);
     }
 
     try {
-      const token = authHeader.replace("Bearer ", "");
       const user = jwt.verify(token, JWT_SECRET);
       res.json(user);
     } catch {
+      res.clearCookie("auth_token", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        domain: ".vercel.app",
+        path: "/",
+      });
       res.json(null);
     }
+  });
+
+  /* LOGOUT */
+  app.post("/api/auth/logout", (_req, res) => {
+    res.clearCookie("auth_token", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      domain: ".vercel.app",
+      path: "/",
+    });
+    res.json({ success: true });
   });
 }
