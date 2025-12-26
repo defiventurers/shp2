@@ -21,7 +21,8 @@ export default function Checkout() {
     setLoading(true);
 
     try {
-      const data = await apiRequest("/api/orders", {
+      const data = await apiRequest({
+        url: "/api/orders",
         method: "POST",
         body: {
           items: items.map((item) => ({
@@ -40,7 +41,6 @@ export default function Checkout() {
         },
       });
 
-      // ✅ data is ALREADY JSON
       toast({
         title: "Order placed",
         description: `Order #${data.orderNumber}`,
