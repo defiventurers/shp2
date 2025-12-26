@@ -13,8 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Home() {
+  const { isAuthenticated, user } = useAuth();
+
   return (
     <div className="min-h-screen bg-background pb-20">
       {/* ---------------- HERO ---------------- */}
@@ -34,13 +37,13 @@ export default function Home() {
             </h1>
 
             <p className="text-primary-foreground/80 text-sm mb-1">
-              Austin Town, Victoria Layout, Bengaluru , Karnataka 560047
+              Austin Town, Victoria Layout, Bengaluru, Karnataka 560047
             </p>
 
             <div className="flex items-center justify-center gap-1 text-xs text-primary-foreground/70 mb-6">
               <MapPin className="w-3 h-3" />
               <span>
-                16, Campbell Rd, opposite to ST. PHILOMENA'S HOSPITAL,
+                16, Campbell Rd, opposite to ST. PHILOMENA&apos;S HOSPITAL
               </span>
             </div>
 
@@ -49,10 +52,16 @@ export default function Home() {
               prescription upload.
             </p>
 
-            {/* ✅ GOOGLE LOGIN BUTTON */}
-            <div className="flex justify-center">
-              <GoogleLoginButton />
-            </div>
+            {/* ✅ AUTH-AWARE LOGIN UI */}
+            {!isAuthenticated ? (
+              <div className="flex justify-center">
+                <GoogleLoginButton />
+              </div>
+            ) : (
+              <p className="text-sm text-primary-foreground/90 font-medium">
+                Welcome back{user?.name ? `, ${user.name}` : ""} 👋
+              </p>
+            )}
           </div>
         </div>
       </div>
