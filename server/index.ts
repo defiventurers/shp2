@@ -10,6 +10,7 @@ import { registerAuthRoutes } from "./routes/auth";
 import { registerMedicineRoutes } from "./routes/medicines";
 import { registerCategoryRoutes } from "./routes/categories";
 import { registerOrderRoutes } from "./routes/orders";
+import { registerPrescriptionRoutes } from "./routes/prescriptions"; // ✅ ADDED
 
 console.log("🔥 SERVER INDEX EXECUTED 🔥");
 
@@ -41,7 +42,6 @@ app.use(express.urlencoded({ extended: false }));
 
 /* -----------------------------
    🔍 DEBUG AUTH ENDPOINT
-   (THIS IS THE KEY)
 ------------------------------ */
 app.get("/api/debug/auth", (req: Request, res: Response) => {
   res.json({
@@ -76,6 +76,7 @@ app.get("/api/__probe", (_req, res) => {
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
+  registerPrescriptionRoutes(app); // ✅ ADDED
 
   /* -----------------------------
      ERROR HANDLER
