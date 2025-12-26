@@ -16,17 +16,14 @@ export default function CheckoutPage() {
 
   const [loading, setLoading] = useState(false);
 
-  // Customer
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
-  // Delivery
   const [deliveryType, setDeliveryType] =
     useState<"pickup" | "delivery">("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
 
-  // Prescription
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
 
@@ -116,23 +113,83 @@ export default function CheckoutPage() {
             <Label>Full Name *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-
           <div>
-            <Label>Phone Number *</Label>
+            <Label>Phone *</Label>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
-
           <div>
-            <Label>Email (Optional)</Label>
+            <Label>Email</Label>
             <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
         </Card>
 
         {/* DELIVERY */}
         <Card className="p-4 space-y-3">
-          <Label className="font-medium">Delivery Option</Label>
-
+          <Label>Delivery Option</Label>
           <RadioGroup
             value={deliveryType}
             onValueChange={(v) =>
-              setDeliveryType(v
+              setDeliveryType(v as "pickup" | "delivery")
+            }
+          >
+            <label className="flex gap-3 border p-3 rounded-lg">
+              <RadioGroupItem value="pickup" />
+              <div>
+                <div className="font-medium">
+                  Store Pickup <span className="text-green-600">FREE</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  16, Campbell Rd, Bengaluru 560047
+                </p>
+              </div>
+            </label>
+
+            <label className="flex gap-3 border p-3 rounded-lg">
+              <RadioGroupItem value="delivery" />
+              <div>
+                <div className="font-medium">Home Delivery ₹30</div>
+                <p className="text-sm text-muted-foreground">
+                  Same day delivery
+                </p>
+              </div>
+            </label>
+          </RadioGroup>
+
+          {deliveryType === "delivery" && (
+            <Input
+              placeholder="Delivery address"
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+            />
+          )}
+        </Card>
+
+        {/* PRESCRIPTION */}
+        {requiresPrescription && (
+          <Card className="p-4 bg-amber-50 border-amber-200">
+            <div className="flex gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <div>
+                <p className="font-medium text-sm">Prescription Required</p>
+                <Button asChild size="sm" variant="outline" className="mt-2">
+                  <Link href="/prescription">Select Prescription</Link>
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+
+      <div className="fixed bottom-16 left-0 right-0 border-t bg-background p-4">
+        <Button
+          className="w-full"
+          size="lg"
+          onClick={placeOrder}
+          disabled={loading}
+        >
+          {loading ? "Placing order..." : `Place Order • ₹${total}`}
+        </Button>
+      </div>
+    </div>
+  );
+}
