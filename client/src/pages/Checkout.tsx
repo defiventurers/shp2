@@ -1,44 +1,43 @@
 import { useState } from "react";
-import { Link } from "wouter";
 import { useCartContext } from "@/context/CartContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, CheckCircle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 
-export default function Checkout() {
+export default function CheckoutPage() {
   const { items, clearCart, requiresPrescription } = useCartContext();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(false);
 
-  /* ---------------- CUSTOMER ---------------- */
+  // Customer
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
-  /* ---------------- DELIVERY ---------------- */
+  // Delivery
   const [deliveryType, setDeliveryType] =
     useState<"pickup" | "delivery">("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
 
-  /* ---------------- PRESCRIPTION ---------------- */
+  // Prescription
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
 
-  /* ---------------- PRICING ---------------- */
   const subtotal = items.reduce(
     (sum, item) => sum + Number(item.medicine.price) * item.quantity,
     0
   );
+
   const deliveryFee = deliveryType === "delivery" ? 30 : 0;
   const total = subtotal + deliveryFee;
 
-  /* ---------------- PLACE ORDER ---------------- */
   async function placeOrder() {
     if (!name || !phone) {
       toast({
@@ -52,7 +51,7 @@ export default function Checkout() {
     if (deliveryType === "delivery" && !deliveryAddress) {
       toast({
         title: "Address required",
-        description: "Please enter your delivery address",
+        description: "Please enter delivery address",
         variant: "destructive",
       });
       return;
@@ -90,7 +89,7 @@ export default function Checkout() {
       });
 
       toast({
-        title: "Order placed successfully",
+        title: "Order placed",
         description: `Order #${data.orderNumber}`,
       });
 
@@ -109,149 +108,31 @@ export default function Checkout() {
   return (
     <div className="min-h-screen bg-background pb-32">
       <div className="px-4 py-4 max-w-lg mx-auto space-y-5">
-
-        {/* STEP */}
-        <div className="text-xs text-muted-foreground">
-          Step 2 of 3
-        </div>
-
         <h2 className="text-lg font-semibold">Checkout</h2>
 
-        {/* ---------------- CUSTOMER DETAILS ---------------- */}
+        {/* CUSTOMER */}
         <Card className="p-4 space-y-3">
-          <Label className="font-medium">Customer Details</Label>
-
           <div>
             <Label>Full Name *</Label>
-            <Input
-              placeholder="Enter your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 
           <div>
             <Label>Phone Number *</Label>
-            <Input
-              placeholder="10-digit mobile number"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
 
           <div>
             <Label>Email (Optional)</Label>
-            <Input
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
         </Card>
 
-        {/* ---------------- DELIVERY OPTIONS ---------------- */}
+        {/* DELIVERY */}
         <Card className="p-4 space-y-3">
           <Label className="font-medium">Delivery Option</Label>
 
           <RadioGroup
             value={deliveryType}
             onValueChange={(v) =>
-              setDeliveryType(v as "pickup" | "delivery")
-            }
-            className="space-y-3"
-          >
-            <label className="flex items-start gap-3 border rounded-lg p-3 cursor-pointer">
-              <RadioGroupItem value="pickup" />
-              <div>
-                <div className="font-medium">
-                  Store Pickup <span className="text-green-600">FREE</span>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  16, Campbell Rd, opposite St. Philomena&apos;s Hospital,
-                  Bengaluru 560047
-                </p>
-              </div>
-            </label>
-
-            <label className="flex items-start gap-3 border rounded-lg p-3 cursor-pointer">
-              <RadioGroupItem value="delivery" />
-              <div>
-                <div className="font-medium">Home Delivery ₹30</div>
-                <p className="text-sm text-muted-foreground">
-                  Same day delivery in Bangalore
-                </p>
-              </div>
-            </label>
-          </RadioGroup>
-
-          {deliveryType === "delivery" && (
-            <div>
-              <Label>Delivery Address *</Label>
-              <Input
-                placeholder="Enter full address"
-                value={deliveryAddress}
-                onChange={(e) => setDeliveryAddress(e.target.value)}
-              />
-            </div>
-          )}
-        </Card>
-
-        {/* ---------------- PRESCRIPTION SELECTION ---------------- */}
-        {requiresPrescription && (
-          <Card className="p-4 bg-amber-50 border-amber-200">
-            <div className="flex gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-sm text-amber-800">
-                  Prescription Required
-                </p>
-                <p className="text-xs text-amber-700 mt-1">
-                  Select a previously uploaded prescription
-                </p>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  asChild
-                >
-                  <Link href="/prescription">
-                    {selectedPrescriptionId
-                      ? "Change Prescription"
-                      : "Select Prescription"}
-                  </Link>
-                </Button>
-
-                {selectedPrescriptionId && (
-                  <div className="flex items-center gap-1 mt-2 text-xs text-green-700">
-                    <CheckCircle className="w-4 h-4" />
-                    Prescription selected
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
-        )}
-      </div>
-
-      {/* ---------------- FIXED FOOTER ---------------- */}
-      <div className="fixed bottom-16 left-0 right-0 bg-background border-t p-4">
-        <div className="max-w-lg mx-auto space-y-2">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Total</span>
-            <span className="font-semibold text-lg">₹{total}</span>
-          </div>
-
-          <Button
-            className="w-full"
-            size="lg"
-            onClick={placeOrder}
-            disabled={loading}
-          >
-            {loading ? "Placing order…" : "Place Order"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
+              setDeliveryType(v
