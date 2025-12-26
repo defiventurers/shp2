@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
@@ -12,20 +12,18 @@ export function requireAuth(
   res: Response,
   next: NextFunction
 ) {
-  const authHeader = req.headers.authorization;
+  const token = req.cookies?.auth_token;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!token) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-
-  const token = authHeader.replace("Bearer ", "");
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch (err) {
-    console.error("JWT VERIFY FAILED:", err);
+    console.error("AUTH VERIFY FAILED:", err);
     return res.status(401).json({ error: "Unauthorized" });
   }
 }
