@@ -40,11 +40,14 @@ export function registerPrescriptionRoutes(app: Express) {
 
         const uploadResult = await new Promise<any>((resolve, reject) => {
           cloudinary.v2.uploader
-            .upload_stream({ folder: "prescriptions" }, (err, result) => {
-              if (err) reject(err);
-              else resolve(result);
-            })
-            .end(req.file!.buffer);
+            .upload_stream(
+              { folder: "prescriptions" },
+              (err, result) => {
+                if (err) reject(err);
+                else resolve(result);
+              }
+            )
+            .end(req.file.buffer);
         });
 
         const [saved] = await db
@@ -62,7 +65,7 @@ export function registerPrescriptionRoutes(app: Express) {
           extractedMedicines: [],
         });
       } catch (err) {
-        console.error(err);
+        console.error("Prescription upload failed:", err);
         res.status(500).json({ error: "Upload failed" });
       }
     }
