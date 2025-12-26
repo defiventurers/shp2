@@ -1,12 +1,12 @@
 import { createContext, useContext, type ReactNode, useState } from "react";
 import { useCart } from "@/hooks/useCart";
-import type { Medicine, CartItem, Prescription } from "@shared/schema";
+import type { Prescription } from "@shared/schema";
 
 interface CartContextType {
-  items: CartItem[];
-  addItem: (medicine: Medicine, quantity?: number) => void;
-  removeItem: (medicineId: string) => void;
-  updateQuantity: (medicineId: string, quantity: number) => void;
+  items: any[];
+  addItem: any;
+  removeItem: any;
+  updateQuantity: any;
   clearCart: () => void;
 
   itemCount: number;
@@ -17,8 +17,10 @@ interface CartContextType {
 
   prescriptions: Prescription[];
   selectedPrescriptionId: string | null;
+
   addPrescription: (p: Prescription) => void;
-  selectPrescription: (id: string | null) => void;
+  selectPrescription: (id: string) => void;
+  deletePrescription: (id: string) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -31,15 +33,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
     useState<string | null>(null);
 
   function addPrescription(p: Prescription) {
-    setPrescriptions((prev) => {
-      if (prev.find((x) => x.id === p.id)) return prev;
-      return [p, ...prev];
-    });
-    setSelectedPrescriptionId(p.id);
+    setPrescriptions((prev) => [p, ...prev]);
+    setSelectedPrescriptionId(p.id); // auto-select latest
   }
 
-  function selectPrescription(id: string | null) {
+  function selectPrescription(id: string) {
     setSelectedPrescriptionId(id);
+  }
+
+  function deletePrescription(id: string) {
+    setPrescriptions((prev) => prev.filter((p) => p.id !== id));
+
+    if (selectedPrescriptionId === id) {
+      setSelectedPrescriptionId(null);
+    }
   }
 
   return (
@@ -50,6 +57,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         selectedPrescriptionId,
         addPrescription,
         selectPrescription,
+        deletePrescription,
       }}
     >
       {children}
