@@ -1,72 +1,73 @@
-import { useMutation } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { useState } from "react";
 import { useCartContext } from "@/context/CartContext";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Checkout() {
-  const { items, subtotal, clearCart } = useCartContext();
+  const { items, clearCart } = useCartContext();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  const createOrder = useMutation({
-    mutationFn: async () => {
-      const payload = {
-        customerName: "Test User",
-        customerPhone: "9999999999",
-        deliveryType: "pickup",
-        items: items.map((item) => ({
-          medicineId: item.medicine.id,
-          medicineName: item.medicine.name,
-          quantity: item.quantity,
-          price: item.medicine.price,
-        })),
-        subtotal: subtotal.toString(),
-        deliveryFee: "0",
-        total: subtotal.toString(),
-      };
+  const subtotal = items.reduce(
+    (sum, item) => sum + Number(item.medicine.price) * item.quantity,
+    0
+  );
 
-      const res = await apiRequest("POST", "/api/orders", payload);
-      return res.json();
-    },
-    onSuccess: () => {
+  const deliveryFee = 0;
+  const total = subtotal + deliveryFee;
+
+  async function placeOrder() {
+    setLoading(true);
+
+    try {
+      const data = await apiRequest("/api/orders", {
+        method: "POST",
+        body: {
+          items: items.map((item) => ({
+            medicineId: item.medicine.id,
+            medicineName: item.medicine.name,
+            quantity: item.quantity,
+            price: item.medicine.price,
+          })),
+          subtotal,
+          deliveryFee,
+          total,
+          deliveryType: "pickup",
+          customerName: "Dev User",
+          customerPhone: "9999999999",
+          customerEmail: "dev@example.com",
+        },
+      });
+
+      // ✅ data is ALREADY JSON
       toast({
         title: "Order placed",
-        description: "Backend + auth working ✅",
+        description: `Order #${data.orderNumber}`,
       });
+
       clearCart();
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-    },
-    onError: (err: Error) => {
+    } catch (err: any) {
       toast({
         title: "Order failed",
-        description: err.message,
+        description: err?.message || "Failed to place order",
         variant: "destructive",
       });
-    },
-  });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <Card className="p-4 max-w-md mx-auto space-y-4">
-        <h1 className="text-lg font-semibold">Checkout (Minimal)</h1>
+    <div className="p-4 space-y-4">
+      <h2 className="text-xl font-semibold">Checkout</h2>
 
-        <p className="text-sm text-muted-foreground">
-          Items in cart: {items.length}
-        </p>
+      <div>Items in cart: {items.length}</div>
+      <div>Total: ₹{total}</div>
 
-        <p className="font-medium">
-          Total: ₹{subtotal.toFixed(0)}
-        </p>
-
-        <Button
-          className="w-full"
-          onClick={() => createOrder.mutate()}
-          disabled={createOrder.isPending}
-        >
-          {createOrder.isPending ? "Placing Order..." : "Place Order"}
-        </Button>
-      </Card>
+      <Button onClick={placeOrder} disabled={loading}>
+        {loading ? "Placing order..." : "Place Order"}
+      </Button>
     </div>
   );
 }
