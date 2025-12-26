@@ -5,15 +5,20 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
 
 export default function CheckoutPage() {
-  const { items, clearCart, requiresPrescription } = useCartContext();
-  const { toast } = useToast();
+  const {
+    items,
+    clearCart,
+    requiresPrescription,
+    selectedPrescriptionId,
+  } = useCartContext();
 
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
   const [name, setName] = useState("");
@@ -23,9 +28,6 @@ export default function CheckoutPage() {
   const [deliveryType, setDeliveryType] =
     useState<"pickup" | "delivery">("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
-
-  const [selectedPrescriptionId, setSelectedPrescriptionId] =
-    useState<string | null>(null);
 
   const subtotal = items.reduce(
     (sum, item) => sum + Number(item.medicine.price) * item.quantity,
@@ -57,7 +59,7 @@ export default function CheckoutPage() {
     if (requiresPrescription && !selectedPrescriptionId) {
       toast({
         title: "Prescription required",
-        description: "Please select a prescription before placing order",
+        description: "Please upload/select a prescription",
         variant: "destructive",
       });
       return;
@@ -166,16 +168,34 @@ export default function CheckoutPage() {
 
         {/* PRESCRIPTION */}
         {requiresPrescription && (
-          <Card className="p-4 bg-amber-50 border-amber-200">
-            <div className="flex gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600" />
-              <div>
-                <p className="font-medium text-sm">Prescription Required</p>
-                <Button asChild size="sm" variant="outline" className="mt-2">
-                  <Link href="/prescription">Select Prescription</Link>
-                </Button>
+          <Card className="p-4 border">
+            {selectedPrescriptionId ? (
+              <div className="flex items-center gap-2 text-green-600">
+                <CheckCircle className="w-5 h-5" />
+                <p className="text-sm font-medium">
+                  Prescription selected
+                </p>
               </div>
-            </div>
+            ) : (
+              <div className="flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+                <div>
+                  <p className="font-medium text-sm">
+                    Prescription Required
+                  </p>
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                  >
+                    <Link href="/prescription">
+                      Upload Prescription
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         )}
       </div>
