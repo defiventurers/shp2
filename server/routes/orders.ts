@@ -1,11 +1,10 @@
 import type { Express, Response } from "express";
 import { db } from "../db";
-import { orders, orderItems } from "@shared/schema";
+import { orders, orderItems, users } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 import { eq } from "drizzle-orm";
 
 function generateOrderNumber() {
-  // Example: SHP-20251227-8342
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const rand = Math.floor(1000 + Math.random() * 9000);
   return `SHP-${date}-${rand}`;
@@ -14,12 +13,24 @@ function generateOrderNumber() {
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
-  /* CREATE ORDER */
   app.post("/api/orders", requireAuth, async (req: AuthRequest, res: Response) => {
     try {
       const user = req.user;
       if (!user?.id) {
         return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      // ✅ ENSURE USER EXISTS
+      const existingUser = await db.query.users.findFirst({
+        where: eq(users.id, user.id),
+      });
+
+      if (!existingUser) {
+        await db.insert(users).values({
+          id: user.id,
+          email: user.email ?? "dev@example.com",
+          name: user.name ?? "Dev User",
+        });
       }
 
       const {
@@ -35,12 +46,12 @@ export function registerOrderRoutes(app: Express) {
         notes,
       } = req.body;
 
-      const orderNumber = generateOrderNumber();
+      const order_number = generateOrderNumber();
 
       const [order] = await db
         .insert(orders)
         .values({
-          orderNumber,              // ✅ FIX
+          order_number,
           userId: user.id,
           customerName,
           customerPhone,
@@ -69,7 +80,7 @@ export function registerOrderRoutes(app: Express) {
 
       res.json({
         success: true,
-        orderNumber: order.orderNumber,
+        orderNumber: order.order_number,
       });
     } catch (err) {
       console.error("ORDER ERROR:", err);
@@ -77,7 +88,6 @@ export function registerOrderRoutes(app: Express) {
     }
   });
 
-  /* GET USER ORDERS */
   app.get("/api/orders", requireAuth, async (req: AuthRequest, res) => {
     const user = req.user;
 
