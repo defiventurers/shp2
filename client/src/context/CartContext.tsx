@@ -15,7 +15,6 @@ interface CartContextType {
   requiresPrescription: boolean;
   isLoaded: boolean;
 
-  /* 🔥 PRESCRIPTION STATE */
   prescriptions: Prescription[];
   selectedPrescriptionId: string | null;
   addPrescription: (p: Prescription) => void;
@@ -31,12 +30,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
 
-  function addPrescription(prescription: Prescription) {
+  function addPrescription(p: Prescription) {
     setPrescriptions((prev) => {
-      if (prev.find((p) => p.id === prescription.id)) return prev;
-      return [prescription, ...prev];
+      if (prev.find((x) => x.id === p.id)) return prev;
+      return [p, ...prev];
     });
-    setSelectedPrescriptionId(prescription.id);
+    setSelectedPrescriptionId(p.id);
   }
 
   function selectPrescription(id: string | null) {
@@ -59,9 +58,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 }
 
 export function useCartContext() {
-  const context = useContext(CartContext);
-  if (!context) {
-    throw new Error("useCartContext must be used within CartProvider");
-  }
-  return context;
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error("useCartContext must be used within CartProvider");
+  return ctx;
 }
