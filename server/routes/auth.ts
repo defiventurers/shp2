@@ -1,26 +1,33 @@
+// server/routes/auth.ts
 import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
+/* -----------------------------
+   Helper: set auth cookie
+------------------------------ */
 function setAuthCookie(res: Response, token: string) {
   res.cookie("auth_token", token, {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    domain: ".vercel.app",   // 🔥 CRITICAL
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: true,       // required on Render (HTTPS)
+    sameSite: "none",   // required for Vercel → Render
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 }
 
+/* -----------------------------
+   Routes
+------------------------------ */
 export function registerAuthRoutes(app: Express) {
-  /* HEALTH */
+  console.log("✅ AUTH ROUTES REGISTERED");
+
+  /* Health */
   app.get("/api/auth/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  /* DEV LOGIN */
+  /* DEV LOGIN (temporary, stable) */
   app.post("/api/auth/dev-login", (_req: Request, res: Response) => {
     const user = {
       id: "dev-user",
@@ -29,13 +36,9 @@ export function registerAuthRoutes(app: Express) {
     };
 
     const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
-
     setAuthCookie(res, token);
 
-    res.json({
-      success: true,
-      user,
-    });
+    res.json({ success: true, user });
   });
 
   /* CURRENT USER */
@@ -54,8 +57,6 @@ export function registerAuthRoutes(app: Express) {
         httpOnly: true,
         secure: true,
         sameSite: "none",
-        domain: ".vercel.app",
-        path: "/",
       });
       res.json(null);
     }
@@ -67,8 +68,6 @@ export function registerAuthRoutes(app: Express) {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      domain: ".vercel.app",
-      path: "/",
     });
     res.json({ success: true });
   });
