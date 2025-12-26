@@ -1,42 +1,30 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://sacredheartpharma-backend.onrender.com";
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 /* ---------------------------------
    Helper
 ---------------------------------- */
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const data = await res.json();
-      message = data?.error || message;
-    } catch {}
-    throw new Error(message);
+    const text = await res.text();
+    throw new Error(text || res.statusText);
   }
 }
 
 /* ---------------------------------
-   ✅ FIXED apiRequest (OBJECT-BASED)
+   ✅ SINGLE VALID apiRequest SIGNATURE
 ---------------------------------- */
-type ApiRequestOptions = {
-  url: string;
-  method?: "GET" | "POST" | "PUT" | "DELETE";
-  body?: unknown;
-};
-
-export async function apiRequest({
-  url,
-  method = "GET",
-  body,
-}: ApiRequestOptions) {
+export async function apiRequest(
+  method: string,
+  url: string,
+  data?: unknown
+) {
   const res = await fetch(`${API_BASE_URL}${url}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: "include", // ✅ REQUIRED FOR COOKIE AUTH
+    headers: data ? { "Content-Type": "application/json" } : {},
+    body: data ? JSON.stringify(data) : undefined,
+    credentials: "include",
   });
 
   await throwIfResNotOk(res);
