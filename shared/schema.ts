@@ -1,10 +1,22 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, decimal, jsonb, index } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  varchar,
+  integer,
+  boolean,
+  timestamp,
+  decimal,
+  jsonb,
+  index,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
 
-// Session storage table for Replit Auth
+/* =========================
+   Sessions (legacy / auth)
+========================= */
 export const sessions = pgTable(
   "sessions",
   {
@@ -15,7 +27,9 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// Users table for Replit Auth
+/* =========================
+   Users
+========================= */
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
@@ -29,14 +43,18 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Medicine categories
+/* =========================
+   Categories
+========================= */
 export const categories = pgTable("categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull().unique(),
   icon: varchar("icon"),
 });
 
-// Medicines inventory
+/* =========================
+   Medicines
+========================= */
 export const medicines = pgTable("medicines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
@@ -44,11 +62,11 @@ export const medicines = pgTable("medicines", {
   manufacturer: varchar("manufacturer"),
   categoryId: varchar("category_id").references(() => categories.id),
   dosage: varchar("dosage"),
-  form: varchar("form"), // tablet, syrup, injection, etc.
+  form: varchar("form"),
   packSize: varchar("pack_size"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   mrp: decimal("mrp", { precision: 10, scale: 2 }).notNull(),
-  stock: integer("stock").default(0).notNull(),
+  stock: integer("stock").notNull().default(0),
   requiresPrescription: boolean("requires_prescription").default(false),
   isScheduleH: boolean("is_schedule_h").default(false),
   description: text("description"),
@@ -57,49 +75,75 @@ export const medicines = pgTable("medicines", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Prescriptions
+/* =========================
+   Prescriptions
+========================= */
 export const prescriptions = pgTable("prescriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
   imageUrl: text("image_url").notNull(),
   ocrText: text("ocr_text"),
   extractedMedicines: jsonb("extracted_medicines"),
-  status: varchar("status").default("pending"), // pending, processed, verified
+  status: varchar("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Orders
+/* =========================
+   Orders  ✅ FIXED
+========================= */
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
+  // ✅ CRITICAL FIX — camelCase in code, snake_case in DB
   orderNumber: varchar("order_number").notNull().unique(),
-  userId: varchar("user_id").references(() => users.id),
+
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+
   customerName: varchar("customer_name").notNull(),
   customerPhone: varchar("customer_phone").notNull(),
   customerEmail: varchar("customer_email"),
+
   prescriptionId: varchar("prescription_id").references(() => prescriptions.id),
-  deliveryType: varchar("delivery_type").notNull(), // pickup or delivery
+
+  deliveryType: varchar("delivery_type").notNull(),
   deliveryAddress: text("delivery_address"),
-  status: varchar("status").default("pending"), // pending, confirmed, processing, ready, out_for_delivery, delivered, cancelled
+
+  status: varchar("status").default("pending"),
+
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+
   notes: text("notes"),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Order items
+/* =========================
+   Order Items
+========================= */
 export const orderItems = pgTable("order_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: varchar("order_id").references(() => orders.id).notNull(),
-  medicineId: varchar("medicine_id").references(() => medicines.id).notNull(),
+  orderId: varchar("order_id")
+    .notNull()
+    .references(() => orders.id),
+  medicineId: varchar("medicine_id")
+    .notNull()
+    .references(() => medicines.id),
   medicineName: varchar("medicine_name").notNull(),
   quantity: integer("quantity").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
 });
 
-// Relations
+/* =========================
+   Relations
+========================= */
 export const usersRelations = relations(users, ({ many }) => ({
   orders: many(orders),
   prescriptions: many(prescriptions),
@@ -146,17 +190,44 @@ export const prescriptionsRelations = relations(prescriptions, ({ one }) => ({
   }),
 }));
 
-// Insert schemas
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
-export const insertMedicineSchema = createInsertSchema(medicines).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertPrescriptionSchema = createInsertSchema(prescriptions).omit({ id: true, createdAt: true });
-export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
+/* =========================
+   Insert Schemas
+========================= */
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
-// Types
+export const insertCategorySchema = createInsertSchema(categories).omit({
+  id: true,
+});
+
+export const insertMedicineSchema = createInsertSchema(medicines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPrescriptionSchema = createInsertSchema(prescriptions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
+  id: true,
+});
+
+/* =========================
+   Types
+========================= */
 export type User = typeof users.$inferSelect;
-export type UpsertUser = typeof users.$inferInsert;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
 export type Category = typeof categories.$inferSelect;
@@ -174,11 +245,19 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
 
-// Cart item type for frontend
+/* =========================
+   Frontend Helpers
+========================= */
 export interface CartItem {
   medicine: Medicine;
   quantity: number;
 }
 
-// Order status type
-export type OrderStatus = "pending" | "confirmed" | "processing" | "ready" | "out_for_delivery" | "delivered" | "cancelled";
+export type OrderStatus =
+  | "pending"
+  | "confirmed"
+  | "processing"
+  | "ready"
+  | "out_for_delivery"
+  | "delivered"
+  | "cancelled";
