@@ -29,6 +29,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const cart = useCart();
 
+  // ✅ SAFE STATE
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
@@ -54,7 +55,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   return (
     <CartContext.Provider
       value={{
-        ...cart,
+        // 🔒 HARD GUARANTEES (THIS FIXES ADD BUTTON)
+        items: cart.items ?? [],
+        addItem: cart.addItem,
+        removeItem: cart.removeItem,
+        updateQuantity: cart.updateQuantity,
+        clearCart: cart.clearCart,
+
+        itemCount: cart.itemCount ?? 0,
+        subtotal: cart.subtotal ?? 0,
+        hasScheduleHDrugs: cart.hasScheduleHDrugs ?? false,
+        requiresPrescription: cart.requiresPrescription ?? false,
+        isLoaded: cart.isLoaded ?? false,
+
+        // PRESCRIPTIONS
         prescriptions,
         selectedPrescriptionId,
         addPrescription,
