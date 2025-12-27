@@ -20,7 +20,7 @@ export default function PrescriptionPage() {
     deletePrescription,
   } = useCartContext();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
   const uploadMutation = useMutation({
@@ -41,6 +41,8 @@ export default function PrescriptionPage() {
       addPrescription(data.prescription);
       toast({ title: "Prescription uploaded (multi-page)" });
     },
+    onError: () =>
+      toast({ title: "Upload failed", variant: "destructive" }),
     onSettled: () => setUploading(false),
   });
 
@@ -54,39 +56,40 @@ export default function PrescriptionPage() {
 
   return (
     <div className="p-4 max-w-lg mx-auto space-y-4">
-      <Card className="p-4 border-dashed border-2 text-center">
+      <Card className="p-4 text-center border-dashed border-2">
         <Upload className="mx-auto mb-2" />
-        <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-          Upload Multi-Page Prescription
+        <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
+          {uploading ? "Uploading..." : "Upload Multi-Page Prescription"}
         </Button>
         <input
-          ref={fileInputRef}
+          ref={fileRef}
           type="file"
-          accept="image/*"
           multiple
+          accept="image/*"
           hidden
           onChange={handleUpload}
         />
       </Card>
 
       {prescriptions.map((p) => (
-        <Card
-          key={p.id}
-          className={`p-3 ${selectedPrescriptionId === p.id ? "border-green-500" : ""}`}
-        >
-          <div className="flex gap-2 mb-2">
+        <Card key={p.id} className="p-3 space-y-2">
+          <div className="grid grid-cols-3 gap-2">
             {p.imageUrls.map((url, i) => (
-              <img key={i} src={url} className="w-14 h-14 rounded object-cover" />
+              <img
+                key={i}
+                src={url}
+                className="w-full h-20 object-cover rounded"
+              />
             ))}
           </div>
 
           {selectedPrescriptionId === p.id && (
-            <p className="text-green-600 text-sm flex gap-1">
+            <p className="text-green-600 flex items-center gap-1">
               <CheckCircle size={14} /> Selected
             </p>
           )}
 
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2">
             <Button size="sm" onClick={() => selectPrescription(p.id)}>
               Select
             </Button>
