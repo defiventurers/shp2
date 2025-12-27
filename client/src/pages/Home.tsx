@@ -9,14 +9,14 @@ import {
   MapPin,
   Phone,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
 import { Card } from "@/components/ui/card";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function Home() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -43,7 +43,7 @@ export default function Home() {
             <div className="flex items-center justify-center gap-1 text-xs text-primary-foreground/70 mb-6">
               <MapPin className="w-3 h-3" />
               <span>
-                16, Campbell Rd, opposite to ST. PHILOMENA&apos;S HOSPITAL
+                16, Campbell Rd, opposite to St. Philomena&apos;s Hospital
               </span>
             </div>
 
@@ -52,14 +52,19 @@ export default function Home() {
               prescription upload.
             </p>
 
-            {/* ✅ AUTH-AWARE LOGIN UI */}
-            {!isAuthenticated ? (
+            {/* ---------------- AUTH AWARE CTA ---------------- */}
+            {isLoading ? (
+              <p className="text-sm text-primary-foreground/80">
+                Checking login…
+              </p>
+            ) : !isAuthenticated ? (
               <div className="flex justify-center">
                 <GoogleLoginButton />
               </div>
             ) : (
               <p className="text-sm text-primary-foreground/90 font-medium">
-                Welcome back{user?.name ? `, ${user.name}` : ""} 👋
+                You are logged in
+                {user?.name ? ` as ${user.name}` : ""}
               </p>
             )}
           </div>
@@ -131,7 +136,7 @@ export default function Home() {
               {
                 icon: Clock,
                 title: "Open 7 Days",
-                desc: "9 AM - 10 PM, including weekends",
+                desc: "9 AM – 10 PM, including weekends",
               },
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="flex items-start gap-3">
