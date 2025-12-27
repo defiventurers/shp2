@@ -1,60 +1,118 @@
-import { createContext, useContext, type ReactNode } from "react";
-import { useCart } from "@/hooks/useCart";
-import type { Medicine, CartItem, Prescription } from "@shared/schema";
+import { useState, useEffect, useCallback } from "react";
+import type { Medicine, CartItem } from "@shared/schema";
 
-interface CartContextType {
-  items: CartItem[];
-  addItem: (medicine: Medicine, quantity?: number) => void;
-  removeItem: (medicineId: string) => void;
-  updateQuantity: (medicineId: string, quantity: number) => void;
-  clearCart: () => void;
+const CART_STORAGE_KEY = "sacred_heart_cart";
 
-  itemCount: number;
-  subtotal: number;
-  hasScheduleHDrugs: boolean;
-  requiresPrescription: boolean;
-  isLoaded: boolean;
+export function useCart() {
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  prescriptions: Prescription[];
-  selectedPrescriptionId: string | null;
-  addPrescription: (p: Prescription) => void;
-  deletePrescription: (id: string) => void;
-  selectPrescription: (id: string | null) => void;
-}
+  /* --------------------------------
+     Load cart from localStorage
+  -------------------------------- */
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(CART_STORAGE_KEY);
+      if (stored) {
+        setItems(JSON.parse(stored));
+      }
+    } catch {
+      setItems([]);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
 
-const CartContext = createContext<CartContextType | null>(null);
+  /* --------------------------------
+     Persist cart
+  -------------------------------- */
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+    }
+  }, [items, isLoaded]);
 
-export function CartProvider({ children }: { children: ReactNode }) {
-  const cart = useCart();
+  /* --------------------------------
+     Cart actions
+  -------------------------------- */
+  const addItem = useCallback(
+    (medicine: Medicine, quantity: number = 1) => {
+      setItems((prev) => {
+        const existing = prev.find(
+          (item) => item.medicine.id === medicine.id
+        );
 
-  // 🔥 IMPORTANT: keep these OUTSIDE useCart
-  const prescriptions: Prescription[] = [];
-  const selectedPrescriptionId: string | null = null;
+        if (existing) {
+          return prev.map((item) =>
+            item.medicine.id === medicine.id
+              ? { ...item, quantity: item.quantity + quantity }
+              : item
+          );
+        }
 
-  function addPrescription(_: Prescription) {}
-  function deletePrescription(_: string) {}
-  function selectPrescription(_: string | null) {}
-
-  return (
-    <CartContext.Provider
-      value={{
-        ...cart,
-        prescriptions,
-        selectedPrescriptionId,
-        addPrescription,
-        deletePrescription,
-        selectPrescription,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
+        return [...prev, { medicine, quantity }];
+      });
+    },
+    []
   );
-}
 
-export function useCartContext() {
-  const ctx = useContext(CartContext);
-  if (!ctx) {
-    throw new Error("useCartContext must be used within CartProvider");
-  }
-  return ctx;
+  const removeItem = useCallback((medicineId: string) => {
+    setItems((prev) =>
+      prev.filter((item) => item.medicine.id !== medicineId)
+    );
+  }, []);
+
+  const updateQuantity = useCallback(
+    (medicineId: string, quantity: number) => {
+      if (quantity <= 0) {
+        removeItem(medicineId);
+        return;
+      }
+
+      setItems((prev) =>
+        prev.map((item) =>
+          item.medicine.id === medicineId
+            ? { ...item, quantity }
+            : item
+        )
+      );
+    },
+    [removeItem]
+  );
+
+  const clearCart = useCallback(() => {
+    setItems([]);
+  }, []);
+
+  /* --------------------------------
+     Derived values
+  -------------------------------- */
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const subtotal = items.reduce(
+    (sum, item) =>
+      sum + Number(item.medicine.price) * item.quantity,
+    0
+  );
+
+  const hasScheduleHDrugs = items.some(
+    (item) => item.medicine.isScheduleH
+  );
+
+  const requiresPrescription = items.some(
+    (item) => item.medicine.requiresPrescription
+  );
+
+  return {
+    items,
+    addItem,
+    removeItem,
+    updateQuantity,
+    clearCart,
+    itemCount,
+    subtotal,
+    hasScheduleHDrugs,
+    requiresPrescription,
+    isLoaded,
+  };
 }
