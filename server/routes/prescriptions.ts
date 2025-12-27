@@ -5,52 +5,41 @@ import { db } from "../db";
 import { prescriptions } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 
-/* -----------------------------
-   Cloudinary config
------------------------------- */
 cloudinary.v2.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
   api_key: process.env.CLOUDINARY_API_KEY!,
   api_secret: process.env.CLOUDINARY_API_SECRET!,
 });
 
-/* -----------------------------
-   Multer (MULTI FILE)
------------------------------- */
-const upload = multer({
-  storage: multer.memoryStorage(),
-});
+const upload = multer({ storage: multer.memoryStorage() });
 
-/* -----------------------------
-   Routes
------------------------------- */
 export function registerPrescriptionRoutes(app: Express) {
-  // ✅ MULTI-PAGE UPLOAD
+  console.log("🔥 PRESCRIPTION ROUTES REGISTERED");
+
+  /* MULTI IMAGE UPLOAD */
   app.post(
     "/api/prescriptions/upload",
     requireAuth,
     upload.array("images", 10),
     async (req: AuthRequest, res: Response) => {
       try {
-        const files = req.files as Express.Multer.File[];
-
-        if (!files || files.length === 0) {
+        if (!req.files || !(req.files instanceof Array)) {
           return res.status(400).json({ error: "No images uploaded" });
         }
 
         const imageUrls: string[] = [];
 
-        for (const file of files) {
-          const result = await new Promise<any>((resolve, reject) => {
+        for (const file of req.files) {
+          const uploadResult = await new Promise<any>((resolve, reject) => {
             cloudinary.v2.uploader
-              .upload_stream({ folder: "prescriptions" }, (err, res) => {
+              .upload_stream({ folder: "prescriptions" }, (err, result) => {
                 if (err) reject(err);
-                else resolve(res);
+                else resolve(result);
               })
               .end(file.buffer);
           });
 
-          imageUrls.push(result.secure_url);
+          imageUrls.push(uploadResult.secure_url);
         }
 
         const [saved] = await db
@@ -62,18 +51,15 @@ export function registerPrescriptionRoutes(app: Express) {
           })
           .returning();
 
-        res.json({
-          success: true,
-          prescription: saved,
-        });
+        res.json({ success: true, prescription: saved });
       } catch (err) {
-        console.error("MULTI PAGE UPLOAD FAILED:", err);
+        console.error("Upload failed:", err);
         res.status(500).json({ error: "Upload failed" });
       }
     }
   );
 
-  // LIST
+  /* LIST */
   app.get(
     "/api/prescriptions",
     requireAuth,
