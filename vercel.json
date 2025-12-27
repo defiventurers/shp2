@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "https://sacredheartpharma-backend.onrender.com/api/$1"
-    }
-  ]
-}
