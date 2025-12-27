@@ -4,109 +4,112 @@ import { OAuth2Client } from "google-auth-library";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
-/* -----------------------------
-   Google OAuth Client
------------------------------- */
+/* --------------------------------------------------
+   ENV VALIDATION (FAIL FAST)
+-------------------------------------------------- */
+if (!process.env.GOOGLE_CLIENT_ID) {
+  console.warn("⚠️ GOOGLE_CLIENT_ID missing");
+}
+if (!process.env.GOOGLE_CLIENT_SECRET) {
+  console.warn("⚠️ GOOGLE_CLIENT_SECRET missing");
+}
+if (!process.env.API_BASE_URL) {
+  console.warn("⚠️ API_BASE_URL missing");
+}
+if (!process.env.FRONTEND_URL) {
+  console.warn("⚠️ FRONTEND_URL missing");
+}
+
+/* --------------------------------------------------
+   GOOGLE OAUTH CLIENT
+-------------------------------------------------- */
 const googleClient = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  `${process.env.API_BASE_URL}/api/auth/google/callback`
 );
 
-/* -----------------------------
-   Helper: set auth cookie
------------------------------- */
+/* --------------------------------------------------
+   COOKIE HELPER
+-------------------------------------------------- */
 function setAuthCookie(res: Response, token: string) {
   res.cookie("auth_token", token, {
     httpOnly: true,
-    secure: true,        // required on Render
-    sameSite: "none",    // required for Vercel → Render
+    secure: true,      // REQUIRED on Render
+    sameSite: "none",  // REQUIRED for cross-site cookies
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
+/* --------------------------------------------------
+   ROUTES
+-------------------------------------------------- */
 export function registerAuthRoutes(app: Express) {
 
-  /* -----------------------------
-     HEALTH
-  ------------------------------ */
+  /* HEALTH */
   app.get("/api/auth/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  /* -----------------------------
-     DEV LOGIN (COOKIE-ONLY)
-  ------------------------------ */
-  app.post("/api/auth/dev-login", (_req: Request, res: Response) => {
-    const user = {
-      id: "dev-user",
-      email: "dev@example.com",
-      name: "Dev User",
-    };
-
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
-    setAuthCookie(res, token);
-
-    res.json({ success: true, user });
-  });
-
-  /* -----------------------------
-     GOOGLE LOGIN (START)
-  ------------------------------ */
+  /* --------------------------------------------------
+     GOOGLE LOGIN — START
+  -------------------------------------------------- */
   app.get("/api/auth/google", (_req, res) => {
-    if (!process.env.GOOGLE_CLIENT_ID) {
-      return res.status(500).json({ error: "Google OAuth not configured" });
-    }
-
     const url = googleClient.generateAuthUrl({
       access_type: "offline",
-      scope: ["profile", "email"],
-      redirect_uri: `${process.env.API_BASE_URL}/api/auth/google/callback`,
+      prompt: "consent",
+      scope: ["openid", "profile", "email"],
     });
 
     res.redirect(url);
   });
 
-  /* -----------------------------
+  /* --------------------------------------------------
      GOOGLE CALLBACK
-  ------------------------------ */
+  -------------------------------------------------- */
   app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
     try {
       const code = req.query.code as string | undefined;
       if (!code) {
-        return res.redirect(process.env.FRONTEND_URL || "/");
+        return res.redirect(process.env.FRONTEND_URL!);
       }
 
-      const { tokens } = await googleClient.getToken({
-        code,
-        redirect_uri: `${process.env.API_BASE_URL}/api/auth/google/callback`,
-      });
+      const { tokens } = await googleClient.getToken(code);
+      if (!tokens.id_token) {
+        throw new Error("No id_token returned by Google");
+      }
 
       const ticket = await googleClient.verifyIdToken({
-        idToken: tokens.id_token!,
+        idToken: tokens.id_token,
         audience: process.env.GOOGLE_CLIENT_ID,
       });
 
       const payload = ticket.getPayload();
-      if (!payload) throw new Error("Invalid Google token");
+      if (!payload) {
+        throw new Error("Invalid Google token payload");
+      }
 
       const user = {
         id: payload.sub,
         email: payload.email,
         name: payload.name,
+        picture: payload.picture,
       };
 
-      const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
-      setAuthCookie(res, token);
+      const jwtToken = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+      setAuthCookie(res, jwtToken);
 
-      res.redirect(process.env.FRONTEND_URL || "/");
+      // ✅ HARD REDIRECT BACK TO FRONTEND
+      res.redirect(process.env.FRONTEND_URL!);
     } catch (err) {
-      console.error("GOOGLE AUTH ERROR:", err);
-      res.redirect(process.env.FRONTEND_URL || "/");
+      console.error("❌ GOOGLE AUTH ERROR:", err);
+      res.redirect(process.env.FRONTEND_URL!);
     }
   });
 
-  /* -----------------------------
+  /* --------------------------------------------------
      CURRENT USER
-  ------------------------------ */
+  -------------------------------------------------- */
   app.get("/api/auth/me", (req: Request, res: Response) => {
     const token = req.cookies?.auth_token;
     if (!token) return res.json(null);
@@ -124,9 +127,9 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  /* -----------------------------
+  /* --------------------------------------------------
      LOGOUT
-  ------------------------------ */
+  -------------------------------------------------- */
   app.post("/api/auth/logout", (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
