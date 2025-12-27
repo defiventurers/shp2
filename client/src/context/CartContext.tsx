@@ -29,16 +29,14 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const cart = useCart();
 
-  // ✅ ALWAYS SAFE DEFAULTS
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
 
   function addPrescription(p: Prescription) {
-    setPrescriptions((prev) => {
-      if (prev.find((x) => x.id === p.id)) return prev;
-      return [p, ...prev];
-    });
+    setPrescriptions((prev) =>
+      prev.find((x) => x.id === p.id) ? prev : [p, ...prev]
+    );
     setSelectedPrescriptionId(p.id);
   }
 
@@ -56,10 +54,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   return (
     <CartContext.Provider
       value={{
-        // CART (from useCart)
         ...cart,
-
-        // PRESCRIPTION STATE
         prescriptions,
         selectedPrescriptionId,
         addPrescription,
