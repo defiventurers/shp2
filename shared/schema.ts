@@ -22,61 +22,32 @@ export const users = pgTable("users", {
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
-  phone: varchar("phone"),
-  address: text("address"),
   isAdmin: boolean("is_admin").default(false),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 /* =========================
-   Prescriptions (MULTI-PAGE)
+   Prescriptions (MULTI PAGE)
 ========================= */
 export const prescriptions = pgTable("prescriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
   userId: varchar("user_id")
     .notNull()
     .references(() => users.id),
 
-  // ✅ MULTI-PAGE SUPPORT
-  imageUrls: jsonb("image_urls").$type<string[]>().notNull(),
+  // ✅ MULTI IMAGE SUPPORT (SAFE)
+  imageUrls: jsonb("image_urls")
+    .notNull()
+    .default(sql`'[]'::jsonb`),
 
-  ocrText: text("ocr_text"),
-  extractedMedicines: jsonb("extracted_medicines"),
   status: varchar("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
-});
-
-/* =========================
-   Orders
-========================= */
-export const orders = pgTable("orders", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderNumber: varchar("order_number").notNull().unique(),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  customerName: varchar("customer_name").notNull(),
-  customerPhone: varchar("customer_phone").notNull(),
-  customerEmail: varchar("customer_email"),
-  prescriptionId: varchar("prescription_id").references(() => prescriptions.id),
-  deliveryType: varchar("delivery_type").notNull(),
-  deliveryAddress: text("delivery_address"),
-  status: varchar("status").default("pending"),
-  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
-  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0"),
-  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 /* =========================
    Relations
 ========================= */
-export const usersRelations = relations(users, ({ many }) => ({
-  prescriptions: many(prescriptions),
-  orders: many(orders),
-}));
-
 export const prescriptionsRelations = relations(prescriptions, ({ one }) => ({
   user: one(users, {
     fields: [prescriptions.userId],
@@ -87,7 +58,10 @@ export const prescriptionsRelations = relations(prescriptions, ({ one }) => ({
 /* =========================
    Types
 ========================= */
-export type Prescription = typeof prescriptions.$inferSelect;
-export type InsertPrescription = z.infer<
-  typeof createInsertSchema(prescriptions)
->;
+export type Prescription = {
+  id: string;
+  userId: string;
+  imageUrls: string[];
+  status: string | null;
+  createdAt: Date | null;
+};
