@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, ReactNode } from "react";
 import type { Prescription } from "@shared/schema";
 
 interface CartContextType {
@@ -9,9 +9,9 @@ interface CartContextType {
   selectPrescription: (id: string) => void;
 }
 
-const CartContext = createContext<CartContextType | null>(null);
+const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export function CartProvider({ children }: { children: React.ReactNode }) {
+export function CartProvider({ children }: { children: ReactNode }) {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
@@ -49,6 +49,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export function useCartContext() {
   const ctx = useContext(CartContext);
-  if (!ctx) throw new Error("CartContext missing");
+  if (!ctx) throw new Error("useCartContext must be used inside CartProvider");
   return ctx;
 }
