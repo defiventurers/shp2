@@ -15,19 +15,6 @@ import { z } from "zod";
 import { relations } from "drizzle-orm";
 
 /* =========================
-   Sessions
-========================= */
-export const sessions = pgTable(
-  "sessions",
-  {
-    sid: varchar("sid").primaryKey(),
-    sess: jsonb("sess").notNull(),
-    expire: timestamp("expire").notNull(),
-  },
-  (table) => [index("IDX_session_expire").on(table.expire)],
-);
-
-/* =========================
    Users
 ========================= */
 export const users = pgTable("users", {
@@ -52,6 +39,7 @@ export const prescriptions = pgTable("prescriptions", {
     .notNull()
     .references(() => users.id),
 
+  // ✅ MULTI-PAGE SUPPORT
   imageUrls: jsonb("image_urls").$type<string[]>().notNull(),
 
   ocrText: text("ocr_text"),
@@ -78,11 +66,17 @@ export const orders = pgTable("orders", {
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).default("0"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 /* =========================
    Relations
 ========================= */
+export const usersRelations = relations(users, ({ many }) => ({
+  prescriptions: many(prescriptions),
+  orders: many(orders),
+}));
+
 export const prescriptionsRelations = relations(prescriptions, ({ one }) => ({
   user: one(users, {
     fields: [prescriptions.userId],
@@ -94,3 +88,6 @@ export const prescriptionsRelations = relations(prescriptions, ({ one }) => ({
    Types
 ========================= */
 export type Prescription = typeof prescriptions.$inferSelect;
+export type InsertPrescription = z.infer<
+  typeof createInsertSchema(prescriptions)
+>;
