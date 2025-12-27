@@ -8,6 +8,7 @@ import {
   Shield,
   MapPin,
   Phone,
+  CheckCircle,
 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -22,7 +23,7 @@ export default function Home() {
     <div className="min-h-screen bg-background pb-20">
       {/* ---------------- HERO ---------------- */}
       <div className="relative bg-gradient-to-br from-primary via-primary to-blue-700 text-primary-foreground overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAzMHYySDI0di0yaDEyek0zNiAyNnYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-30" />
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyBmaWxsPSJub25lIiBmaWxsLW9wYWNpdHk9IjAuMDUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAzMHYySDI0di0yaDEyek0zNiAyNnYySDI0di0yaDEyeiIvPjwvc3ZnPg==')] opacity-30" />
 
         <div className="relative px-4 py-10 sm:py-14">
           <div className="max-w-lg mx-auto text-center">
@@ -62,10 +63,12 @@ export default function Home() {
                 <GoogleLoginButton />
               </div>
             ) : (
-              <p className="text-sm text-primary-foreground/90 font-medium">
-                You are logged in
-                {user?.name ? ` as ${user.name}` : ""}
-              </p>
+              <div className="flex items-center justify-center gap-2 text-sm text-primary-foreground/90 font-medium">
+                <CheckCircle className="w-4 h-4 text-green-300" />
+                <span>
+                  Logged in{user?.name ? ` as ${user.name}` : ""}
+                </span>
+              </div>
             )}
           </div>
         </div>
@@ -75,8 +78,8 @@ export default function Home() {
       <div className="px-4 -mt-6 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <Link href="/prescription">
-            <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer group">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+            <Card className="p-4 hover-elevate cursor-pointer group">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
                 <Upload className="w-6 h-6 text-primary" />
               </div>
               <h3 className="font-semibold text-sm mb-1">
@@ -89,8 +92,8 @@ export default function Home() {
           </Link>
 
           <Link href="/inventory">
-            <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer group">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+            <Card className="p-4 hover-elevate cursor-pointer group">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
                 <Package className="w-6 h-6 text-primary" />
               </div>
               <h3 className="font-semibold text-sm mb-1">
