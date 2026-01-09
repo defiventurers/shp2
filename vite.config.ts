@@ -3,7 +3,11 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig({
+  // 👇 Frontend lives inside /client
   root: path.resolve(__dirname, "client"),
+
+  // 👇 REQUIRED for Vercel (fixes white screen)
+  base: "/",
 
   plugins: [
     react(),
@@ -18,8 +22,8 @@ export default defineConfig({
   },
 
   build: {
-    // ✅ MUST be relative to `root`
-    outDir: "dist",
+    // 👇 Output goes to repo-root/dist
+    outDir: path.resolve(__dirname, "dist"),
     emptyOutDir: true,
   },
 
