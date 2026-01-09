@@ -3,13 +3,19 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
+
   "scripts": {
-    "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "tsx script/build.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+
+    "server": "NODE_ENV=development tsx server/index.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
+
     "check": "tsc",
     "db:push": "drizzle-kit push"
   },
+
   "dependencies": {
     "tsx": "^4.20.5",
 
@@ -84,6 +90,7 @@
     "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0"
   },
+
   "devDependencies": {
     "@replit/vite-plugin-cartographer": "^0.4.4",
     "@replit/vite-plugin-dev-banner": "^0.1.1",
@@ -103,6 +110,7 @@
     "typescript": "5.6.3",
     "vite": "^5.4.20"
   },
+
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
   }
