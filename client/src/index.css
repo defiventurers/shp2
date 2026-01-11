@@ -2,49 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* -----------------------------
-   Base styles (NO @apply)
------------------------------ */
 @layer base {
   * {
-    border-color: hsl(var(--border));
+    @apply border-border;
   }
 
   body {
-    font-family: Inter, system-ui, sans-serif;
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-}
-
-/* -----------------------------
-   Theme tokens
------------------------------ */
-:root {
-  --border: 214 20% 92%;
-  --background: 0 0% 100%;
-  --foreground: 215 25% 15%;
-}
-
-.dark {
-  --border: 217 20% 18%;
-  --background: 217 25% 8%;
-  --foreground: 214 20% 95%;
-}
-
-/* -----------------------------
-   Utilities
------------------------------ */
-@layer utilities {
-  input[type="search"]::-webkit-search-cancel-button {
-    display: none;
-  }
-
-  [contenteditable][data-placeholder]:empty::before {
-    content: attr(data-placeholder);
-    color: hsl(var(--foreground) / 0.5);
-    pointer-events: none;
+    @apply bg-background text-foreground font-sans antialiased;
   }
 }
