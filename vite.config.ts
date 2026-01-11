@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig({
-  // Frontend root
   root: path.resolve(__dirname, "client"),
 
   plugins: [react()],
@@ -11,18 +10,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "client/src"),
+      "@shared": path.resolve(__dirname, "shared"),
     },
   },
 
   build: {
-    // Output relative to root
-    outDir: "dist",
+    outDir: path.resolve(__dirname, "dist"),
     emptyOutDir: true,
-  },
-
-  server: {
-    fs: {
-      strict: true,
-    },
   },
 });
