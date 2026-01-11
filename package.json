@@ -49,16 +49,13 @@
     "cloudinary": "^1.41.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
-
     "date-fns": "^3.6.0",
     "drizzle-orm": "^0.39.3",
     "drizzle-zod": "^0.7.0",
     "embla-carousel-react": "^8.6.0",
     "express": "^4.21.2",
-
     "google-auth-library": "^9.9.0",
     "jsonwebtoken": "^9.0.2",
-
     "lucide-react": "^0.453.0",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.16.3",
@@ -67,8 +64,7 @@
     "wouter": "^3.3.5",
     "zod": "^3.24.2",
 
-    "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
     "vite": "^5.4.20",
@@ -78,8 +74,10 @@
     "@types/node": "20.16.11",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
+
     "tailwindcss": "^3.4.17",
     "postcss": "^8.4.47",
-    "autoprefixer": "^10.4.20"
+    "autoprefixer": "^10.4.20",
+    "tailwindcss-animate": "^1.0.7"
   }
 }
