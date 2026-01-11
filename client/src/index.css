@@ -6,20 +6,24 @@
   --background: 0 0% 100%;
   --foreground: 215 25% 15%;
   --border: 214 20% 92%;
+  --primary: 217 91% 50%;
+  --primary-foreground: 0 0% 100%;
 }
 
 .dark {
   --background: 217 25% 8%;
   --foreground: 214 20% 95%;
   --border: 217 20% 18%;
+  --primary: 217 91% 55%;
+  --primary-foreground: 0 0% 100%;
 }
 
 @layer base {
   * {
-    border-color: hsl(var(--border));
+    @apply border-border;
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground;
   }
 }
