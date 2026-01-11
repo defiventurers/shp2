@@ -1,58 +1,73 @@
-import type { Config } from "tailwindcss";
-import animate from "tailwindcss-animate";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-const config: Config = {
-  darkMode: ["class"],
-  content: [
-    "./client/index.html",
-    "./client/src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+/* --------------------------------------------------
+   Base token-backed utilities
+-------------------------------------------------- */
+@layer base {
+  /* Define border-border explicitly */
+  .border-border {
+    border-color: hsl(var(--border));
+  }
 
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-      },
-      borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-      },
-    },
-  },
-  plugins: [animate],
-};
+  * {
+    @apply border-border;
+  }
 
-export default config;
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  /* Safe area support for iOS */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pb-safe {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* --------------------------------------------------
+   Theme tokens (unchanged)
+-------------------------------------------------- */
+:root {
+  --border: 214 20% 92%;
+  --background: 0 0% 100%;
+  --foreground: 215 25% 15%;
+  --primary: 217 91% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 214 25% 93%;
+  --secondary-foreground: 215 25% 15%;
+  --muted: 214 20% 95%;
+  --muted-foreground: 215 15% 45%;
+  --accent: 214 30% 96%;
+  --accent-foreground: 217 91% 45%;
+  --destructive: 0 84% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 214 20% 80%;
+  --ring: 217 91% 50%;
+  --radius: .5rem;
+}
+
+.dark {
+  --border: 217 20% 18%;
+  --background: 217 25% 8%;
+  --foreground: 214 20% 95%;
+}
+
+/* --------------------------------------------------
+   Utilities
+-------------------------------------------------- */
+@layer utilities {
+  input[type="search"]::-webkit-search-cancel-button {
+    @apply hidden;
+  }
+
+  [contenteditable][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+  }
+}
