@@ -1,15 +1,13 @@
-import type { Config } from "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-const config: Config = {
-  darkMode: ["class"],
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [require("tailwindcss-animate")],
-};
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
 
-export default config;
+  body {
+    @apply antialiased bg-background text-foreground;
+  }
+}
