@@ -1,33 +1,59 @@
-import { useQuery } from "@tanstack/react-query";
+import { createContext, useContext, useEffect, useState } from "react";
 
 type User = {
-  id: string;
+  name: string;
   email: string;
-  name?: string;
   picture?: string;
-  isAdmin?: boolean;
 };
 
-export function useAuth() {
-  const { data, isLoading } = useQuery<User | null>({
-    queryKey: ["/api/auth/me"],
-    queryFn: async () => {
-      const res = await fetch("/api/auth/me", {
-        credentials: "include",
-        cache: "no-store", // 🔥 CRITICAL
-      });
+type AuthContextType = {
+  user: User | null;
+  isAuthenticated: boolean;
+  login: (user: User) => void;
+  logout: () => void;
+};
 
-      return res.json();
-    },
-    staleTime: 0,        // 🔥 CRITICAL
-    cacheTime: 0,        // 🔥 CRITICAL
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-  });
+const AuthContext = createContext<AuthContextType | null>(null);
 
-  return {
-    user: data,
-    isLoading,
-    isAuthenticated: !!data,
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+
+  // Load user from localStorage on refresh
+  useEffect(() => {
+    const saved = localStorage.getItem("auth_user");
+    if (saved) {
+      setUser(JSON.parse(saved));
+    }
+  }, []);
+
+  const login = (userData: User) => {
+    localStorage.setItem("auth_user", JSON.stringify(userData));
+    setUser(userData);
   };
+
+  const logout = () => {
+    localStorage.removeItem("auth_user");
+    setUser(null);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        login,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+  return ctx;
 }
