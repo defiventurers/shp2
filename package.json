@@ -1,0 +1,21 @@
+{
+  "name": "shp-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.ts",
+    "dev": "node server/index.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "cookie-parser": "^1.4.6",
+    "jsonwebtoken": "^9.0.2",
+    "google-auth-library": "^9.9.0",
+    "multer": "^1.4.5-lts.1",
+    "cloudinary": "^1.41.3",
+    "pg": "^8.16.3",
+    "drizzle-orm": "^0.39.3",
+    "drizzle-zod": "^0.7.0"
+  }
+}
