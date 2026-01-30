@@ -26,15 +26,13 @@ export default function Home() {
         <div className="px-4 pt-8 pb-3 sm:pt-10 sm:pb-3">
           <div className="max-w-lg mx-auto text-center">
             {/* LOGO */}
-            <div className="flex justify-center mb-3">
-              <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center">
-                <img
-                  src="/logo.png"
-                  alt="Sacred Heart Pharmacy"
-                  className="w-12 h-12 object-contain"
-                />
-              </div>
-            </div>
+           <div className="flex justify-center mb-4">
+  <img
+    src="/logo.png"
+    alt="Sacred Heart Pharmacy"
+    className="w-24 h-24 object-contain"
+  />
+</div>
 
             <h1 className="text-2xl sm:text-3xl font-bold mb-2">
               Sacred Heart Pharmacy
