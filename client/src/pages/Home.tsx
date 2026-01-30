@@ -21,14 +21,13 @@ export default function Home() {
       {/* ---------------- HERO ---------------- */}
       <div
         className="relative text-white overflow-hidden"
-        style={{ backgroundColor: "#0B6F3A" }} // ✅ EXACT LOGO GREEN
+        style={{ backgroundColor: "#0B6F3A" }} // brand green
       >
-        {/* very subtle texture */}
         <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_top,white,transparent_70%)]" />
 
-        <div className="relative px-4 pt-8 pb-4 sm:pt-10 sm:pb-6">
+        {/* ⬇ reduced bottom padding */}
+        <div className="relative px-4 pt-8 pb-3 sm:pt-10 sm:pb-4">
           <div className="max-w-lg mx-auto text-center">
-            {/* LOGO */}
             <div className="flex justify-center mb-4">
               <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center shadow-sm">
                 <img
@@ -47,7 +46,7 @@ export default function Home() {
               Austin Town, Victoria Layout, Bengaluru, Karnataka 560047
             </p>
 
-            <div className="flex items-center justify-center gap-1 text-xs text-white/70 mb-4">
+            <div className="flex items-center justify-center gap-1 text-xs text-white/70 mb-3">
               <MapPin className="w-3 h-3" />
               <span>
                 16, Campbell Rd, opposite to ST. PHILOMENA&apos;S HOSPITAL
@@ -73,7 +72,8 @@ export default function Home() {
       </div>
 
       {/* ---------------- MAIN CONTENT ---------------- */}
-      <div className="px-4 -mt-6 max-w-lg mx-auto">
+      {/* ⬇ no negative overlap anymore */}
+      <div className="px-4 mt-4 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <Link href="/prescription">
             <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer">
@@ -131,8 +131,7 @@ export default function Home() {
               {
                 icon: Shield,
                 title: "100% Genuine",
-                desc:
-                  "All medicines sourced from authorized distributors",
+                desc: "All medicines sourced from authorized distributors",
               },
               {
                 icon: Clock,
