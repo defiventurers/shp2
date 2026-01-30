@@ -2,7 +2,6 @@ import { Link } from "wouter";
 import {
   Upload,
   Package,
-  Heart,
   Clock,
   Truck,
   Shield,
@@ -22,16 +21,21 @@ export default function Home() {
       {/* ---------------- HERO ---------------- */}
       <div
         className="relative text-white overflow-hidden"
-        style={{ backgroundColor: "#22c55e" }} // ✅ SOLID GREEN (Tailwind green-500)
+        style={{ backgroundColor: "#0B6F3A" }} // ✅ EXACT LOGO GREEN
       >
-        {/* subtle texture overlay (optional, very light) */}
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top,white,transparent_70%)]" />
+        {/* very subtle texture */}
+        <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_top,white,transparent_70%)]" />
 
-        <div className="relative px-4 pt-8 pb-6 sm:pt-10 sm:pb-8">
+        <div className="relative px-4 pt-8 pb-4 sm:pt-10 sm:pb-6">
           <div className="max-w-lg mx-auto text-center">
+            {/* LOGO */}
             <div className="flex justify-center mb-4">
-              <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center">
-                <Heart className="w-12 h-12 text-white" fill="currentColor" />
+              <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+                <img
+                  src="/logo.png"
+                  alt="Sacred Heart Pharmacy"
+                  className="w-12 h-12"
+                />
               </div>
             </div>
 
@@ -43,14 +47,14 @@ export default function Home() {
               Austin Town, Victoria Layout, Bengaluru, Karnataka 560047
             </p>
 
-            <div className="flex items-center justify-center gap-1 text-xs text-white/70 mb-5">
+            <div className="flex items-center justify-center gap-1 text-xs text-white/70 mb-4">
               <MapPin className="w-3 h-3" />
               <span>
                 16, Campbell Rd, opposite to ST. PHILOMENA&apos;S HOSPITAL
               </span>
             </div>
 
-            <p className="text-white/90 text-sm max-w-xs mx-auto mb-5">
+            <p className="text-white/90 text-sm max-w-xs mx-auto mb-4">
               Your trusted neighborhood pharmacy. Order medicines online with
               prescription upload.
             </p>
@@ -69,13 +73,12 @@ export default function Home() {
       </div>
 
       {/* ---------------- MAIN CONTENT ---------------- */}
-      {/* pulled up closer to hero */}
-      <div className="px-4 -mt-12 max-w-lg mx-auto">
+      <div className="px-4 -mt-6 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <Link href="/prescription">
-            <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer group">
+            <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
-                <Upload className="w-6 h-6 text-green-600" />
+                <Upload className="w-6 h-6 text-green-700" />
               </div>
               <h3 className="font-semibold text-sm mb-1">
                 Upload Prescription
@@ -87,9 +90,9 @@ export default function Home() {
           </Link>
 
           <Link href="/inventory">
-            <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer group">
+            <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
-                <Package className="w-6 h-6 text-green-600" />
+                <Package className="w-6 h-6 text-green-700" />
               </div>
               <h3 className="font-semibold text-sm mb-1">
                 Browse Inventory
@@ -104,7 +107,7 @@ export default function Home() {
         <Card className="mt-4 p-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-              <Phone className="w-6 h-6 text-green-600" />
+              <Phone className="w-6 h-6 text-green-700" />
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-sm mb-0.5">Need Help?</h3>
@@ -139,7 +142,7 @@ export default function Home() {
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-green-600" />
+                  <Icon className="w-5 h-5 text-green-700" />
                 </div>
                 <div>
                   <h4 className="font-medium text-sm">{title}</h4>
