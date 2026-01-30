@@ -3,9 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx server/index.ts",
-    "dev": "node server/index.ts"
-  },
+  "dev": "NODE_ENV=development tsx server/index.ts",
+  "build": "npm install",
+  "start": "tsx server/index.ts",
+  "check": "tsc",
+  "db:push": "drizzle-kit push"
+},
   "dependencies": {
     "express": "^4.21.2",
     "cors": "^2.8.5",
