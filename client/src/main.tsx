@@ -2,7 +2,6 @@ import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 import { queryClient } from "@/lib/queryClient";
-import { AuthProvider } from "@/hooks/useAuth";
 import "./index.css";
 
 const rootElement = document.getElementById("root");
@@ -13,8 +12,6 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <App />
   </QueryClientProvider>
 );
