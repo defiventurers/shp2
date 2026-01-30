@@ -22,17 +22,13 @@ export default function Home() {
       {/* ---------------- HERO ---------------- */}
       <div
         className="relative text-white overflow-hidden"
-        style={{ backgroundColor: "#15803d" }} // solid pharmacy green
+        style={{ backgroundColor: "#22c55e" }} // solid green
       >
-        <div className="relative px-4 pt-8 pb-6 sm:pt-10 sm:pb-8">
+        <div className="relative px-4 pt-8 pb-4 sm:pt-10 sm:pb-5">
           <div className="max-w-lg mx-auto text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center">
-                <img
-                  src="/logo.png"
-                  alt="Sacred Heart Pharmacy"
-                  className="w-12 h-12"
-                />
+            <div className="flex justify-center mb-3">
+              <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center">
+                <Heart className="w-12 h-12 text-white" fill="currentColor" />
               </div>
             </div>
 
@@ -51,18 +47,17 @@ export default function Home() {
               </span>
             </div>
 
-            <p className="text-white/90 text-sm max-w-xs mx-auto mb-5">
+            <p className="text-white/90 text-sm max-w-xs mx-auto mb-4">
               Order medicines online with prescription upload.
             </p>
 
-            {/* ✅ SINGLE SOURCE OF LOGIN */}
             {!isAuthenticated ? (
-              <div className="flex justify-center">
+              <div className="flex justify-center mb-2">
                 <GoogleLoginButton />
               </div>
             ) : (
-              <p className="text-sm text-white/90">
-                Signed in as <strong>{user?.name}</strong>
+              <p className="text-sm font-medium mb-2">
+                Signed in as {user?.name}
               </p>
             )}
           </div>
@@ -70,12 +65,13 @@ export default function Home() {
       </div>
 
       {/* ---------------- MAIN CONTENT ---------------- */}
-      <div className="px-4 -mt-10 max-w-lg mx-auto">
+      {/* reduced overlap */}
+      <div className="px-4 -mt-6 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <Link href="/prescription">
             <Card className="p-4 cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
-                <Upload className="w-6 h-6 text-green-700" />
+                <Upload className="w-6 h-6 text-green-600" />
               </div>
               <h3 className="font-semibold text-sm mb-1">
                 Upload Prescription
@@ -89,7 +85,7 @@ export default function Home() {
           <Link href="/inventory">
             <Card className="p-4 cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
-                <Package className="w-6 h-6 text-green-700" />
+                <Package className="w-6 h-6 text-green-600" />
               </div>
               <h3 className="font-semibold text-sm mb-1">
                 Browse Inventory
@@ -104,10 +100,10 @@ export default function Home() {
         <Card className="mt-4 p-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-              <Phone className="w-6 h-6 text-green-700" />
+              <Phone className="w-6 h-6 text-green-600" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-sm">Need Help?</h3>
+              <h3 className="font-semibold text-sm mb-0.5">Need Help?</h3>
               <p className="text-xs text-muted-foreground">
                 Chat with our pharmacist on WhatsApp
               </p>
@@ -138,7 +134,7 @@ export default function Home() {
             ].map(({ icon: Icon, title, desc }) => (
               <div key={title} className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-green-700" />
+                  <Icon className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
                   <h4 className="font-medium text-sm">{title}</h4>
