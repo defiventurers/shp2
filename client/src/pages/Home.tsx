@@ -2,7 +2,6 @@ import { Link } from "wouter";
 import {
   Upload,
   Package,
-  Heart,
   Clock,
   Truck,
   Shield,
@@ -22,16 +21,17 @@ export default function Home() {
       {/* ---------------- HERO ---------------- */}
       <div
         className="relative text-white"
-        style={{ backgroundColor: "#0A7A3D" }} // ✅ FIXED BRAND GREEN
+        style={{ backgroundColor: "#0A7A3D" }} // ✅ BRAND GREEN
       >
         <div className="px-4 pt-8 pb-3 sm:pt-10 sm:pb-3">
           <div className="max-w-lg mx-auto text-center">
             {/* LOGO */}
             <div className="flex justify-center mb-3">
               <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center">
-                <Heart
-                  className="w-12 h-12 text-[#0A7A3D]"
-                  fill="currentColor"
+                <img
+                  src="/logo.png"
+                  alt="Sacred Heart Pharmacy"
+                  className="w-12 h-12 object-contain"
                 />
               </div>
             </div>
@@ -55,7 +55,7 @@ export default function Home() {
               Order medicines online with prescription upload.
             </p>
 
-            {/* ✅ GOOGLE LOGIN STAYS IN HERO */}
+            {/* GOOGLE LOGIN */}
             {!isAuthenticated ? (
               <div className="flex justify-center">
                 <GoogleLoginButton />
@@ -70,7 +70,6 @@ export default function Home() {
       </div>
 
       {/* ---------------- MAIN CONTENT ---------------- */}
-      {/* ✅ NO NEGATIVE MARGIN HERE */}
       <div className="px-4 mt-4 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <Link href="/prescription">
