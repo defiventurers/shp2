@@ -23,39 +23,39 @@ export default function Home() {
         className="relative text-white overflow-hidden"
         style={{ backgroundColor: "#0B6F3A" }} // brand green
       >
+        {/* very subtle texture */}
         <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_top,white,transparent_70%)]" />
 
-        {/* ⬇ reduced bottom padding */}
-        <div className="relative px-4 pt-8 pb-3 sm:pt-10 sm:pb-4">
+        {/* ⬇️ HERO CONTENT — REDUCED HEIGHT */}
+        <div className="relative px-4 pt-6 pb-2">
           <div className="max-w-lg mx-auto text-center">
-            <div className="flex justify-center mb-4">
-              <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center shadow-sm">
+            <div className="flex justify-center mb-3">
+              <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center">
                 <img
                   src="/logo.png"
                   alt="Sacred Heart Pharmacy"
-                  className="w-12 h-12"
+                  className="w-10 h-10"
                 />
               </div>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold mb-2">
+            <h1 className="text-xl sm:text-2xl font-bold mb-1">
               Sacred Heart Pharmacy
             </h1>
 
-            <p className="text-white/80 text-sm mb-1">
+            <p className="text-white/80 text-xs mb-1">
               Austin Town, Victoria Layout, Bengaluru, Karnataka 560047
             </p>
 
-            <div className="flex items-center justify-center gap-1 text-xs text-white/70 mb-3">
+            <div className="flex items-center justify-center gap-1 text-[11px] text-white/70 mb-2">
               <MapPin className="w-3 h-3" />
               <span>
                 16, Campbell Rd, opposite to ST. PHILOMENA&apos;S HOSPITAL
               </span>
             </div>
 
-            <p className="text-white/90 text-sm max-w-xs mx-auto mb-4">
-              Your trusted neighborhood pharmacy. Order medicines online with
-              prescription upload.
+            <p className="text-white/90 text-xs max-w-xs mx-auto mb-3">
+              Order medicines online with prescription upload.
             </p>
 
             {!isAuthenticated ? (
@@ -63,7 +63,7 @@ export default function Home() {
                 <GoogleLoginButton />
               </div>
             ) : (
-              <p className="text-sm font-medium">
+              <p className="text-xs font-medium">
                 Welcome back{user?.name ? `, ${user.name}` : ""} 👋
               </p>
             )}
@@ -72,11 +72,11 @@ export default function Home() {
       </div>
 
       {/* ---------------- MAIN CONTENT ---------------- */}
-      {/* ⬇ no negative overlap anymore */}
-      <div className="px-4 mt-4 max-w-lg mx-auto">
+      {/* ⬇️ NOW CLEARLY BELOW HERO */}
+      <div className="px-4 mt-3 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <Link href="/prescription">
-            <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer">
+            <Card className="p-4 hover-elevate cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
                 <Upload className="w-6 h-6 text-green-700" />
               </div>
@@ -90,7 +90,7 @@ export default function Home() {
           </Link>
 
           <Link href="/inventory">
-            <Card className="p-4 hover-elevate active-elevate-2 cursor-pointer">
+            <Card className="p-4 hover-elevate cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
                 <Package className="w-6 h-6 text-green-700" />
               </div>
@@ -119,7 +119,7 @@ export default function Home() {
           </div>
         </Card>
 
-        <div className="mt-8">
+        <div className="mt-6">
           <h2 className="font-semibold text-lg mb-4">Why Choose Us</h2>
           <div className="grid gap-3">
             {[
