@@ -2,48 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-/* =========================================
-   SACRED HEART PHARMACY — GREEN THEME
-   ========================================= */
+/* =====================================================
+   SACRED HEART PHARMACY — SOLID GREEN BRAND THEME
+   ===================================================== */
 
 :root {
+  /* CORE */
   --background: 0 0% 100%;
-  --foreground: 215 25% 15%;
+  --foreground: 220 15% 15%;
 
-  --primary: 142 76% 36%;            /* GREEN */
+  /* BRAND GREEN (NO BLUE TINT) */
+  --primary: 142 72% 34%;               /* Solid pharmacy green */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 142 40% 92%;
-  --secondary-foreground: 142 76% 25%;
+  --secondary: 142 45% 92%;
+  --secondary-foreground: 142 72% 22%;
 
-  --border: 214 20% 90%;
-  --muted: 214 20% 96%;
-  --accent: 142 40% 94%;
+  --border: 220 15% 88%;
+  --muted: 220 15% 96%;
+  --accent: 142 45% 94%;
   --destructive: 0 84% 55%;
 }
 
 .dark {
-  --background: 215 25% 8%;
-  --foreground: 214 20% 95%;
+  --background: 220 20% 8%;
+  --foreground: 220 15% 95%;
 
-  --primary: 142 76% 45%;
+  --primary: 142 72% 42%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 142 25% 18%;
-  --secondary-foreground: 214 20% 95%;
+  --secondary: 142 30% 18%;
+  --secondary-foreground: 220 15% 95%;
 
-  --border: 217 20% 18%;
-  --muted: 217 20% 16%;
-  --accent: 142 25% 20%;
+  --border: 220 15% 20%;
+  --muted: 220 15% 16%;
+  --accent: 142 30% 22%;
   --destructive: 0 72% 50%;
 }
 
+/* =====================================================
+   BASE STYLES
+   ===================================================== */
 @layer base {
-  body {
-    @apply bg-background text-foreground;
-  }
-
   * {
     @apply border-border;
   }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* =====================================================
+   HERO BACKGROUND CONTROL
+   ===================================================== */
+
+/* Force hero sections to stay compact */
+.hero,
+.hero-bg {
+  background-color: hsl(var(--primary));
+  padding-top: 3rem;     /* ↓ reduced */
+  padding-bottom: 3rem;  /* ↓ reduced */
+}
+
+/* Prevent green bleed into cards */
+.hero + * {
+  margin-top: -1.5rem;   /* pulls cards upward */
+}
+
+/* =====================================================
+   UTILITY TWEAKS
+   ===================================================== */
+
+/* Safer spacing on mobile bottom nav */
+.pb-safe {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
