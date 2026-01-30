@@ -1,32 +1,44 @@
 import { Link } from "wouter";
-import { GoogleLoginButton } from "@/components/GoogleLoginButton";
+import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { GoogleLoginButton } from "@/components/GoogleLoginButton";
+import { Button } from "@/components/ui/button";
 
 export function Header() {
   const { isAuthenticated, user, logout } = useAuth();
 
-  return (
-    <header className="flex items-center justify-between px-4 py-2 border-b bg-white">
-      <Link href="/" className="flex items-center gap-2 font-semibold">
-        <img src="/logo.png" alt="logo" className="w-6 h-6" />
-        Sacred Heart
-      </Link>
+  async function handleLogout() {
+    await logout();
+  }
 
-      {!isAuthenticated ? (
-        <GoogleLoginButton />
-      ) : (
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">
-            {user?.name}
-          </span>
-          <button
-            onClick={logout}
-            className="text-sm text-red-600 hover:underline"
-          >
-            Logout
-          </button>
-        </div>
-      )}
+  return (
+    <header className="sticky top-0 z-40 bg-background/90 backdrop-blur border-b border-border">
+      <div className="flex items-center justify-between h-14 px-4 max-w-7xl mx-auto">
+        {/* Logo / Home */}
+        <Link href="/" className="font-semibold text-sm">
+          Sacred Heart
+        </Link>
+
+        {/* Auth section */}
+        {!isAuthenticated ? (
+          <GoogleLoginButton />
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium truncate max-w-[140px]">
+              {user?.name}
+            </span>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4 text-red-600" />
+            </Button>
+          </div>
+        )}
+      </div>
     </header>
   );
 }
