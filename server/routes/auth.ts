@@ -4,40 +4,35 @@ import { OAuth2Client } from "google-auth-library";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
-/* -----------------------------
-   Google client (JWT only)
------------------------------- */
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID
 );
 
-/* -----------------------------
-   Cookie helper
------------------------------- */
 function setAuthCookie(res: Response, token: string) {
   res.cookie("auth_token", token, {
     httpOnly: true,
-    secure: true,        // REQUIRED on Render
-    sameSite: "none",    // REQUIRED for Vercel → Render
+    secure: true,        // Render
+    sameSite: "none",    // Vercel → Render
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
 export function registerAuthRoutes(app: Express) {
-  /* -----------------------------
-     Health
-  ------------------------------ */
+  console.log("✅ AUTH ROUTES REGISTERED");
+
+  /* HEALTH */
   app.get("/api/auth/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  /* -----------------------------
-     Google Login (JWT)
-  ------------------------------ */
+  /* ---------------------------
+     GOOGLE LOGIN (JWT FLOW)
+  ---------------------------- */
   app.post("/api/auth/google", async (req: Request, res: Response) => {
     try {
-      const { credential } = req.body;
+      console.log("🔥 /api/auth/google HIT");
 
+      const { credential } = req.body;
       if (!credential) {
         return res.status(400).json({ error: "Missing credential" });
       }
@@ -64,14 +59,12 @@ export function registerAuthRoutes(app: Express) {
 
       res.json({ success: true, user });
     } catch (err) {
-      console.error("GOOGLE AUTH ERROR:", err);
+      console.error("❌ GOOGLE AUTH ERROR:", err);
       res.status(401).json({ error: "Google authentication failed" });
     }
   });
 
-  /* -----------------------------
-     Current user
-  ------------------------------ */
+  /* CURRENT USER */
   app.get("/api/auth/me", (req: Request, res: Response) => {
     const token = req.cookies?.auth_token;
     if (!token) return res.json(null);
@@ -89,9 +82,7 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  /* -----------------------------
-     Logout
-  ------------------------------ */
+  /* LOGOUT */
   app.post("/api/auth/logout", (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
