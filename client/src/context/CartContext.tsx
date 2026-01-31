@@ -3,6 +3,7 @@ import { useCart } from "@/hooks/useCart";
 import type { Prescription } from "@shared/schema";
 
 interface CartContextType {
+  /* Cart (existing – untouched) */
   items: any[];
   addItem: any;
   removeItem: any;
@@ -15,12 +16,14 @@ interface CartContextType {
   requiresPrescription: boolean;
   isLoaded: boolean;
 
+  /* Prescriptions (UPDATED) */
   prescriptions: Prescription[];
-  selectedPrescriptionId: string | null;
+  selectedPrescriptionIds: string[];
 
   addPrescription: (p: Prescription) => void;
-  selectPrescription: (id: string) => void;
+  togglePrescription: (id: string) => void;
   deletePrescription: (id: string) => void;
+  clearSelectedPrescriptions: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -29,35 +32,52 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const cart = useCart();
 
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [selectedPrescriptionId, setSelectedPrescriptionId] =
-    useState<string | null>(null);
+  const [selectedPrescriptionIds, setSelectedPrescriptionIds] = useState<
+    string[]
+  >([]);
+
+  /* ---------------------------
+     Prescription helpers
+  ---------------------------- */
 
   function addPrescription(p: Prescription) {
     setPrescriptions((prev) => [p, ...prev]);
-    setSelectedPrescriptionId(p.id); // auto-select latest
+
+    // auto-select newly uploaded prescription
+    setSelectedPrescriptionIds((prev) => [...prev, p.id]);
   }
 
-  function selectPrescription(id: string) {
-    setSelectedPrescriptionId(id);
+  function togglePrescription(id: string) {
+    setSelectedPrescriptionIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((pid) => pid !== id)
+        : [...prev, id]
+    );
   }
 
   function deletePrescription(id: string) {
     setPrescriptions((prev) => prev.filter((p) => p.id !== id));
+    setSelectedPrescriptionIds((prev) => prev.filter((pid) => pid !== id));
+  }
 
-    if (selectedPrescriptionId === id) {
-      setSelectedPrescriptionId(null);
-    }
+  function clearSelectedPrescriptions() {
+    setSelectedPrescriptionIds([]);
   }
 
   return (
     <CartContext.Provider
       value={{
+        /* cart */
         ...cart,
+
+        /* prescriptions */
         prescriptions,
-        selectedPrescriptionId,
+        selectedPrescriptionIds,
+
         addPrescription,
-        selectPrescription,
+        togglePrescription,
         deletePrescription,
+        clearSelectedPrescriptions,
       }}
     >
       {children}
@@ -67,6 +87,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
 export function useCartContext() {
   const ctx = useContext(CartContext);
-  if (!ctx) throw new Error("useCartContext must be used within CartProvider");
+  if (!ctx) {
+    throw new Error("useCartContext must be used within CartProvider");
+  }
   return ctx;
 }
