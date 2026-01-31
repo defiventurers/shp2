@@ -76,14 +76,18 @@ export const medicines = pgTable("medicines", {
 });
 
 /* =========================
-   Prescriptions
+   Prescriptions ✅ FIXED
 ========================= */
 export const prescriptions = pgTable("prescriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
   userId: varchar("user_id")
     .notNull()
     .references(() => users.id),
-  imageUrl: text("image_url").notNull(),
+
+  // ✅ MULTI-PAGE SUPPORT
+  imageUrls: jsonb("image_urls").notNull(), // string[]
+
   ocrText: text("ocr_text"),
   extractedMedicines: jsonb("extracted_medicines"),
   status: varchar("status").default("pending"),
@@ -91,12 +95,11 @@ export const prescriptions = pgTable("prescriptions", {
 });
 
 /* =========================
-   Orders  ✅ FIXED
+   Orders
 ========================= */
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
 
-  // ✅ CRITICAL FIX — camelCase in code, snake_case in DB
   orderNumber: varchar("order_number").notNull().unique(),
 
   userId: varchar("user_id")
