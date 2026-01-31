@@ -3,7 +3,7 @@ import { useCart } from "@/hooks/useCart";
 import type { Prescription } from "@shared/schema";
 
 interface CartContextType {
-  // cart
+  // CART
   items: any[];
   addItem: any;
   removeItem: any;
@@ -16,7 +16,7 @@ interface CartContextType {
   requiresPrescription: boolean;
   isLoaded: boolean;
 
-  // prescriptions
+  // PRESCRIPTIONS
   prescriptions: Prescription[];
   selectedPrescriptionId: string | null;
   setSelectedPrescriptionId: (id: string | null) => void;
@@ -32,22 +32,29 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
 
-  // 🔑 Fetch from backend (SOURCE OF TRUTH)
+  // 🔑 SOURCE OF TRUTH — BACKEND
   async function refreshPrescriptions() {
     try {
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/prescriptions`,
         { credentials: "include" }
       );
+
       if (!res.ok) return;
-      const data = await res.json();
+
+      const data: Prescription[] = await res.json();
       setPrescriptions(data);
+
+      // ✅ Auto-select latest if nothing selected
+      if (!selectedPrescriptionId && data.length > 0) {
+        setSelectedPrescriptionId(data[0].id);
+      }
     } catch {
       // ignore
     }
   }
 
-  // Load once on app start
+  // Load prescriptions once on app start
   useEffect(() => {
     refreshPrescriptions();
   }, []);
@@ -55,7 +62,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   return (
     <CartContext.Provider
       value={{
+        // CART
         ...cart,
+
+        // PRESCRIPTIONS
         prescriptions,
         selectedPrescriptionId,
         setSelectedPrescriptionId,
@@ -69,6 +79,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export function useCartContext() {
   const ctx = useContext(CartContext);
-  if (!ctx) throw new Error("useCartContext must be used within CartProvider");
+  if (!ctx) {
+    throw new Error("useCartContext must be used within CartProvider");
+  }
   return ctx;
 }
