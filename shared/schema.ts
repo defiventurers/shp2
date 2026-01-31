@@ -76,7 +76,7 @@ export const medicines = pgTable("medicines", {
 });
 
 /* =========================
-   Prescriptions (MULTI-PAGE) ✅ FINAL FIX
+   Prescriptions (MULTI-PAGE)
 ========================= */
 export const prescriptions = pgTable("prescriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -85,7 +85,7 @@ export const prescriptions = pgTable("prescriptions", {
     .notNull()
     .references(() => users.id),
 
-  // ✅ 1–5 pages supported
+  // ✅ Supports 1–5 images
   imageUrls: jsonb("image_urls").$type<string[]>().notNull(),
 
   ocrText: text("ocr_text"),
@@ -94,7 +94,7 @@ export const prescriptions = pgTable("prescriptions", {
 
   createdAt: timestamp("created_at").defaultNow(),
 
-  // ❌ DO NOT ADD updatedAt — DB DOES NOT HAVE IT
+  // ❌ DO NOT ADD updatedAt — DB does not have it
 });
 
 /* =========================
@@ -217,7 +217,6 @@ export const insertMedicineSchema = createInsertSchema(medicines).omit({
 export const insertPrescriptionSchema = createInsertSchema(prescriptions).omit({
   id: true,
   createdAt: true,
-  // ❌ no updatedAt here
 });
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
