@@ -15,14 +15,10 @@ cloudinary.v2.config({
 });
 
 /* -----------------------------
-   Multer (memory upload)
+   Multer (memory)
 ------------------------------ */
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    files: 5,           // max 5 pages
-    fileSize: 5 * 1024 * 1024, // 5MB per image
-  },
 });
 
 /* -----------------------------
@@ -31,72 +27,47 @@ const upload = multer({
 export function registerPrescriptionRoutes(app: Express) {
   console.log("🔥 PRESCRIPTION ROUTES REGISTERED 🔥");
 
-  /* -----------------------------------
-     Upload prescription (1–5 images)
-  ------------------------------------ */
   app.post(
     "/api/prescriptions/upload",
     requireAuth,
-    upload.array("images", 5), // ✅ MULTI-PAGE
+    upload.array("images", 5),
     async (req: AuthRequest, res: Response) => {
       try {
-        const files = req.files as Express.Multer.File[] | undefined;
+        const files = req.files as Express.Multer.File[];
 
         if (!files || files.length === 0) {
           return res.status(400).json({ error: "No images uploaded" });
         }
 
-        const uploadedUrls: string[] = [];
+        const imageUrls: string[] = [];
 
         for (const file of files) {
           const result = await new Promise<any>((resolve, reject) => {
             cloudinary.v2.uploader
-              .upload_stream(
-                { folder: "prescriptions" },
-                (err, result) => {
-                  if (err) reject(err);
-                  else resolve(result);
-                }
-              )
+              .upload_stream({ folder: "prescriptions" }, (err, result) => {
+                if (err) reject(err);
+                else resolve(result);
+              })
               .end(file.buffer);
           });
 
-          uploadedUrls.push(result.secure_url);
+          imageUrls.push(result.secure_url);
         }
 
         const [saved] = await db
           .insert(prescriptions)
           .values({
             userId: req.user!.id,
-            imageUrls: uploadedUrls, // ✅ matches schema
+            imageUrls,
             status: "pending",
           })
           .returning();
 
-        res.json({
-          success: true,
-          prescription: saved,
-        });
+        res.json({ success: true, prescription: saved });
       } catch (err) {
         console.error("❌ Prescription upload failed:", err);
         res.status(500).json({ error: "Upload failed" });
       }
-    }
-  );
-
-  /* -----------------------------------
-     List user prescriptions
-  ------------------------------------ */
-  app.get(
-    "/api/prescriptions",
-    requireAuth,
-    async (req: AuthRequest, res: Response) => {
-      const data = await db.query.prescriptions.findMany({
-        where: (p, { eq }) => eq(p.userId, req.user!.id),
-        orderBy: (p, { desc }) => [desc(p.createdAt)],
-      });
-
-      res.json(data);
     }
   );
 }
