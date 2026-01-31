@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { Upload, Trash2, CheckCircle } from "lucide-react";
+import { Upload, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,26 +12,30 @@ import { useCartContext } from "@/context/CartContext";
 export default function PrescriptionPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
-
-  const {
-    prescriptions,
-    selectedPrescriptionIds,
-    addPrescription,
-    togglePrescription,
-    deletePrescription,
-  } = useCartContext();
+  const { user, isAuthenticated } = useAuth();
+  const { addPrescription } = useCartContext();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [files, setFiles] = useState<File[]>([]);
+  const [date, setDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [uploading, setUploading] = useState(false);
 
   /* ---------------------------
-     Upload mutation (MULTI)
+     Upload mutation
   ---------------------------- */
   const uploadMutation = useMutation({
-    mutationFn: async (files: File[]) => {
+    mutationFn: async () => {
       const formData = new FormData();
+
       files.forEach((file) => formData.append("images", file));
+
+      formData.append(
+        "label",
+        `${user?.name || "Prescription"} – ${date}`
+      );
 
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/prescriptions/upload`,
@@ -51,25 +55,19 @@ export default function PrescriptionPage() {
     },
     onSuccess: (data) => {
       addPrescription(data.prescription);
-      toast({ title: "Prescription uploaded" });
+      setFiles([]);
+      toast({ title: "Prescription created" });
+      navigate("/checkout");
     },
     onError: (err: any) => {
       toast({
         title: "Upload failed",
-        description: err?.message || "Unable to upload prescription",
+        description: err?.message,
         variant: "destructive",
       });
     },
     onSettled: () => setUploading(false),
   });
-
-  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    setUploading(true);
-    uploadMutation.mutate(files);
-  }
 
   if (!isAuthenticated) {
     return <p className="p-4">Please login to upload prescription</p>;
@@ -77,16 +75,13 @@ export default function PrescriptionPage() {
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-4">
-      <h1 className="font-semibold text-lg">Prescriptions</h1>
+      <h1 className="font-semibold text-lg">Create Prescription</h1>
 
       {/* UPLOAD */}
       <Card className="p-4 text-center border-dashed border-2">
         <Upload className="mx-auto mb-2" />
-        <Button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? "Uploading..." : "Upload Prescription (1–5 pages)"}
+        <Button onClick={() => fileInputRef.current?.click()}>
+          Select Images (1–5)
         </Button>
         <input
           ref={fileInputRef}
@@ -94,63 +89,55 @@ export default function PrescriptionPage() {
           accept="image/*"
           multiple
           hidden
-          onChange={handleUpload}
+          onChange={(e) =>
+            setFiles(Array.from(e.target.files || []).slice(0, 5))
+          }
         />
       </Card>
 
-      {/* LIST */}
-      {prescriptions.map((p) => {
-        const isSelected = selectedPrescriptionIds.includes(p.id);
+      {/* PREVIEW */}
+      {files.length > 0 && (
+        <Card className="p-4 space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            {files.map((file, idx) => (
+              <img
+                key={idx}
+                src={URL.createObjectURL(file)}
+                className="w-full h-24 object-cover rounded"
+              />
+            ))}
+          </div>
 
-        return (
-          <Card
-            key={p.id}
-            className={`p-3 flex items-center gap-3 ${
-              isSelected ? "border-green-500" : ""
-            }`}
-          >
-            <img
-              src={p.imageUrls?.[0]}
-              alt="Prescription"
-              className="w-16 h-16 object-cover rounded"
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Prescription Date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full border rounded px-2 py-1"
             />
+          </div>
 
-            <div className="flex-1">
-              {isSelected && (
-                <p className="text-green-600 text-sm flex items-center gap-1">
-                  <CheckCircle size={14} /> Selected
-                </p>
-              )}
-            </div>
+          <Button
+            className="w-full"
+            disabled={uploading}
+            onClick={() => {
+              setUploading(true);
+              uploadMutation.mutate();
+            }}
+          >
+            {uploading ? "Uploading..." : "Create Prescription"}
+          </Button>
 
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => togglePrescription(p.id)}
-              >
-                {isSelected ? "Unselect" : "Select"}
-              </Button>
-
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => deletePrescription(p.id)}
-              >
-                <Trash2 size={14} />
-              </Button>
-            </div>
-          </Card>
-        );
-      })}
-
-      <Button
-        className="w-full"
-        disabled={selectedPrescriptionIds.length === 0}
-        onClick={() => navigate("/checkout")}
-      >
-        Continue to Checkout
-      </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setFiles([])}
+          >
+            <Trash2 size={14} /> Clear
+          </Button>
+        </Card>
+      )}
     </div>
   );
 }
