@@ -1,13 +1,18 @@
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { Upload, Trash2, CheckCircle } from "lucide-react";
+import { Upload, Trash2, CheckCircle, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartContext } from "@/context/CartContext";
+
+type PreviewFile = {
+  file: File;
+  preview: string;
+};
 
 export default function PrescriptionPage() {
   const [, navigate] = useLocation();
@@ -23,8 +28,13 @@ export default function PrescriptionPage() {
   } = useCartContext();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [selectedFiles, setSelectedFiles] = useState<PreviewFile[]>([]);
   const [uploading, setUploading] = useState(false);
 
+  /* -----------------------------
+     Upload mutation (single file)
+  ------------------------------ */
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       const formData = new FormData();
@@ -36,28 +46,69 @@ export default function PrescriptionPage() {
         credentials: "include",
       });
 
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        throw new Error("Upload failed");
+      }
+
       return res.json();
     },
     onSuccess: (data) => {
       addPrescription(data.prescription);
-      toast({ title: "Prescription uploaded" });
     },
-    onError: () => {
+  });
+
+  /* -----------------------------
+     Handle file selection
+  ------------------------------ */
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+
+    if (files.length > 5) {
+      toast({
+        title: "Too many images",
+        description: "You can upload up to 5 images",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const previews = files.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+
+    setSelectedFiles(previews);
+  }
+
+  function removePreview(index: number) {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function uploadAll() {
+    if (!selectedFiles.length) return;
+
+    setUploading(true);
+
+    try {
+      for (const item of selectedFiles) {
+        await uploadMutation.mutateAsync(item.file);
+      }
+
+      toast({
+        title: "Prescription uploaded",
+        description: `${selectedFiles.length} image(s) uploaded`,
+      });
+
+      setSelectedFiles([]);
+    } catch {
       toast({
         title: "Upload failed",
         variant: "destructive",
       });
-    },
-    onSettled: () => setUploading(false),
-  });
-
-  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    uploadMutation.mutate(file);
+    } finally {
+      setUploading(false);
+    }
   }
 
   if (!isAuthenticated) {
@@ -68,29 +119,63 @@ export default function PrescriptionPage() {
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-4">
       <h1 className="font-semibold text-lg">Prescriptions</h1>
 
-      {/* UPLOAD */}
-      <Card className="p-4 text-center border-dashed border-2">
-        <Upload className="mx-auto mb-2" />
-        <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-          {uploading ? "Uploading..." : "Upload Prescription"}
+      {/* ---------------- UPLOAD AREA ---------------- */}
+      <Card className="p-4 border-dashed border-2 text-center space-y-3">
+        <Upload className="mx-auto" />
+
+        <Button
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Select Images (1–5)
         </Button>
+
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
+          multiple
           hidden
-          onChange={handleUpload}
+          onChange={handleFileSelect}
         />
+
+        {/* PREVIEWS */}
+        {selectedFiles.length > 0 && (
+          <>
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              {selectedFiles.map((item, idx) => (
+                <div key={idx} className="relative">
+                  <img
+                    src={item.preview}
+                    className="w-full h-24 object-cover rounded"
+                  />
+                  <button
+                    className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1"
+                    onClick={() => removePreview(idx)}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              className="w-full mt-3"
+              onClick={uploadAll}
+              disabled={uploading}
+            >
+              {uploading ? "Uploading..." : "Upload Selected Images"}
+            </Button>
+          </>
+        )}
       </Card>
 
-      {/* LIST */}
+      {/* ---------------- SAVED PRESCRIPTIONS ---------------- */}
       {prescriptions.map((p) => (
         <Card
           key={p.id}
           className={`p-3 flex items-center gap-3 ${
-            selectedPrescriptionId === p.id
-              ? "border-green-500"
-              : ""
+            selectedPrescriptionId === p.id ? "border-green-500" : ""
           }`}
         >
           <img
