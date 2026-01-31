@@ -30,9 +30,16 @@ export function useAuth() {
     }
   }
 
+  // Load on first mount
   useEffect(() => {
     fetchMe();
   }, []);
+
+  // 🔄 REQUIRED BY GOOGLE LOGIN BUTTON
+  async function refresh() {
+    setIsLoading(true);
+    await fetchMe();
+  }
 
   // 🔓 Logout (backend + frontend)
   async function logout() {
@@ -55,7 +62,7 @@ export function useAuth() {
     user,
     isAuthenticated: !!user,
     isLoading,
+    refresh,      // ✅ THIS IS THE KEY FIX
     logout,
-    refetchAuth: fetchMe,
   };
 }
