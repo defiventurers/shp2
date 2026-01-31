@@ -1,128 +1,124 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
-import { useCartContext } from "@/context/CartContext";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, User } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { FileText, Package } from "lucide-react";
+import { Link } from "wouter";
 
-type Prescription = {
-  id: string;
-  imageUrls: string[];
-  createdAt: string;
-};
+export default function Profile() {
+  const { user, isLoading } = useAuth();
 
-export default function ProfilePage() {
-  const { user, isAuthenticated } = useAuth();
-  const {
-    prescriptions,
-    selectPrescription,
-    selectedPrescriptionId,
-  } = useCartContext();
-
-  // 🔄 Fetch prescriptions from backend on page load
-  const { data = [] } = useQuery<Prescription[]>({
-    queryKey: ["/api/prescriptions"],
-    enabled: isAuthenticated,
+  const { data: orders = [] } = useQuery<any[]>({
+    queryKey: ["/api/orders"],
+    enabled: !!user,
   });
 
-  // Sync backend prescriptions into CartContext once
-  useEffect(() => {
-    if (data.length > 0 && prescriptions.length === 0) {
-      data.forEach((p) => {
-        // only add if not already present
-        if (!prescriptions.find((x) => x.id === p.id)) {
-          prescriptions.push(p as any);
-        }
-      });
-    }
-  }, [data]);
+  const { data: prescriptions = [] } = useQuery<any[]>({
+    queryKey: ["/api/prescriptions"],
+    enabled: !!user,
+  });
 
-  if (!isAuthenticated) {
+  if (isLoading) {
+    return <p className="p-4">Loading profile…</p>;
+  }
+
+  if (!user) {
     return (
-      <div className="p-6 text-center text-sm text-muted-foreground">
-        Please sign in to view your profile
+      <div className="p-4">
+        <p>Please login to view your profile.</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="px-4 py-4 max-w-lg mx-auto space-y-6">
+    <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
+      {/* USER INFO */}
+      <Card className="p-4 space-y-1">
+        <h2 className="font-semibold text-lg">Profile</h2>
+        <p className="text-sm text-muted-foreground">
+          {user.name}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {user.email}
+        </p>
+      </Card>
 
-        {/* ---------------- USER INFO ---------------- */}
-        <Card className="p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <User size={16} />
-            <h2 className="font-semibold text-sm">My Profile</h2>
-          </div>
-
-          <p className="text-sm">
-            <strong>Name:</strong> {user?.name || "—"}
-          </p>
-          <p className="text-sm">
-            <strong>Email:</strong> {user?.email || "—"}
-          </p>
-        </Card>
-
-        {/* ---------------- PRESCRIPTIONS ---------------- */}
-        <div>
-          <h3 className="font-semibold text-sm mb-2">
-            Uploaded Prescriptions
-          </h3>
-
-          {prescriptions.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No prescriptions uploaded yet.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {prescriptions.map((p) => {
-                const isSelected = selectedPrescriptionId === p.id;
-
-                return (
-                  <Card
-                    key={p.id}
-                    className={`p-3 flex items-center gap-3 ${
-                      isSelected ? "border-green-600" : ""
-                    }`}
-                  >
-                    <img
-                      src={p.imageUrls[0]}
-                      alt="Prescription"
-                      className="w-14 h-14 object-cover rounded"
-                    />
-
-                    <div className="flex-1">
-                      <p className="text-sm font-medium flex items-center gap-1">
-                        <FileText size={14} />
-                        Prescription
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {p.imageUrls.length} page(s) •{" "}
-                        {new Date(p.createdAt).toLocaleDateString("en-IN")}
-                      </p>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      variant={isSelected ? "default" : "outline"}
-                      onClick={() => selectPrescription(p.id)}
-                    >
-                      {isSelected ? "Selected" : "Use"}
-                    </Button>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+      {/* ORDERS */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Package size={18} />
+          <h3 className="font-medium">My Orders</h3>
         </div>
 
-        {/* ---------------- ORDERS (COMING NEXT) ---------------- */}
-        <Card className="p-4 text-sm text-muted-foreground">
-          Orders section coming next…
-        </Card>
-      </div>
+        <Separator />
+
+        {orders.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No orders yet.
+          </p>
+        ) : (
+          orders.map((order) => (
+            <div
+              key={order.id}
+              className="border rounded-md p-3 text-sm space-y-1"
+            >
+              <p>
+                <strong>Order:</strong> #{order.orderNumber}
+              </p>
+              <p>
+                <strong>Total:</strong> ₹{order.total}
+              </p>
+              <p className="text-muted-foreground">
+                {order.status}
+              </p>
+            </div>
+          ))
+        )}
+      </Card>
+
+      {/* PRESCRIPTIONS */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <FileText size={18} />
+          <h3 className="font-medium">My Prescriptions</h3>
+        </div>
+
+        <Separator />
+
+        {prescriptions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No prescriptions uploaded.
+          </p>
+        ) : (
+          prescriptions.map((p) => (
+            <div
+              key={p.id}
+              className="border rounded-md p-3 space-y-2"
+            >
+              <p className="text-sm">
+                Uploaded on{" "}
+                {new Date(p.createdAt).toLocaleDateString()}
+              </p>
+
+              <div className="flex gap-2 flex-wrap">
+                {(p.imageUrls || []).map((url: string, idx: number) => (
+                  <img
+                    key={idx}
+                    src={url}
+                    className="w-16 h-16 object-cover rounded"
+                    alt="Prescription"
+                  />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+
+        <Button asChild variant="outline" size="sm">
+          <Link href="/prescription">Upload New Prescription</Link>
+        </Button>
+      </Card>
     </div>
   );
 }
