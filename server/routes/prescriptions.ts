@@ -1,6 +1,6 @@
 import type { Express, Response } from "express";
 import multer from "multer";
-import cloudinary from "cloudinary";
+import { v2 as cloudinary } from "cloudinary";
 import { db } from "../db";
 import { prescriptions } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
@@ -8,10 +8,16 @@ import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 /* -----------------------------
    Cloudinary config
 ------------------------------ */
-cloudinary.v2.config({
+cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
   api_key: process.env.CLOUDINARY_API_KEY!,
   api_secret: process.env.CLOUDINARY_API_SECRET!,
+});
+
+console.log("🌤️ Cloudinary configured:", {
+  cloud: !!process.env.CLOUDINARY_CLOUD_NAME,
+  key: !!process.env.CLOUDINARY_API_KEY,
+  secret: !!process.env.CLOUDINARY_API_SECRET,
 });
 
 /* -----------------------------
@@ -19,6 +25,9 @@ cloudinary.v2.config({
 ------------------------------ */
 const upload = multer({
   storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
 });
 
 /* -----------------------------
@@ -34,17 +43,30 @@ export function registerPrescriptionRoutes(app: Express) {
     upload.single("image"),
     async (req: AuthRequest, res: Response) => {
       try {
+        console.log("📥 Prescription upload hit");
+
         if (!req.file) {
           return res.status(400).json({ error: "No image uploaded" });
         }
 
+        if (!req.file.mimetype.startsWith("image/")) {
+          return res.status(400).json({ error: "Invalid file type" });
+        }
+
         const uploadResult = await new Promise<any>((resolve, reject) => {
-          cloudinary.v2.uploader
+          cloudinary.uploader
             .upload_stream(
-              { folder: "prescriptions" },
+              {
+                folder: "prescriptions",
+                resource_type: "image",
+              },
               (err, result) => {
-                if (err) reject(err);
-                else resolve(result);
+                if (err) {
+                  console.error("❌ Cloudinary error:", err);
+                  reject(err);
+                } else {
+                  resolve(result);
+                }
               }
             )
             .end(req.file.buffer);
@@ -65,7 +87,7 @@ export function registerPrescriptionRoutes(app: Express) {
           extractedMedicines: [],
         });
       } catch (err) {
-        console.error("Prescription upload failed:", err);
+        console.error("❌ Prescription upload failed:", err);
         res.status(500).json({ error: "Upload failed" });
       }
     }
