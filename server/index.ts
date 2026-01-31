@@ -4,6 +4,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 
 import { seedDatabase } from "./seed";
+import { migratePrescriptions } from "./db"; // ✅ ADDED
 
 // 🔥 FORCE IMPORT ROUTES (NO TREE SHAKING)
 import { registerAuthRoutes } from "./routes/auth";
@@ -66,9 +67,13 @@ app.get("/api/__probe", (_req, res) => {
 ------------------------------ */
 (async () => {
   try {
+    console.log("🌱 Seeding database (safe)...");
     await seedDatabase();
+
+    console.log("🔄 Running prescription migration...");
+    await migratePrescriptions(); // ✅ CRITICAL FIX
   } catch (err) {
-    console.error("Seed failed:", err);
+    console.error("Startup task failed:", err);
   }
 
   console.log("🌤️ Cloudinary configured:", {
@@ -77,7 +82,7 @@ app.get("/api/__probe", (_req, res) => {
     secret: Boolean(process.env.CLOUDINARY_API_SECRET),
   });
 
-  // 🔥 REGISTER ROUTES EXPLICITLY
+  // 🔥 REGISTER ROUTES
   registerAuthRoutes(app);
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
