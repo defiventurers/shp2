@@ -1,22 +1,66 @@
+import { useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
-export function GoogleLoginButton() {
-  const { isAuthenticated, user, logout } = useAuth();
-
-  // 🔐 Redirect-based login (matches backend)
-  function handleLogin() {
-    window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
+declare global {
+  interface Window {
+    google?: any;
   }
+}
 
+export function GoogleLoginButton() {
+  const buttonRef = useRef<HTMLDivElement>(null);
+  const { isAuthenticated, user, refresh, logout } = useAuth();
+
+  useEffect(() => {
+    // Do nothing if already logged in
+    if (isAuthenticated) return;
+    if (!window.google || !buttonRef.current) return;
+
+    window.google.accounts.id.initialize({
+      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID!,
+      callback: async (response: any) => {
+        try {
+          const res = await fetch(
+            `${import.meta.env.VITE_API_URL}/api/auth/google`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include", // 🔥 REQUIRED
+              body: JSON.stringify({ credential: response.credential }),
+            }
+          );
+
+          if (!res.ok) {
+            console.error("Google login failed");
+            return;
+          }
+
+          // 🔥 Force auth state refresh
+          await refresh();
+        } catch (err) {
+          console.error("Google auth error", err);
+        }
+      },
+    });
+
+    window.google.accounts.id.renderButton(buttonRef.current, {
+      theme: "outline",
+      size: "large",
+      text: "signin_with",
+      shape: "rectangular",
+    });
+  }, [isAuthenticated, refresh]);
+
+  // Logged-in UI
   if (isAuthenticated) {
     return (
       <div className="flex items-center gap-3 text-sm">
-        <span className="text-muted-foreground">
+        <span className="text-white/90">
           Signed in{user?.name ? ` as ${user.name}` : ""}
         </span>
         <button
           onClick={logout}
-          className="text-green-700 font-medium hover:underline"
+          className="text-white font-medium underline"
         >
           Logout
         </button>
@@ -24,17 +68,6 @@ export function GoogleLoginButton() {
     );
   }
 
-  return (
-    <button
-      onClick={handleLogin}
-      className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-muted transition"
-    >
-      <img
-        src="https://developers.google.com/identity/images/g-logo.png"
-        alt="Google"
-        className="w-4 h-4"
-      />
-      <span className="text-sm font-medium">Sign in with Google</span>
-    </button>
-  );
+  // Logged-out UI
+  return <div ref={buttonRef} />;
 }
