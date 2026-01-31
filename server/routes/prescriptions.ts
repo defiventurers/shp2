@@ -42,7 +42,7 @@ export function registerPrescriptionRoutes(app: Express) {
           return res.status(400).json({ error: "No images uploaded" });
         }
 
-        const uploadedUrls: string[] = [];
+        const imageUrls: string[] = [];
 
         for (const file of files) {
           const result = await new Promise<any>((resolve, reject) => {
@@ -54,25 +54,21 @@ export function registerPrescriptionRoutes(app: Express) {
               .end(file.buffer);
           });
 
-          uploadedUrls.push(result.secure_url);
+          imageUrls.push(result.secure_url);
         }
 
         const [saved] = await db
           .insert(prescriptions)
           .values({
             userId: req.user!.id,
-            imageUrls: uploadedUrls, // stored as image_urls in DB
+            imageUrls, // ✅ correct field
             status: "pending",
           })
           .returning();
 
-        // ✅ NORMALIZE RESPONSE FOR FRONTEND
         res.json({
           success: true,
-          prescription: {
-            ...saved,
-            imageUrls: saved.image_urls,
-          },
+          prescription: saved, // ✅ already normalized by Drizzle
         });
       } catch (err) {
         console.error("❌ Prescription upload failed:", err);
@@ -94,13 +90,8 @@ export function registerPrescriptionRoutes(app: Express) {
           orderBy: (p, { desc }) => [desc(p.createdAt)],
         });
 
-        // ✅ NORMALIZE image_urls → imageUrls
-        const normalized = rows.map((p) => ({
-          ...p,
-          imageUrls: p.image_urls,
-        }));
-
-        res.json(normalized);
+        // ✅ rows already contain imageUrls
+        res.json(rows);
       } catch (err) {
         console.error("❌ Fetch prescriptions failed:", err);
         res.status(500).json({ error: "Failed to fetch prescriptions" });
