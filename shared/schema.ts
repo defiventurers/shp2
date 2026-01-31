@@ -86,12 +86,14 @@ export const prescriptions = pgTable("prescriptions", {
     .references(() => users.id),
 
   // ✅ MULTI-PAGE SUPPORT
-  imageUrls: jsonb("image_urls").notNull(), // string[]
+  imageUrls: jsonb("image_urls").$type<string[]>().notNull(),
 
   ocrText: text("ocr_text"),
   extractedMedicines: jsonb("extracted_medicines"),
   status: varchar("status").default("pending"),
+
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 /* =========================
@@ -99,7 +101,6 @@ export const prescriptions = pgTable("prescriptions", {
 ========================= */
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-
   orderNumber: varchar("order_number").notNull().unique(),
 
   userId: varchar("user_id")
@@ -215,6 +216,7 @@ export const insertMedicineSchema = createInsertSchema(medicines).omit({
 export const insertPrescriptionSchema = createInsertSchema(prescriptions).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
@@ -247,20 +249,3 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
 
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
-
-/* =========================
-   Frontend Helpers
-========================= */
-export interface CartItem {
-  medicine: Medicine;
-  quantity: number;
-}
-
-export type OrderStatus =
-  | "pending"
-  | "confirmed"
-  | "processing"
-  | "ready"
-  | "out_for_delivery"
-  | "delivered"
-  | "cancelled";
