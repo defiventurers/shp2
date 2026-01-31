@@ -16,15 +16,18 @@ export default function PrescriptionPage() {
 
   const {
     prescriptions,
-    selectedPrescriptionId,
+    selectedPrescriptionIds,
     addPrescription,
-    selectPrescription,
+    togglePrescription,
     deletePrescription,
   } = useCartContext();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
+  /* ---------------------------
+     Upload mutation (MULTI)
+  ---------------------------- */
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
       const formData = new FormData();
@@ -96,49 +99,54 @@ export default function PrescriptionPage() {
       </Card>
 
       {/* LIST */}
-      {prescriptions.map((p) => (
-        <Card
-          key={p.id}
-          className={`p-3 flex items-center gap-3 ${
-            selectedPrescriptionId === p.id ? "border-green-500" : ""
-          }`}
-        >
-          <img
-            src={p.imageUrls?.[0]}
-            alt="Prescription"
-            className="w-16 h-16 object-cover rounded"
-          />
+      {prescriptions.map((p) => {
+        const isSelected = selectedPrescriptionIds.includes(p.id);
 
-          <div className="flex-1">
-            {selectedPrescriptionId === p.id && (
-              <p className="text-green-600 text-sm flex items-center gap-1">
-                <CheckCircle size={14} /> Selected
-              </p>
-            )}
-          </div>
+        return (
+          <Card
+            key={p.id}
+            className={`p-3 flex items-center gap-3 ${
+              isSelected ? "border-green-500" : ""
+            }`}
+          >
+            <img
+              src={p.imageUrls?.[0]}
+              alt="Prescription"
+              className="w-16 h-16 object-cover rounded"
+            />
 
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => selectPrescription(p.id)}
-            >
-              Select
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => deletePrescription(p.id)}
-            >
-              <Trash2 size={14} />
-            </Button>
-          </div>
-        </Card>
-      ))}
+            <div className="flex-1">
+              {isSelected && (
+                <p className="text-green-600 text-sm flex items-center gap-1">
+                  <CheckCircle size={14} /> Selected
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => togglePrescription(p.id)}
+              >
+                {isSelected ? "Unselect" : "Select"}
+              </Button>
+
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => deletePrescription(p.id)}
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          </Card>
+        );
+      })}
 
       <Button
         className="w-full"
-        disabled={!selectedPrescriptionId}
+        disabled={selectedPrescriptionIds.length === 0}
         onClick={() => navigate("/checkout")}
       >
         Continue to Checkout
