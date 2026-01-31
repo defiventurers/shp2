@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { Upload, Trash2 } from "lucide-react";
+import { Upload, CheckCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,30 +12,22 @@ import { useCartContext } from "@/context/CartContext";
 export default function PrescriptionPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { user, isAuthenticated } = useAuth();
-  const { addPrescription } = useCartContext();
+  const { isAuthenticated } = useAuth();
+
+  const {
+    prescriptions,
+    selectedPrescriptionId,
+    setSelectedPrescriptionId,
+    refreshPrescriptions,
+  } = useCartContext();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [files, setFiles] = useState<File[]>([]);
-  const [date, setDate] = useState(() =>
-    new Date().toISOString().slice(0, 10)
-  );
   const [uploading, setUploading] = useState(false);
 
-  /* ---------------------------
-     Upload mutation
-  ---------------------------- */
   const uploadMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (files: File[]) => {
       const formData = new FormData();
-
-      files.forEach((file) => formData.append("images", file));
-
-      formData.append(
-        "label",
-        `${user?.name || "Prescription"} – ${date}`
-      );
+      files.forEach((f) => formData.append("images", f));
 
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/prescriptions/upload`,
@@ -46,28 +38,29 @@ export default function PrescriptionPage() {
         }
       );
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Upload failed");
-      }
-
+      if (!res.ok) throw new Error("Upload failed");
       return res.json();
     },
-    onSuccess: (data) => {
-      addPrescription(data.prescription);
-      setFiles([]);
-      toast({ title: "Prescription created" });
-      navigate("/checkout");
+    onSuccess: async () => {
+      await refreshPrescriptions(); // 🔥 KEY FIX
+      toast({ title: "Prescription uploaded" });
     },
-    onError: (err: any) => {
+    onError: () => {
       toast({
         title: "Upload failed",
-        description: err?.message,
         variant: "destructive",
       });
     },
     onSettled: () => setUploading(false),
   });
+
+  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setUploading(true);
+    uploadMutation.mutate(files);
+  }
 
   if (!isAuthenticated) {
     return <p className="p-4">Please login to upload prescription</p>;
@@ -75,13 +68,15 @@ export default function PrescriptionPage() {
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-4">
-      <h1 className="font-semibold text-lg">Create Prescription</h1>
+      <h1 className="font-semibold text-lg">Your Prescriptions</h1>
 
-      {/* UPLOAD */}
       <Card className="p-4 text-center border-dashed border-2">
         <Upload className="mx-auto mb-2" />
-        <Button onClick={() => fileInputRef.current?.click()}>
-          Select Images (1–5)
+        <Button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? "Uploading..." : "Upload Prescription (1–5 pages)"}
         </Button>
         <input
           ref={fileInputRef}
@@ -89,55 +84,43 @@ export default function PrescriptionPage() {
           accept="image/*"
           multiple
           hidden
-          onChange={(e) =>
-            setFiles(Array.from(e.target.files || []).slice(0, 5))
-          }
+          onChange={handleUpload}
         />
       </Card>
 
-      {/* PREVIEW */}
-      {files.length > 0 && (
-        <Card className="p-4 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            {files.map((file, idx) => (
-              <img
-                key={idx}
-                src={URL.createObjectURL(file)}
-                className="w-full h-24 object-cover rounded"
-              />
-            ))}
+      {prescriptions.map((p) => (
+        <Card
+          key={p.id}
+          className={`p-3 flex items-center gap-3 cursor-pointer ${
+            selectedPrescriptionId === p.id ? "border-green-500" : ""
+          }`}
+          onClick={() => setSelectedPrescriptionId(p.id)}
+        >
+          <img
+            src={p.imageUrls?.[0]}
+            alt="Prescription"
+            className="w-16 h-16 object-cover rounded"
+          />
+          <div className="flex-1">
+            {selectedPrescriptionId === p.id && (
+              <p className="text-green-600 text-sm flex items-center gap-1">
+                <CheckCircle size={14} /> Selected
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {p.imageUrls.length} page(s)
+            </p>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Prescription Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full border rounded px-2 py-1"
-            />
-          </div>
-
-          <Button
-            className="w-full"
-            disabled={uploading}
-            onClick={() => {
-              setUploading(true);
-              uploadMutation.mutate();
-            }}
-          >
-            {uploading ? "Uploading..." : "Create Prescription"}
-          </Button>
-
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setFiles([])}
-          >
-            <Trash2 size={14} /> Clear
-          </Button>
         </Card>
-      )}
+      ))}
+
+      <Button
+        className="w-full"
+        disabled={!selectedPrescriptionId}
+        onClick={() => navigate("/checkout")}
+      >
+        Continue to Checkout
+      </Button>
     </div>
   );
 }
