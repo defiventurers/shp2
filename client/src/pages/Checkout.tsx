@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, CheckCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
@@ -16,6 +16,7 @@ export default function CheckoutPage() {
     clearCart,
     requiresPrescription,
     selectedPrescriptionId,
+    prescriptions,
   } = useCartContext();
 
   const { toast } = useToast();
@@ -28,6 +29,10 @@ export default function CheckoutPage() {
   const [deliveryType, setDeliveryType] =
     useState<"pickup" | "delivery">("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+
+  const selectedPrescription = prescriptions.find(
+    (p) => p.id === selectedPrescriptionId
+  );
 
   const subtotal = items.reduce(
     (sum, item) => sum + Number(item.medicine.price) * item.quantity,
@@ -59,7 +64,7 @@ export default function CheckoutPage() {
     if (requiresPrescription && !selectedPrescriptionId) {
       toast({
         title: "Prescription required",
-        description: "Please upload/select a prescription",
+        description: "Please upload and select a prescription",
         variant: "destructive",
       });
       return;
@@ -168,13 +173,31 @@ export default function CheckoutPage() {
 
         {/* PRESCRIPTION */}
         {requiresPrescription && (
-          <Card className="p-4 border">
-            {selectedPrescriptionId ? (
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle className="w-5 h-5" />
-                <p className="text-sm font-medium">
-                  Prescription selected
-                </p>
+          <Card className="p-4 border space-y-2">
+            {selectedPrescription ? (
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium flex items-center gap-1">
+                    <FileText size={14} />
+                    Prescription selected
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedPrescription.imageUrls.length} page(s) •{" "}
+                    {new Date(
+                      selectedPrescription.createdAt
+                    ).toLocaleDateString("en-IN")}
+                  </p>
+
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                  >
+                    <Link href="/prescription">Change Prescription</Link>
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="flex gap-3">
@@ -189,9 +212,7 @@ export default function CheckoutPage() {
                     variant="outline"
                     className="mt-2"
                   >
-                    <Link href="/prescription">
-                      Upload Prescription
-                    </Link>
+                    <Link href="/prescription">Upload Prescription</Link>
                   </Button>
                 </div>
               </div>
