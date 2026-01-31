@@ -20,8 +20,8 @@ cloudinary.v2.config({
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    files: 5,               // max 5 images
-    fileSize: 10 * 1024 * 1024, // 10MB per file
+    files: 5,           // max 5 pages
+    fileSize: 5 * 1024 * 1024, // 5MB per image
   },
 });
 
@@ -31,13 +31,13 @@ const upload = multer({
 export function registerPrescriptionRoutes(app: Express) {
   console.log("🔥 PRESCRIPTION ROUTES REGISTERED 🔥");
 
-  /* =========================
-     UPLOAD PRESCRIPTION (1–5 pages)
-  ========================= */
+  /* -----------------------------------
+     Upload prescription (1–5 images)
+  ------------------------------------ */
   app.post(
     "/api/prescriptions/upload",
     requireAuth,
-    upload.array("images", 5), // ✅ IMPORTANT: "images"
+    upload.array("images", 5), // ✅ MULTI-PAGE
     async (req: AuthRequest, res: Response) => {
       try {
         const files = req.files as Express.Multer.File[] | undefined;
@@ -49,7 +49,7 @@ export function registerPrescriptionRoutes(app: Express) {
         const uploadedUrls: string[] = [];
 
         for (const file of files) {
-          const uploadResult = await new Promise<any>((resolve, reject) => {
+          const result = await new Promise<any>((resolve, reject) => {
             cloudinary.v2.uploader
               .upload_stream(
                 { folder: "prescriptions" },
@@ -61,7 +61,7 @@ export function registerPrescriptionRoutes(app: Express) {
               .end(file.buffer);
           });
 
-          uploadedUrls.push(uploadResult.secure_url);
+          uploadedUrls.push(result.secure_url);
         }
 
         const [saved] = await db
@@ -84,9 +84,9 @@ export function registerPrescriptionRoutes(app: Express) {
     }
   );
 
-  /* =========================
-     LIST USER PRESCRIPTIONS
-  ========================= */
+  /* -----------------------------------
+     List user prescriptions
+  ------------------------------------ */
   app.get(
     "/api/prescriptions",
     requireAuth,
