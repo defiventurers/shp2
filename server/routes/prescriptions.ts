@@ -19,6 +19,10 @@ cloudinary.v2.config({
 ------------------------------ */
 const upload = multer({
   storage: multer.memoryStorage(),
+  limits: {
+    files: 5,               // max 5 images
+    fileSize: 10 * 1024 * 1024, // 10MB per file
+  },
 });
 
 /* -----------------------------
@@ -27,24 +31,25 @@ const upload = multer({
 export function registerPrescriptionRoutes(app: Express) {
   console.log("🔥 PRESCRIPTION ROUTES REGISTERED 🔥");
 
-  /**
-   * MULTI-PAGE PRESCRIPTION UPLOAD (1–5 images)
-   */
+  /* =========================
+     UPLOAD PRESCRIPTION (1–5 pages)
+  ========================= */
   app.post(
     "/api/prescriptions/upload",
     requireAuth,
-    upload.array("images", 5), // ✅ FIXED
+    upload.array("images", 5), // ✅ IMPORTANT: "images"
     async (req: AuthRequest, res: Response) => {
       try {
-        if (!req.files || !(req.files instanceof Array) || req.files.length === 0) {
+        const files = req.files as Express.Multer.File[] | undefined;
+
+        if (!files || files.length === 0) {
           return res.status(400).json({ error: "No images uploaded" });
         }
 
-        // Upload all images to Cloudinary
         const uploadedUrls: string[] = [];
 
-        for (const file of req.files) {
-          const result = await new Promise<any>((resolve, reject) => {
+        for (const file of files) {
+          const uploadResult = await new Promise<any>((resolve, reject) => {
             cloudinary.v2.uploader
               .upload_stream(
                 { folder: "prescriptions" },
@@ -56,16 +61,14 @@ export function registerPrescriptionRoutes(app: Express) {
               .end(file.buffer);
           });
 
-          uploadedUrls.push(result.secure_url);
+          uploadedUrls.push(uploadResult.secure_url);
         }
 
-        // Save ONLY FIRST IMAGE as primary (others are pages)
         const [saved] = await db
           .insert(prescriptions)
           .values({
             userId: req.user!.id,
-            imageUrl: uploadedUrls[0], // primary preview
-            extractedMedicines: uploadedUrls, // store all pages
+            imageUrls: uploadedUrls, // ✅ matches schema
             status: "pending",
           })
           .returning();
@@ -75,15 +78,15 @@ export function registerPrescriptionRoutes(app: Express) {
           prescription: saved,
         });
       } catch (err) {
-        console.error("Prescription upload failed:", err);
+        console.error("❌ Prescription upload failed:", err);
         res.status(500).json({ error: "Upload failed" });
       }
     }
   );
 
-  /**
-   * LIST USER PRESCRIPTIONS
-   */
+  /* =========================
+     LIST USER PRESCRIPTIONS
+  ========================= */
   app.get(
     "/api/prescriptions",
     requireAuth,
