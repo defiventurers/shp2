@@ -13,6 +13,7 @@ import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
 import Orders from "@/pages/Orders";
 import Prescription from "@/pages/Prescription";
+import Profile from "@/pages/Profile"; // ✅ ADDED
 import Admin from "@/pages/Admin";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/cart" component={Cart} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/orders" component={Orders} />
+      <Route path="/profile" component={Profile} /> {/* ✅ ADDED */}
       <Route path="/prescription" component={Prescription} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
