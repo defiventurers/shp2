@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { Upload, CheckCircle } from "lucide-react";
+import { Upload, Trash2, CheckCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartContext } from "@/context/CartContext";
@@ -12,7 +13,7 @@ import { useCartContext } from "@/context/CartContext";
 export default function PrescriptionPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const {
     prescriptions,
@@ -22,12 +23,24 @@ export default function PrescriptionPage() {
   } = useCartContext();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
 
+  const today = new Date().toLocaleDateString("en-GB");
+  const defaultName = user?.name
+    ? `${user.name.split(" ")[0]}-${today}`
+    : `Prescription-${today}`;
+
+  const [prescriptionName, setPrescriptionName] =
+    useState(defaultName);
+  const [prescriptionDate, setPrescriptionDate] =
+    useState(today);
+
   const uploadMutation = useMutation({
-    mutationFn: async (files: File[]) => {
+    mutationFn: async () => {
       const formData = new FormData();
-      files.forEach((f) => formData.append("images", f));
+      selectedFiles.forEach((f) => formData.append("images", f));
 
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/prescriptions/upload`,
@@ -42,8 +55,9 @@ export default function PrescriptionPage() {
       return res.json();
     },
     onSuccess: async () => {
-      await refreshPrescriptions(); // 🔥 KEY FIX
-      toast({ title: "Prescription uploaded" });
+      setSelectedFiles([]);
+      await refreshPrescriptions();
+      toast({ title: "Prescription created" });
     },
     onError: () => {
       toast({
@@ -54,29 +68,19 @@ export default function PrescriptionPage() {
     onSettled: () => setUploading(false),
   });
 
-  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    setUploading(true);
-    uploadMutation.mutate(files);
-  }
-
   if (!isAuthenticated) {
     return <p className="p-4">Please login to upload prescription</p>;
   }
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-4">
-      <h1 className="font-semibold text-lg">Your Prescriptions</h1>
+      <h1 className="font-semibold text-lg">Create Prescription</h1>
 
+      {/* FILE SELECT */}
       <Card className="p-4 text-center border-dashed border-2">
         <Upload className="mx-auto mb-2" />
-        <Button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? "Uploading..." : "Upload Prescription (1–5 pages)"}
+        <Button onClick={() => fileInputRef.current?.click()}>
+          Select 1–5 Images
         </Button>
         <input
           ref={fileInputRef}
@@ -84,9 +88,68 @@ export default function PrescriptionPage() {
           accept="image/*"
           multiple
           hidden
-          onChange={handleUpload}
+          onChange={(e) =>
+            setSelectedFiles(
+              Array.from(e.target.files || []).slice(0, 5)
+            )
+          }
         />
+        {selectedFiles.length > 0 && (
+          <p className="text-xs mt-2 text-muted-foreground">
+            {selectedFiles.length} image(s) selected
+          </p>
+        )}
       </Card>
+
+      {/* PREVIEW */}
+      {selectedFiles.length > 0 && (
+        <Card className="p-4 space-y-3">
+          <Input
+            value={prescriptionName}
+            onChange={(e) => setPrescriptionName(e.target.value)}
+            placeholder="Prescription name"
+          />
+          <Input
+            value={prescriptionDate}
+            onChange={(e) => setPrescriptionDate(e.target.value)}
+          />
+
+          <div className="grid grid-cols-3 gap-2">
+            {selectedFiles.map((file, idx) => (
+              <div key={idx} className="relative">
+                <img
+                  src={URL.createObjectURL(file)}
+                  className="w-full h-24 object-cover rounded"
+                />
+                <button
+                  onClick={() =>
+                    setSelectedFiles((prev) =>
+                      prev.filter((_, i) => i !== idx)
+                    )
+                  }
+                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <Button
+            disabled={uploading}
+            onClick={() => {
+              setUploading(true);
+              uploadMutation.mutate();
+            }}
+            className="w-full"
+          >
+            {uploading ? "Creating..." : "Create Prescription"}
+          </Button>
+        </Card>
+      )}
+
+      {/* EXISTING */}
+      <h2 className="font-medium text-sm">Your Prescriptions</h2>
 
       {prescriptions.map((p) => (
         <Card
@@ -98,7 +161,6 @@ export default function PrescriptionPage() {
         >
           <img
             src={p.imageUrls?.[0]}
-            alt="Prescription"
             className="w-16 h-16 object-cover rounded"
           />
           <div className="flex-1">
