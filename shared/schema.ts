@@ -76,7 +76,7 @@ export const medicines = pgTable("medicines", {
 });
 
 /* =========================
-   Prescriptions ✅ FIXED
+   Prescriptions (MULTI-PAGE)
 ========================= */
 export const prescriptions = pgTable("prescriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -85,7 +85,7 @@ export const prescriptions = pgTable("prescriptions", {
     .notNull()
     .references(() => users.id),
 
-  // ✅ MULTI-PAGE SUPPORT
+  // ✅ MULTI-PAGE SUPPORT (1–5 images)
   imageUrls: jsonb("image_urls").$type<string[]>().notNull(),
 
   ocrText: text("ocr_text"),
@@ -101,6 +101,7 @@ export const prescriptions = pgTable("prescriptions", {
 ========================= */
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
   orderNumber: varchar("order_number").notNull().unique(),
 
   userId: varchar("user_id")
