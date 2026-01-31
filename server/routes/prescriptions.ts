@@ -16,15 +16,9 @@ cloudinary.v2.config({
 
 /* -----------------------------
    Multer (memory upload)
-   ✔ max 5 files
-   ✔ 10MB per file
 ------------------------------ */
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    files: 5,
-    fileSize: 10 * 1024 * 1024, // 10 MB per image
-  },
 });
 
 /* -----------------------------
@@ -33,22 +27,23 @@ const upload = multer({
 export function registerPrescriptionRoutes(app: Express) {
   console.log("🔥 PRESCRIPTION ROUTES REGISTERED 🔥");
 
-  /* MULTI-PAGE UPLOAD */
+  /**
+   * MULTI-PAGE PRESCRIPTION UPLOAD (1–5 images)
+   */
   app.post(
     "/api/prescriptions/upload",
     requireAuth,
-    upload.array("image", 5),
+    upload.array("images", 5), // ✅ FIXED
     async (req: AuthRequest, res: Response) => {
       try {
-        if (!req.files || req.files.length === 0) {
+        if (!req.files || !(req.files instanceof Array) || req.files.length === 0) {
           return res.status(400).json({ error: "No images uploaded" });
         }
 
-        const files = req.files as Express.Multer.File[];
-
+        // Upload all images to Cloudinary
         const uploadedUrls: string[] = [];
 
-        for (const file of files) {
+        for (const file of req.files) {
           const result = await new Promise<any>((resolve, reject) => {
             cloudinary.v2.uploader
               .upload_stream(
@@ -64,11 +59,13 @@ export function registerPrescriptionRoutes(app: Express) {
           uploadedUrls.push(result.secure_url);
         }
 
+        // Save ONLY FIRST IMAGE as primary (others are pages)
         const [saved] = await db
           .insert(prescriptions)
           .values({
             userId: req.user!.id,
-            imageUrls: uploadedUrls, // ✅ MULTI-PAGE
+            imageUrl: uploadedUrls[0], // primary preview
+            extractedMedicines: uploadedUrls, // store all pages
             status: "pending",
           })
           .returning();
@@ -76,16 +73,17 @@ export function registerPrescriptionRoutes(app: Express) {
         res.json({
           success: true,
           prescription: saved,
-          extractedMedicines: [],
         });
       } catch (err) {
-        console.error("❌ Prescription upload failed:", err);
+        console.error("Prescription upload failed:", err);
         res.status(500).json({ error: "Upload failed" });
       }
     }
   );
 
-  /* LIST USER PRESCRIPTIONS */
+  /**
+   * LIST USER PRESCRIPTIONS
+   */
   app.get(
     "/api/prescriptions",
     requireAuth,
