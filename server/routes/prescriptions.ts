@@ -27,6 +27,9 @@ const upload = multer({
 export function registerPrescriptionRoutes(app: Express) {
   console.log("🔥 PRESCRIPTION ROUTES REGISTERED 🔥");
 
+  /* ---------------------------------
+     UPLOAD PRESCRIPTION (1–5 pages)
+  ---------------------------------- */
   app.post(
     "/api/prescriptions/upload",
     requireAuth,
@@ -39,7 +42,7 @@ export function registerPrescriptionRoutes(app: Express) {
           return res.status(400).json({ error: "No images uploaded" });
         }
 
-        const imageUrls: string[] = [];
+        const uploadedUrls: string[] = [];
 
         for (const file of files) {
           const result = await new Promise<any>((resolve, reject) => {
@@ -51,22 +54,56 @@ export function registerPrescriptionRoutes(app: Express) {
               .end(file.buffer);
           });
 
-          imageUrls.push(result.secure_url);
+          uploadedUrls.push(result.secure_url);
         }
 
         const [saved] = await db
           .insert(prescriptions)
           .values({
             userId: req.user!.id,
-            imageUrls,
+            imageUrls: uploadedUrls, // stored as image_urls in DB
             status: "pending",
           })
           .returning();
 
-        res.json({ success: true, prescription: saved });
+        // ✅ NORMALIZE RESPONSE FOR FRONTEND
+        res.json({
+          success: true,
+          prescription: {
+            ...saved,
+            imageUrls: saved.image_urls,
+          },
+        });
       } catch (err) {
         console.error("❌ Prescription upload failed:", err);
         res.status(500).json({ error: "Upload failed" });
+      }
+    }
+  );
+
+  /* ---------------------------------
+     LIST USER PRESCRIPTIONS
+  ---------------------------------- */
+  app.get(
+    "/api/prescriptions",
+    requireAuth,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const rows = await db.query.prescriptions.findMany({
+          where: (p, { eq }) => eq(p.userId, req.user!.id),
+          orderBy: (p, { desc }) => [desc(p.createdAt)],
+        });
+
+        // ✅ NORMALIZE image_urls → imageUrls
+        const normalized = rows.map((p) => ({
+          ...p,
+          imageUrls: p.image_urls,
+        }));
+
+        res.json(normalized);
+      } catch (err) {
+        console.error("❌ Fetch prescriptions failed:", err);
+        res.status(500).json({ error: "Failed to fetch prescriptions" });
       }
     }
   );
