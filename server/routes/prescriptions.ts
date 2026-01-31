@@ -1,6 +1,6 @@
 import type { Express, Response } from "express";
 import multer from "multer";
-import { v2 as cloudinary } from "cloudinary";
+import cloudinary from "cloudinary";
 import { db } from "../db";
 import { prescriptions } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
@@ -8,16 +8,10 @@ import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 /* -----------------------------
    Cloudinary config
 ------------------------------ */
-cloudinary.config({
+cloudinary.v2.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
   api_key: process.env.CLOUDINARY_API_KEY!,
   api_secret: process.env.CLOUDINARY_API_SECRET!,
-});
-
-console.log("🌤️ Cloudinary configured:", {
-  cloud: !!process.env.CLOUDINARY_CLOUD_NAME,
-  key: !!process.env.CLOUDINARY_API_KEY,
-  secret: !!process.env.CLOUDINARY_API_SECRET,
 });
 
 /* -----------------------------
@@ -25,9 +19,7 @@ console.log("🌤️ Cloudinary configured:", {
 ------------------------------ */
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
-  },
+  limits: { files: 5 }, // max 5 pages
 });
 
 /* -----------------------------
@@ -36,47 +28,42 @@ const upload = multer({
 export function registerPrescriptionRoutes(app: Express) {
   console.log("🔥 PRESCRIPTION ROUTES REGISTERED 🔥");
 
-  // Upload prescription image
+  /**
+   * Upload multi-page prescription
+   */
   app.post(
     "/api/prescriptions/upload",
     requireAuth,
-    upload.single("image"),
+    upload.array("images", 5),
     async (req: AuthRequest, res: Response) => {
       try {
-        console.log("📥 Prescription upload hit");
-
-        if (!req.file) {
-          return res.status(400).json({ error: "No image uploaded" });
+        if (!req.files || req.files.length === 0) {
+          return res.status(400).json({ error: "No images uploaded" });
         }
 
-        if (!req.file.mimetype.startsWith("image/")) {
-          return res.status(400).json({ error: "Invalid file type" });
-        }
+        const imageUrls: string[] = [];
 
-        const uploadResult = await new Promise<any>((resolve, reject) => {
-          cloudinary.uploader
-            .upload_stream(
-              {
-                folder: "prescriptions",
-                resource_type: "image",
-              },
-              (err, result) => {
-                if (err) {
-                  console.error("❌ Cloudinary error:", err);
-                  reject(err);
-                } else {
-                  resolve(result);
+        for (const file of req.files as Express.Multer.File[]) {
+          const uploadResult = await new Promise<any>((resolve, reject) => {
+            cloudinary.v2.uploader
+              .upload_stream(
+                { folder: "prescriptions" },
+                (err, result) => {
+                  if (err) reject(err);
+                  else resolve(result);
                 }
-              }
-            )
-            .end(req.file.buffer);
-        });
+              )
+              .end(file.buffer);
+          });
+
+          imageUrls.push(uploadResult.secure_url);
+        }
 
         const [saved] = await db
           .insert(prescriptions)
           .values({
             userId: req.user!.id,
-            imageUrl: uploadResult.secure_url,
+            imageUrls, // ✅ ARRAY
             status: "pending",
           })
           .returning();
@@ -84,16 +71,17 @@ export function registerPrescriptionRoutes(app: Express) {
         res.json({
           success: true,
           prescription: saved,
-          extractedMedicines: [],
         });
       } catch (err) {
-        console.error("❌ Prescription upload failed:", err);
+        console.error("Prescription upload failed:", err);
         res.status(500).json({ error: "Upload failed" });
       }
     }
   );
 
-  // List user prescriptions
+  /**
+   * List user prescriptions
+   */
   app.get(
     "/api/prescriptions",
     requireAuth,
