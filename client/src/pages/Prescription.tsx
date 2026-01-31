@@ -51,20 +51,40 @@ export default function PrescriptionPage() {
         }
       );
 
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Upload failed");
+      }
+
       return res.json();
     },
-    onSuccess: async () => {
+
+    // ✅ CRITICAL FIX
+    onSuccess: async (data) => {
+      const prescription = data.prescription;
+
       setSelectedFiles([]);
+
+      // refresh list from backend
       await refreshPrescriptions();
-      toast({ title: "Prescription created" });
+
+      // 🔥 AUTO-SELECT newly created prescription
+      setSelectedPrescriptionId(prescription.id);
+
+      toast({
+        title: "Prescription created",
+        description: "Selected for checkout",
+      });
     },
-    onError: () => {
+
+    onError: (err: any) => {
       toast({
         title: "Upload failed",
+        description: err?.message || "Unable to upload prescription",
         variant: "destructive",
       });
     },
+
     onSettled: () => setUploading(false),
   });
 
@@ -101,7 +121,7 @@ export default function PrescriptionPage() {
         )}
       </Card>
 
-      {/* PREVIEW */}
+      {/* PREVIEW + METADATA */}
       {selectedFiles.length > 0 && (
         <Card className="p-4 space-y-3">
           <Input
