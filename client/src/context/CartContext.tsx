@@ -1,9 +1,9 @@
-import { createContext, useContext, type ReactNode, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useCart } from "@/hooks/useCart";
 import type { Prescription } from "@shared/schema";
 
 interface CartContextType {
-  /* Cart (existing – untouched) */
+  // cart
   items: any[];
   addItem: any;
   removeItem: any;
@@ -16,68 +16,50 @@ interface CartContextType {
   requiresPrescription: boolean;
   isLoaded: boolean;
 
-  /* Prescriptions (UPDATED) */
+  // prescriptions
   prescriptions: Prescription[];
-  selectedPrescriptionIds: string[];
-
-  addPrescription: (p: Prescription) => void;
-  togglePrescription: (id: string) => void;
-  deletePrescription: (id: string) => void;
-  clearSelectedPrescriptions: () => void;
+  selectedPrescriptionId: string | null;
+  setSelectedPrescriptionId: (id: string | null) => void;
+  refreshPrescriptions: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export function CartProvider({ children }: { children: ReactNode }) {
+export function CartProvider({ children }: { children: React.ReactNode }) {
   const cart = useCart();
 
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [selectedPrescriptionIds, setSelectedPrescriptionIds] = useState<
-    string[]
-  >([]);
+  const [selectedPrescriptionId, setSelectedPrescriptionId] =
+    useState<string | null>(null);
 
-  /* ---------------------------
-     Prescription helpers
-  ---------------------------- */
-
-  function addPrescription(p: Prescription) {
-    setPrescriptions((prev) => [p, ...prev]);
-
-    // auto-select newly uploaded prescription
-    setSelectedPrescriptionIds((prev) => [...prev, p.id]);
+  // 🔑 Fetch from backend (SOURCE OF TRUTH)
+  async function refreshPrescriptions() {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/prescriptions`,
+        { credentials: "include" }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      setPrescriptions(data);
+    } catch {
+      // ignore
+    }
   }
 
-  function togglePrescription(id: string) {
-    setSelectedPrescriptionIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((pid) => pid !== id)
-        : [...prev, id]
-    );
-  }
-
-  function deletePrescription(id: string) {
-    setPrescriptions((prev) => prev.filter((p) => p.id !== id));
-    setSelectedPrescriptionIds((prev) => prev.filter((pid) => pid !== id));
-  }
-
-  function clearSelectedPrescriptions() {
-    setSelectedPrescriptionIds([]);
-  }
+  // Load once on app start
+  useEffect(() => {
+    refreshPrescriptions();
+  }, []);
 
   return (
     <CartContext.Provider
       value={{
-        /* cart */
         ...cart,
-
-        /* prescriptions */
         prescriptions,
-        selectedPrescriptionIds,
-
-        addPrescription,
-        togglePrescription,
-        deletePrescription,
-        clearSelectedPrescriptions,
+        selectedPrescriptionId,
+        setSelectedPrescriptionId,
+        refreshPrescriptions,
       }}
     >
       {children}
@@ -87,8 +69,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
 export function useCartContext() {
   const ctx = useContext(CartContext);
-  if (!ctx) {
-    throw new Error("useCartContext must be used within CartProvider");
-  }
+  if (!ctx) throw new Error("useCartContext must be used within CartProvider");
   return ctx;
 }
