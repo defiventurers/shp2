@@ -5,25 +5,14 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
-/**
- * ✅ CORRECT DATA DIRECTORY
- * Repo structure:
- * /data/IndiaMedicinesandDrugInfoDataset.csv.gz
- */
-const DATA_DIR = path.join(process.cwd(), "data");
-
-/**
- * 🔥 HARD SAFETY CAP
- * Render Free cannot handle more safely
- */
-const MAX_MEDICINES = 50_000;
+const DATA_DIR = path.join(process.cwd(), "server", "data");
+const MAX_MEDICINES = 50_000; // safe cap for Render free tier
 
 export async function importMedicinesFromCSV() {
   console.log("📦 Starting CSV medicine import (SAFE LIMITED MODE)");
-  console.log("📁 Resolved DATA_DIR:", DATA_DIR);
 
   if (!fs.existsSync(DATA_DIR)) {
-    console.warn("⚠️ data directory not found, skipping import");
+    console.warn("⚠️ server/data directory not found, skipping import");
     return;
   }
 
@@ -32,7 +21,7 @@ export async function importMedicinesFromCSV() {
     .filter((f) => f.endsWith(".csv") || f.endsWith(".csv.gz"));
 
   if (files.length === 0) {
-    console.warn("⚠️ No CSV files found in data/, skipping import");
+    console.warn("⚠️ No CSV files found in server/data, skipping import");
     return;
   }
 
@@ -41,11 +30,11 @@ export async function importMedicinesFromCSV() {
 
   console.log("📥 Found CSV file:", csvFile);
 
-  // ⚠️ WIPE ONLY medicines (SAFE)
+  // 🚨 wipe medicines ONLY
   await db.delete(medicines);
   console.log("🧨 Wiped medicines table");
 
-  // Load categories
+  // categories
   const categoryRows = await db.select().from(categories);
   const categoryMap = new Map<string, string>();
   categoryRows.forEach((c) =>
@@ -53,13 +42,11 @@ export async function importMedicinesFromCSV() {
   );
 
   const fileStream = fs.createReadStream(filePath);
-
   const inputStream = csvFile.endsWith(".gz")
     ? fileStream.pipe(zlib.createGunzip())
     : fileStream;
 
   let inserted = 0;
-  let stoppedEarly = false;
 
   return new Promise<void>((resolve, reject) => {
     const parser = csv();
@@ -69,33 +56,27 @@ export async function importMedicinesFromCSV() {
       .on("data", async (row) => {
         try {
           if (inserted >= MAX_MEDICINES) {
-            if (!stoppedEarly) {
-              console.log(
-                `🛑 Reached ${MAX_MEDICINES} medicines — stopping import`
-              );
-              stoppedEarly = true;
-              parser.destroy(); // stop stream cleanly
-            }
+            console.log(`🛑 Reached ${MAX_MEDICINES}, stopping import`);
+            parser.destroy();
             return;
           }
 
+          // ✅ CORRECT COLUMN MAPPING (THIS IS THE FIX)
           const name =
-            row["Medicine Name"] ||
-            row["Drug Name"] ||
-            row["name"];
+            row["Drug_Name"] ||
+            row["Brand_Name"] ||
+            row["Medicine_Name"];
+
+          if (!name) return;
 
           const manufacturer =
-            row["Manufacturer"] ||
-            row["Company"] ||
+            row["Manufacturer_Name"] ||
+            row["Company_Name"] ||
             null;
 
-          if (!name || !manufacturer) return;
-          if (name.length > 80) return;
-
           const categoryName =
-            row["Therapeutic Class"] ||
-            row["Category"] ||
-            "Pain Relief";
+            row["Therapeutic_Class"] ||
+            "General";
 
           const categoryId =
             categoryMap.get(categoryName.toLowerCase()) ||
@@ -103,28 +84,26 @@ export async function importMedicinesFromCSV() {
 
           await db.insert(medicines).values({
             name: name.trim(),
-            genericName: row["Generic Name"] || null,
+            genericName: row["Salt_Composition"] || null,
             manufacturer,
             categoryId,
-            dosage: row["Dosage"] || null,
-            form: row["Form"] || null,
-            packSize: row["Pack Size"] || null,
+            dosage: row["Strength"] || null,
+            form: row["Dosage_Form"] || null,
+            packSize: null,
             price: "0",
             mrp: "0",
             stock: 100,
-            requiresPrescription:
-              row["Prescription Required"] === "Yes",
-            isScheduleH:
-              row["Schedule H"] === "Yes",
+            requiresPrescription: false,
+            isScheduleH: false,
           });
 
           inserted++;
 
-          if (inserted % 5000 === 0) {
+          if (inserted % 1000 === 0) {
             console.log(`➕ Inserted ${inserted} medicines`);
           }
         } catch {
-          // silently skip malformed rows
+          // silently skip bad rows
         }
       })
       .on("end", () => {
