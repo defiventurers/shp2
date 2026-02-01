@@ -2,13 +2,13 @@ import type { Express, Response } from "express";
 import { db } from "../db";
 import { users } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export function registerUserRoutes(app: Express) {
   console.log("👤 USER ROUTES REGISTERED");
 
   /* ---------------------------------
-     UPDATE CURRENT USER
+     UPSERT CURRENT USER PROFILE
      PATCH /api/users/me
   ---------------------------------- */
   app.patch(
@@ -22,34 +22,33 @@ export function registerUserRoutes(app: Express) {
           return res.status(400).json({ error: "Missing user email" });
         }
 
-        const [updated] = await db
-          .update(users)
-          .set({
-            firstName: name ?? undefined,
-            phone: phone ?? undefined,
-            address: address ?? undefined,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.email, req.user.email))
-          .returning();
+        const firstName = name ?? null;
 
-        if (!updated) {
-          return res.status(404).json({ error: "User not found" });
-        }
+        const [user] = await db.execute(sql`
+          INSERT INTO users (email, first_name, phone, address)
+          VALUES (${req.user.email}, ${firstName}, ${phone}, ${address})
+          ON CONFLICT (email)
+          DO UPDATE SET
+            first_name = EXCLUDED.first_name,
+            phone = EXCLUDED.phone,
+            address = EXCLUDED.address,
+            updated_at = NOW()
+          RETURNING id, email, first_name, phone, address;
+        `);
 
         res.json({
           success: true,
           user: {
-            id: updated.id,
-            name: updated.firstName,
-            phone: updated.phone,
-            address: updated.address,
-            email: updated.email,
+            id: user.id,
+            email: user.email,
+            name: user.first_name,
+            phone: user.phone,
+            address: user.address,
           },
         });
       } catch (err) {
-        console.error("❌ Update user failed:", err);
-        res.status(500).json({ error: "Failed to update profile" });
+        console.error("❌ Profile upsert failed:", err);
+        res.status(500).json({ error: "Failed to save profile" });
       }
     }
   );
