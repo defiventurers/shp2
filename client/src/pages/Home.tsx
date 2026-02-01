@@ -17,22 +17,22 @@ export default function Home() {
   const { isAuthenticated, user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-28">
       {/* ---------------- HERO ---------------- */}
       <div
         className="relative text-white"
-        style={{ backgroundColor: "#0A7A3D" }} // ✅ BRAND GREEN
+        style={{ backgroundColor: "#0A7A3D" }}
       >
         <div className="px-4 pt-8 pb-3 sm:pt-10 sm:pb-3">
           <div className="max-w-lg mx-auto text-center">
             {/* LOGO */}
-           <div className="flex justify-center mb-4">
-  <img
-    src="/logo.png"
-    alt="Sacred Heart Pharmacy"
-    className="w-24 h-24 object-contain"
-  />
-</div>
+            <div className="flex justify-center mb-4">
+              <img
+                src="/logo.png"
+                alt="Sacred Heart Pharmacy"
+                className="w-24 h-24 object-contain"
+              />
+            </div>
 
             <h1 className="text-2xl sm:text-3xl font-bold mb-2">
               Sacred Heart Pharmacy
@@ -145,6 +145,15 @@ export default function Home() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ---------------- STAFF LOGIN LINK ---------------- */}
+        <div className="mt-10 text-center">
+          <Link href="/staff/login">
+            <span className="text-xs text-muted-foreground hover:underline cursor-pointer">
+              Staff Login
+            </span>
+          </Link>
         </div>
       </div>
     </div>
