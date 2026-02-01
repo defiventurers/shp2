@@ -7,7 +7,10 @@
     "build": "npm install",
     "start": "npx tsx server/index.ts",
     "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+
+    // ✅ ADD THIS LINE
+    "import:medicines": "tsx server/scripts/importMedicinesFromCSV.ts"
   },
   "dependencies": {
     "express": "^4.21.2",
