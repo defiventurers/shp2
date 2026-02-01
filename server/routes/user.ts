@@ -1,11 +1,11 @@
-import type { Express, Response } from "express";
-import { eq } from "drizzle-orm";
+import type { Express, Request, Response } from "express";
 import { db } from "../db";
 import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 
 export function registerUserRoutes(app: Express) {
-  console.log("✅ USER ROUTES REGISTERED");
+  console.log("👤 USER ROUTES REGISTERED");
 
   /* ---------------------------------
      UPDATE CURRENT USER PROFILE
@@ -18,24 +18,14 @@ export function registerUserRoutes(app: Express) {
       try {
         const { name, phone, address } = req.body;
 
-        const updates: any = {};
-
-        if (name) {
-          const parts = name.trim().split(" ");
-          updates.firstName = parts[0];
-          updates.lastName = parts.slice(1).join(" ") || null;
-        }
-
-        if (phone !== undefined) updates.phone = phone;
-        if (address !== undefined) updates.address = address;
-
-        if (Object.keys(updates).length === 0) {
-          return res.status(400).json({ error: "No fields to update" });
-        }
-
         const [updated] = await db
           .update(users)
-          .set(updates)
+          .set({
+            firstName: name ?? null,
+            phone: phone ?? null,
+            address: address ?? null,
+            updatedAt: new Date(),
+          })
           .where(eq(users.id, req.user!.id))
           .returning();
 
@@ -43,10 +33,19 @@ export function registerUserRoutes(app: Express) {
           return res.status(404).json({ error: "User not found" });
         }
 
-        res.json({ success: true });
+        res.json({
+          success: true,
+          user: {
+            id: updated.id,
+            name: updated.firstName,
+            email: updated.email,
+            phone: updated.phone,
+            address: updated.address,
+          },
+        });
       } catch (err) {
-        console.error("❌ Update profile failed:", err);
-        res.status(500).json({ error: "Update failed" });
+        console.error("❌ Profile update failed:", err);
+        res.status(500).json({ error: "Could not update profile" });
       }
     }
   );
