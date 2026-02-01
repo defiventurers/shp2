@@ -1,14 +1,14 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Response } from "express";
 import { db } from "../db";
 import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
+import { eq } from "drizzle-orm";
 
 export function registerUserRoutes(app: Express) {
   console.log("👤 USER ROUTES REGISTERED");
 
   /* ---------------------------------
-     UPDATE CURRENT USER PROFILE
+     UPDATE CURRENT USER
      PATCH /api/users/me
   ---------------------------------- */
   app.patch(
@@ -21,9 +21,9 @@ export function registerUserRoutes(app: Express) {
         const [updated] = await db
           .update(users)
           .set({
-            firstName: name ?? null,
-            phone: phone ?? null,
-            address: address ?? null,
+            firstName: name ?? undefined,
+            phone: phone ?? undefined,
+            address: address ?? undefined,
             updatedAt: new Date(),
           })
           .where(eq(users.id, req.user!.id))
@@ -38,14 +38,14 @@ export function registerUserRoutes(app: Express) {
           user: {
             id: updated.id,
             name: updated.firstName,
-            email: updated.email,
             phone: updated.phone,
             address: updated.address,
+            email: updated.email,
           },
         });
       } catch (err) {
-        console.error("❌ Profile update failed:", err);
-        res.status(500).json({ error: "Could not update profile" });
+        console.error("❌ Update user failed:", err);
+        res.status(500).json({ error: "Failed to update profile" });
       }
     }
   );
