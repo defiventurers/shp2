@@ -13,6 +13,17 @@ function generateOrderNumber() {
   return `SHP-${date}-${rand}`;
 }
 
+/* =========================
+   Allowed Status Flow
+========================= */
+const ALLOWED_STATUSES = [
+  "pending",
+  "confirmed",
+  "processing",
+  "ready",
+  "delivered",
+];
+
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
@@ -29,9 +40,7 @@ export function registerOrderRoutes(app: Express) {
           return res.status(401).json({ error: "Unauthorized" });
         }
 
-        /* -------------------------
-           Ensure user exists
-        ------------------------- */
+        /* Ensure user exists */
         const existingUser = await db.query.users.findFirst({
           where: eq(users.id, user.id),
         });
@@ -58,13 +67,10 @@ export function registerOrderRoutes(app: Express) {
           notes,
         } = req.body;
 
-        /* -------------------------
-           Create order
-        ------------------------- */
         const [order] = await db
           .insert(orders)
           .values({
-            orderNumber: generateOrderNumber(), // ✅ FIXED
+            orderNumber: generateOrderNumber(),
             userId: user.id,
             customerName,
             customerPhone,
@@ -79,9 +85,6 @@ export function registerOrderRoutes(app: Express) {
           })
           .returning();
 
-        /* -------------------------
-           Insert order items
-        ------------------------- */
         if (items?.length) {
           await db.insert(orderItems).values(
             items.map((item: any) => ({
@@ -90,7 +93,7 @@ export function registerOrderRoutes(app: Express) {
               medicineName: item.medicineName,
               quantity: item.quantity,
               price: item.price,
-              total: item.price * item.quantity, // ✅ REQUIRED
+              total: item.price * item.quantity,
             }))
           );
         }
@@ -107,7 +110,7 @@ export function registerOrderRoutes(app: Express) {
   );
 
   /* =========================
-     GET USER ORDERS
+     GET USER ORDERS (CUSTOMER)
   ========================= */
   app.get("/api/orders", requireAuth, async (req: AuthRequest, res) => {
     const user = req.user;
@@ -120,4 +123,41 @@ export function registerOrderRoutes(app: Express) {
 
     res.json(userOrders);
   });
+
+  /* =========================
+     UPDATE ORDER STATUS (STAFF)
+     PATCH /api/orders/:id/status
+  ========================= */
+  app.patch(
+    "/api/orders/:id/status",
+    requireAuth,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!ALLOWED_STATUSES.includes(status)) {
+          return res.status(400).json({ error: "Invalid status" });
+        }
+
+        const [updated] = await db
+          .update(orders)
+          .set({ status })
+          .where(eq(orders.id, id))
+          .returning();
+
+        if (!updated) {
+          return res.status(404).json({ error: "Order not found" });
+        }
+
+        res.json({
+          success: true,
+          order: updated,
+        });
+      } catch (err) {
+        console.error("❌ STATUS UPDATE ERROR:", err);
+        res.status(500).json({ error: "Failed to update order status" });
+      }
+    }
+  );
 }
