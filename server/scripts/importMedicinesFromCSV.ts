@@ -5,14 +5,11 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
-/**
- * IMPORTANT:
- * Your dataset lives in /data (NOT /server/data)
- */
 const DATA_DIR = path.join(process.cwd(), "data");
+const BATCH_SIZE = 500;
 
 export async function importMedicinesFromCSV() {
-  console.log("📦 Starting CSV medicine import (DESTRUCTIVE MODE)");
+  console.log("📦 Starting CSV medicine import (SAFE BATCH MODE)");
   console.log("📁 Resolved DATA_DIR:", DATA_DIR);
 
   if (!fs.existsSync(DATA_DIR)) {
@@ -22,9 +19,7 @@ export async function importMedicinesFromCSV() {
 
   const files = fs
     .readdirSync(DATA_DIR)
-    .filter(
-      (f) => f.endsWith(".csv") || f.endsWith(".csv.gz")
-    );
+    .filter((f) => f.endsWith(".csv") || f.endsWith(".csv.gz"));
 
   if (files.length === 0) {
     console.warn("⚠️ No CSV files found in data/, skipping import");
@@ -33,10 +28,9 @@ export async function importMedicinesFromCSV() {
 
   const csvFile = files[0];
   const filePath = path.join(DATA_DIR, csvFile);
-
   console.log("📥 Found CSV file:", csvFile);
 
-  // 🔥 WIPE MEDICINES ONLY (orders & order_items already handled upstream)
+  // ⚠️ WIPE MEDICINES ONLY (orders already handled)
   await db.delete(medicines);
   console.log("🧨 Wiped medicines table");
 
@@ -51,55 +45,82 @@ export async function importMedicinesFromCSV() {
     ? fileStream.pipe(zlib.createGunzip())
     : fileStream;
 
+  let batch: any[] = [];
   let inserted = 0;
+  let paused = false;
 
   await new Promise<void>((resolve, reject) => {
-    inputStream
-      .pipe(csv())
-      .on("data", async (row) => {
-        try {
-          const name =
-            row["Medicine Name"] ||
-            row["Drug Name"] ||
-            row["name"];
+    const stream = inputStream.pipe(csv());
 
-          if (!name) return;
+    const flushBatch = async () => {
+      if (batch.length === 0) return;
 
-          const categoryName =
-            row["Therapeutic Class"] ||
-            row["Category"] ||
-            "Pain Relief";
+      await db.insert(medicines).values(batch);
+      inserted += batch.length;
+      console.log(`➕ Inserted ${inserted} medicines`);
+      batch = [];
+    };
 
-          const categoryId =
-            categoryMap.get(categoryName.toLowerCase()) ||
-            categoryMap.values().next().value;
+    stream.on("data", async (row) => {
+      stream.pause();
+      paused = true;
 
-          await db.insert(medicines).values({
-            name: name.trim(),
-            genericName: row["Generic Name"] || null,
-            manufacturer: row["Manufacturer"] || null,
-            categoryId,
-            dosage: row["Dosage"] || null,
-            form: row["Form"] || null,
-            packSize: row["Pack Size"] || null,
-            price: "0",
-            mrp: "0",
-            stock: 100,
-            requiresPrescription:
-              row["Prescription Required"] === "Yes",
-            isScheduleH:
-              row["Schedule H"] === "Yes",
-          });
+      try {
+        const name =
+          row["Medicine Name"] ||
+          row["Drug Name"] ||
+          row["name"];
 
-          inserted++;
-        } catch {
-          // skip bad rows safely
+        if (!name) {
+          stream.resume();
+          paused = false;
+          return;
         }
-      })
-      .on("end", () => {
-        console.log(`✅ CSV import complete: ${inserted} medicines`);
-        resolve();
-      })
-      .on("error", reject);
+
+        const categoryName =
+          row["Therapeutic Class"] ||
+          row["Category"] ||
+          "Pain Relief";
+
+        const categoryId =
+          categoryMap.get(categoryName.toLowerCase()) ||
+          categoryMap.values().next().value;
+
+        batch.push({
+          name: name.trim(),
+          genericName: row["Generic Name"] || null,
+          manufacturer: row["Manufacturer"] || null,
+          categoryId,
+          dosage: row["Dosage"] || null,
+          form: row["Form"] || null,
+          packSize: row["Pack Size"] || null,
+          price: "0",
+          mrp: "0",
+          stock: 100,
+          requiresPrescription:
+            row["Prescription Required"] === "Yes",
+          isScheduleH:
+            row["Schedule H"] === "Yes",
+        });
+
+        if (batch.length >= BATCH_SIZE) {
+          await flushBatch();
+        }
+      } catch {
+        // ignore bad rows
+      } finally {
+        stream.resume();
+        paused = false;
+      }
+    });
+
+    stream.on("end", async () => {
+      if (paused) return;
+      await flushBatch();
+      console.log(`✅ CSV import complete: ${inserted} medicines`);
+      resolve();
+    });
+
+    stream.on("error", reject);
   });
 }
