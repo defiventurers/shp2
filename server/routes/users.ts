@@ -7,12 +7,20 @@ import { eq } from "drizzle-orm";
 export function registerUserRoutes(app: Express) {
   console.log("👤 USER ROUTES REGISTERED");
 
+  /* ---------------------------------
+     UPDATE CURRENT USER
+     PATCH /api/users/me
+  ---------------------------------- */
   app.patch(
     "/api/users/me",
     requireAuth,
     async (req: AuthRequest, res: Response) => {
       try {
         const { name, phone, address } = req.body;
+
+        if (!req.user?.email) {
+          return res.status(400).json({ error: "Missing user email" });
+        }
 
         const [updated] = await db
           .update(users)
@@ -22,7 +30,7 @@ export function registerUserRoutes(app: Express) {
             address: address ?? undefined,
             updatedAt: new Date(),
           })
-          .where(eq(users.id, req.user!.id))
+          .where(eq(users.email, req.user.email))
           .returning();
 
         if (!updated) {
@@ -34,9 +42,9 @@ export function registerUserRoutes(app: Express) {
           user: {
             id: updated.id,
             name: updated.firstName,
-            email: updated.email,
             phone: updated.phone,
             address: updated.address,
+            email: updated.email,
           },
         });
       } catch (err) {
