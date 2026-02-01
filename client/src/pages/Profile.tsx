@@ -1,10 +1,28 @@
-import { useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { User, FileText, Package } from "lucide-react";
+import {
+  User as UserIcon,
+  FileText,
+  Package,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartContext } from "@/context/CartContext";
+
+/* -----------------------------
+   Types
+------------------------------ */
+type OrderItem = {
+  id: string;
+  medicineName: string;
+  quantity: number;
+  price: string;
+};
 
 type Order = {
   id: string;
@@ -12,22 +30,26 @@ type Order = {
   status: string;
   total: string;
   createdAt: string;
+  items?: OrderItem[];
 };
 
 export default function Profile() {
   const { user } = useAuth();
-  const { prescriptions, refreshPrescriptions } = useCartContext();
+  const { prescriptions } = useCartContext();
 
   /* -----------------------------
-     FORCE REFRESH ON OPEN
+     Editable profile state
   ------------------------------ */
-  useEffect(() => {
-    refreshPrescriptions();
-  }, [refreshPrescriptions]);
+  const [name, setName] = useState(user?.name || "");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [saved, setSaved] = useState(false);
 
   /* -----------------------------
-     Fetch Orders
+     Orders
   ------------------------------ */
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
   const { data: orders = [] } = useQuery<Order[]>({
     queryKey: ["/api/orders"],
     queryFn: async () => {
@@ -52,29 +74,62 @@ export default function Profile() {
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
       <h1 className="text-lg font-semibold">Profile</h1>
 
-      {/* -----------------------------
-         USER INFO
-      ------------------------------ */}
-      <Card className="p-4 space-y-2">
+      {/* =============================
+         USER DETAILS (EDITABLE)
+      ============================== */}
+      <Card className="p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <User className="w-4 h-4 text-muted-foreground" />
-          <span className="font-medium">Account</span>
+          <UserIcon className="w-4 h-4 text-muted-foreground" />
+          <span className="font-medium">Your Details</span>
         </div>
 
-        <p className="text-sm">
-          <strong>Name:</strong> {user.name || "—"}
-        </p>
-        <p className="text-sm">
-          <strong>Email:</strong> {user.email || "—"}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          (Phone & address editable in next step)
-        </p>
+        <div className="space-y-2">
+          <Label>Name</Label>
+          <Input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setSaved(false);
+            }}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Phone</Label>
+          <Input
+            value={phone}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              setSaved(false);
+            }}
+            placeholder="Enter phone number"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Address</Label>
+          <Input
+            value={address}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              setSaved(false);
+            }}
+            placeholder="Enter address"
+          />
+        </div>
+
+        <Button
+          onClick={() => setSaved(true)}
+          className="w-full"
+          variant="outline"
+        >
+          {saved ? "Saved ✓ (local)" : "Save Details"}
+        </Button>
       </Card>
 
-      {/* -----------------------------
+      {/* =============================
          PRESCRIPTIONS
-      ------------------------------ */}
+      ============================== */}
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
@@ -89,25 +144,23 @@ export default function Profile() {
           prescriptions.map((p) => (
             <div
               key={p.id}
-              className="flex items-center justify-between border rounded-md p-2"
+              className="border rounded-md p-2 space-y-1"
             >
-              <div>
-                <p className="text-sm font-medium">
-                  {user.name?.split(" ")[0] || "Prescription"} –{" "}
-                  {new Date(p.createdAt).toLocaleDateString("en-GB")}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {p.imageUrls?.length || 0} page(s)
-                </p>
-              </div>
+              <p className="text-sm font-medium">
+                {user.name?.split(" ")[0] || "Prescription"} –{" "}
+                {new Date(p.createdAt).toLocaleDateString("en-GB")}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {p.imageUrls?.length || 0} page(s)
+              </p>
             </div>
           ))
         )}
       </Card>
 
-      {/* -----------------------------
-         ORDERS
-      ------------------------------ */}
+      {/* =============================
+         ORDERS (EXPANDABLE)
+      ============================== */}
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Package className="w-4 h-4 text-muted-foreground" />
@@ -119,33 +172,63 @@ export default function Profile() {
             No orders placed yet.
           </p>
         ) : (
-          orders.map((order) => (
-            <div
-              key={order.id}
-              className="flex items-center justify-between border rounded-md p-2"
-            >
-              <div>
-                <p className="text-sm font-medium">
-                  #{order.orderNumber}
-                </p>
-                <p className="text-xs text-muted-foreground capitalize">
-                  {order.status}
-                </p>
+          orders.map((order) => {
+            const isOpen = expandedOrderId === order.id;
+
+            return (
+              <div
+                key={order.id}
+                className="border rounded-md"
+              >
+                <button
+                  className="w-full flex items-center justify-between p-3 text-left"
+                  onClick={() =>
+                    setExpandedOrderId(isOpen ? null : order.id)
+                  }
+                >
+                  <div>
+                    <p className="text-sm font-medium">
+                      #{order.orderNumber}
+                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {order.status}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">
+                      ₹{Number(order.total).toFixed(0)}
+                    </span>
+                    {isOpen ? (
+                      <ChevronUp size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
+                  </div>
+                </button>
+
+                {isOpen && order.items && (
+                  <div className="border-t px-3 pb-3 space-y-2">
+                    {order.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex justify-between text-sm"
+                      >
+                        <span>
+                          {item.medicineName} × {item.quantity}
+                        </span>
+                        <span>
+                          ₹{Number(item.price).toFixed(0)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-semibold">
-                ₹{Number(order.total).toFixed(0)}
-              </p>
-            </div>
-          ))
+            );
+          })
         )}
       </Card>
-
-      {/* -----------------------------
-         FUTURE ACTIONS
-      ------------------------------ */}
-      <Button variant="outline" className="w-full" disabled>
-        Edit Profile (coming next)
-      </Button>
     </div>
   );
 }
