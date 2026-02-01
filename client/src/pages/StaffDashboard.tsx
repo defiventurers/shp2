@@ -7,6 +7,7 @@ import {
   ChevronUp,
   Phone,
   Truck,
+  MessageCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ export default function StaffDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
 
   /* -----------------------------
      STAFF AUTH GUARD
@@ -125,9 +127,13 @@ export default function StaffDashboard() {
     (o) => o.status === "pending"
   ).length;
 
+  const visibleOrders = showPendingOnly
+    ? orders.filter((o) => o.status === "pending")
+    : orders;
+
   return (
     <div className="min-h-screen max-w-lg mx-auto">
-      {/* 🟢 STAFF MODE BANNER */}
+      {/* 🟢 STAFF MODE HEADER */}
       <div className="sticky top-0 z-50 bg-green-50 border-b border-green-200 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-green-700" />
@@ -143,21 +149,24 @@ export default function StaffDashboard() {
         )}
       </div>
 
-      <div className="p-4 space-y-6">
-        <h1 className="text-lg font-semibold flex items-center gap-2">
-          <Shield className="w-5 h-5 text-green-600" />
-          Staff Dashboard
-        </h1>
+      <div className="p-4 space-y-4">
+        {/* FILTER */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => setShowPendingOnly((p) => !p)}
+        >
+          {showPendingOnly ? "Show All Orders" : "Show Pending Only"}
+        </Button>
 
-        {/* =============================
-           ORDERS
-        ============================== */}
-        {orders.length === 0 ? (
+        {/* ORDERS */}
+        {visibleOrders.length === 0 ? (
           <Card className="p-4 text-sm text-muted-foreground">
-            No orders yet.
+            No orders to show.
           </Card>
         ) : (
-          orders.map((order) => {
+          visibleOrders.map((order) => {
             const isOpen = expandedId === order.id;
             const currentIndex = STATUS_FLOW.indexOf(order.status);
             const isDelivery = order.deliveryType === "delivery";
@@ -199,21 +208,37 @@ export default function StaffDashboard() {
                 {/* EXPANDED */}
                 {isOpen && (
                   <div className="space-y-3">
-                    {/* CUSTOMER */}
-                    <div className="text-sm space-y-1">
-                      <p>
-                        <strong>{order.customerName}</strong>
-                      </p>
-                      <p className="flex items-center gap-1">
-                        <Phone size={14} />
-                        {order.customerPhone}
-                      </p>
-                      {isDelivery && (
-                        <p className="flex items-center gap-1">
-                          <Truck size={14} />
-                          {order.deliveryAddress}
-                        </p>
-                      )}
+                    {/* CUSTOMER ACTIONS */}
+                    <div className="flex gap-2">
+                      <a
+                        href={`tel:${order.customerPhone}`}
+                        className="flex-1"
+                      >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full flex items-center gap-2"
+                        >
+                          <Phone size={14} />
+                          Call
+                        </Button>
+                      </a>
+
+                      <a
+                        href={`https://wa.me/91${order.customerPhone}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1"
+                      >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full flex items-center gap-2"
+                        >
+                          <MessageCircle size={14} />
+                          WhatsApp
+                        </Button>
+                      </a>
                     </div>
 
                     {/* ITEMS */}
@@ -257,22 +282,20 @@ export default function StaffDashboard() {
                     </div>
 
                     {/* STATUS CONTROL */}
-                    <div className="pt-2">
-                      <select
-                        className="w-full border rounded-md p-2 text-sm"
-                        value={order.status}
-                        disabled={updatingId === order.id}
-                        onChange={(e) =>
-                          updateStatus(order.id, e.target.value)
-                        }
-                      >
-                        {STATUS_FLOW.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <select
+                      className="w-full border rounded-md p-2 text-sm"
+                      value={order.status}
+                      disabled={updatingId === order.id}
+                      onChange={(e) =>
+                        updateStatus(order.id, e.target.value)
+                      }
+                    >
+                      {STATUS_FLOW.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </Card>
