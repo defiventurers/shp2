@@ -43,6 +43,34 @@ const STATUS_FLOW = [
   "delivered",
 ];
 
+/* =================================
+   🔢 PHONE NORMALIZATION (INDIA)
+================================= */
+function normalizeIndianPhone(input: string): string {
+  if (!input) return "";
+
+  // remove spaces, hyphens, brackets
+  let phone = input.replace(/[^\d+]/g, "");
+
+  // already +91xxxxxxxxxx
+  if (phone.startsWith("+91") && phone.length === 13) {
+    return phone;
+  }
+
+  // 91xxxxxxxxxx
+  if (phone.startsWith("91") && phone.length === 12) {
+    return `+${phone}`;
+  }
+
+  // xxxxxxxxxx
+  if (phone.length === 10) {
+    return `+91${phone}`;
+  }
+
+  // fallback (return as-is)
+  return phone;
+}
+
 export default function StaffDashboard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -68,11 +96,11 @@ export default function StaffDashboard() {
      INIT SOUND
   ------------------------------ */
   useEffect(() => {
-    audioRef.current = new Audio("/ding.mp3"); // put ding.mp3 in /public
+    audioRef.current = new Audio("/ding.mp3");
   }, []);
 
   /* -----------------------------
-     FETCH ALL ORDERS
+     FETCH ORDERS
   ------------------------------ */
   async function fetchOrders() {
     try {
@@ -87,7 +115,6 @@ export default function StaffDashboard() {
       if (!res.ok) throw new Error();
       const data: Order[] = await res.json();
 
-      // 🔔 SOUND ALERT FOR NEW ORDERS
       if (data.length > prevOrderCount.current) {
         audioRef.current?.play().catch(() => {});
       }
@@ -167,129 +194,131 @@ export default function StaffDashboard() {
       </div>
 
       {/* ORDERS */}
-      {orders.length === 0 ? (
-        <Card className="p-4 text-sm text-muted-foreground">
-          No orders yet.
-        </Card>
-      ) : (
-        orders.map((order) => {
-          const isOpen = expandedId === order.id;
+      {orders.map((order) => {
+        const isOpen = expandedId === order.id;
+        const normalizedPhone = normalizeIndianPhone(order.customerPhone);
 
-          return (
-            <Card
-              key={order.id}
-              className={`p-3 space-y-3 ${
-                order.deliveryType === "delivery"
-                  ? "border-l-4 border-green-600"
-                  : ""
-              }`}
+        return (
+          <Card
+            key={order.id}
+            className={`p-3 space-y-3 ${
+              order.deliveryType === "delivery"
+                ? "border-l-4 border-green-600"
+                : ""
+            }`}
+          >
+            {/* HEADER */}
+            <div
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() =>
+                setExpandedId(isOpen ? null : order.id)
+              }
             >
-              {/* HEADER */}
-              <div
-                className="flex items-center justify-between cursor-pointer"
-                onClick={() =>
-                  setExpandedId(isOpen ? null : order.id)
-                }
-              >
-                <div>
-                  <p className="text-sm font-medium">
-                    #{order.orderNumber}
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {order.deliveryType}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">
-                    ₹{Number(order.total).toFixed(0)}
-                  </span>
-                  {isOpen ? <ChevronUp /> : <ChevronDown />}
-                </div>
+              <div>
+                <p className="text-sm font-medium">
+                  #{order.orderNumber}
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {order.deliveryType}
+                </p>
               </div>
 
-              {/* EXPANDED */}
-              {isOpen && (
-                <div className="space-y-4">
-                  {/* CUSTOMER */}
-                  <div className="bg-muted/50 rounded-md p-3 text-sm space-y-1">
-                    <p>
-                      <strong>{order.customerName}</strong>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">
+                  ₹{Number(order.total).toFixed(0)}
+                </span>
+                {isOpen ? <ChevronUp /> : <ChevronDown />}
+              </div>
+            </div>
+
+            {/* EXPANDED */}
+            {isOpen && (
+              <div className="space-y-4">
+                {/* CUSTOMER */}
+                <div className="bg-muted/50 rounded-md p-3 text-sm space-y-1">
+                  <p>
+                    <strong>{order.customerName}</strong>
+                  </p>
+
+                  <p className="text-xs text-muted-foreground">
+                    📞 {normalizedPhone}
+                  </p>
+
+                  <div className="flex gap-4 mt-1">
+                    <a
+                      href={`tel:${normalizedPhone}`}
+                      className="flex items-center gap-1 text-green-700 text-sm"
+                    >
+                      <Phone size={14} />
+                      Call
+                    </a>
+
+                    <a
+                      href={`https://wa.me/${normalizedPhone.replace(
+                        "+",
+                        ""
+                      )}?text=Hello%20from%20Sacred%20Heart%20Pharmacy%20regarding%20your%20order`}
+                      target="_blank"
+                      className="flex items-center gap-1 text-green-700 text-sm"
+                    >
+                      <MessageCircle size={14} />
+                      WhatsApp
+                    </a>
+                  </div>
+
+                  {order.customerEmail && (
+                    <p className="flex items-center gap-1 text-xs">
+                      <Mail size={12} />
+                      {order.customerEmail}
                     </p>
+                  )}
 
-                    <div className="flex gap-3 mt-1">
-                      <a
-                        href={`tel:${order.customerPhone}`}
-                        className="flex items-center gap-1 text-green-700 text-sm"
-                      >
-                        <Phone size={14} />
-                        Call
-                      </a>
-
-                      <a
-                        href={`https://wa.me/${order.customerPhone}?text=Hello%20from%20Sacred%20Heart%20Pharmacy%20regarding%20your%20order`}
-                        target="_blank"
-                        className="flex items-center gap-1 text-green-700 text-sm"
-                      >
-                        <MessageCircle size={14} />
-                        WhatsApp
-                      </a>
-                    </div>
-
-                    {order.customerEmail && (
+                  {order.deliveryType === "delivery" &&
+                    order.deliveryAddress && (
                       <p className="flex items-center gap-1 text-xs">
-                        <Mail size={12} />
-                        {order.customerEmail}
+                        <Truck size={12} />
+                        {order.deliveryAddress}
                       </p>
                     )}
-
-                    {order.deliveryType === "delivery" &&
-                      order.deliveryAddress && (
-                        <p className="flex items-center gap-1 text-xs">
-                          <Truck size={12} />
-                          {order.deliveryAddress}
-                        </p>
-                      )}
-                  </div>
-
-                  {/* ITEMS */}
-                  <div className="border-t pt-2 space-y-1">
-                    {order.items.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="flex justify-between text-sm"
-                      >
-                        <span>
-                          {item.medicineName} × {item.quantity}
-                        </span>
-                        <span>
-                          ₹{Number(item.price).toFixed(0)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* STATUS */}
-                  <select
-                    className="w-full border rounded-md p-2 text-sm"
-                    value={order.status}
-                    disabled={updatingId === order.id}
-                    onChange={(e) =>
-                      updateStatus(order.id, e.target.value)
-                    }
-                  >
-                    {STATUS_FLOW.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
                 </div>
-              )}
-            </Card>
-          );
-        })
-      )}
+
+                {/* ITEMS */}
+                <div className="border-t pt-2 space-y-1">
+                  {order.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex justify-between text-sm"
+                    >
+                      <span>
+                        {item.medicineName} × {item.quantity}
+                      </span>
+                      <span>
+                        ₹{Number(item.price).toFixed(0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* STATUS */}
+                <select
+                  className="w-full border rounded-md p-2 text-sm"
+                  value={order.status}
+                  disabled={updatingId === order.id}
+                  onChange={(e) =>
+                    updateStatus(order.id, e.target.value)
+                  }
+                >
+                  {STATUS_FLOW.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </Card>
+        );
+      })}
 
       <Button
         variant="destructive"
