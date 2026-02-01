@@ -6,9 +6,9 @@ import cookieParser from "cookie-parser";
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
 
-// ROUTES
+// 🔥 ROUTE REGISTRATIONS
 import { registerAuthRoutes } from "./routes/auth";
-import { registerUserRoutes } from "./routes/users"; // ✅ MISSING BEFORE
+import { registerUserRoutes } from "./routes/users";
 import { registerMedicineRoutes } from "./routes/medicines";
 import { registerCategoryRoutes } from "./routes/categories";
 import { registerOrderRoutes } from "./routes/orders";
@@ -18,8 +18,17 @@ console.log("🔥 SERVER INDEX EXECUTED 🔥");
 
 const app = express();
 
+/* =====================================================
+   🚨 TEMPORARY DIAGNOSTIC ROUTE (VERY IMPORTANT)
+   This MUST respond if routing works
+===================================================== */
+app.patch("/api/users/me", (_req: Request, res: Response) => {
+  console.log("🚨 TEMP /api/users/me HIT");
+  res.json({ ok: true });
+});
+
 /* -----------------------------
-   CORS
+   CORS — MUST BE FIRST
 ------------------------------ */
 app.use(
   cors({
@@ -32,14 +41,18 @@ app.use(
 );
 
 /* -----------------------------
-   MIDDLEWARE
+   COOKIE PARSER — REQUIRED
 ------------------------------ */
 app.use(cookieParser());
+
+/* -----------------------------
+   BODY PARSERS
+------------------------------ */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 /* -----------------------------
-   DEBUG
+   DEBUG AUTH
 ------------------------------ */
 app.get("/api/debug/auth", (req: Request, res: Response) => {
   res.json({
@@ -49,7 +62,7 @@ app.get("/api/debug/auth", (req: Request, res: Response) => {
 });
 
 /* -----------------------------
-   HEALTH
+   PROBE
 ------------------------------ */
 app.get("/api/__probe", (_req, res) => {
   res.json({ status: "ok" });
@@ -60,10 +73,13 @@ app.get("/api/__probe", (_req, res) => {
 ------------------------------ */
 (async () => {
   try {
+    console.log("🌱 Seeding database...");
     await seedDatabase();
+
+    console.log("🔄 Running prescription migration...");
     await migratePrescriptions();
   } catch (err) {
-    console.error("Startup error:", err);
+    console.error("Startup task failed:", err);
   }
 
   console.log("🌤️ Cloudinary configured:", {
@@ -72,20 +88,23 @@ app.get("/api/__probe", (_req, res) => {
     secret: Boolean(process.env.CLOUDINARY_API_SECRET),
   });
 
-  // ✅ REGISTER ALL ROUTES
+  // ✅ REGISTER REAL ROUTES
   registerAuthRoutes(app);
-  registerUserRoutes(app);            // ✅ THIS FIXES PROFILE SAVE
+  registerUserRoutes(app);
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
 
+  /* -----------------------------
+     ERROR HANDLER
+  ------------------------------ */
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("UNHANDLED ERROR:", err);
     res.status(500).json({ error: "Internal Server Error" });
   });
 
-  const port = Number(process.env.PORT || 10000);
+  const port = parseInt(process.env.PORT || "10000", 10);
 
   http.createServer(app).listen(port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${port}`);
