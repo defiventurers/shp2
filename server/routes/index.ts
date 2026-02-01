@@ -6,11 +6,9 @@ import cookieParser from "cookie-parser";
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
 
-/* -----------------------------
-   ROUTE IMPORTS
------------------------------- */
+// ROUTES
 import { registerAuthRoutes } from "./routes/auth";
-import { registerUserRoutes } from "./routes/users"; // ✅ NEW
+import { registerUserRoutes } from "./routes/users"; // ✅ MISSING BEFORE
 import { registerMedicineRoutes } from "./routes/medicines";
 import { registerCategoryRoutes } from "./routes/categories";
 import { registerOrderRoutes } from "./routes/orders";
@@ -21,7 +19,7 @@ console.log("🔥 SERVER INDEX EXECUTED 🔥");
 const app = express();
 
 /* -----------------------------
-   CORS — MUST BE FIRST
+   CORS
 ------------------------------ */
 app.use(
   cors({
@@ -34,33 +32,22 @@ app.use(
 );
 
 /* -----------------------------
-   COOKIE PARSER
+   MIDDLEWARE
 ------------------------------ */
 app.use(cookieParser());
-
-/* -----------------------------
-   BODY PARSERS
------------------------------- */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 /* -----------------------------
-   DEBUG AUTH ENDPOINT
+   DEBUG
 ------------------------------ */
 app.get("/api/debug/auth", (req: Request, res: Response) => {
   res.json({
     cookies: req.cookies,
     hasAuthToken: Boolean(req.cookies?.auth_token),
-    headers: {
-      origin: req.headers.origin,
-      cookie: req.headers.cookie,
-    },
   });
 });
 
-/* -----------------------------
-   PROBE (DEPLOY CHECK)
------------------------------- */
 app.get("/api/__probe", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -70,10 +57,7 @@ app.get("/api/__probe", (_req, res) => {
 ------------------------------ */
 (async () => {
   try {
-    console.log("🌱 Seeding database (safe)...");
     await seedDatabase();
-
-    console.log("🔄 Running prescription migration...");
     await migratePrescriptions();
   } catch (err) {
     console.error("Startup task failed:", err);
@@ -85,11 +69,9 @@ app.get("/api/__probe", (_req, res) => {
     secret: Boolean(process.env.CLOUDINARY_API_SECRET),
   });
 
-  /* -----------------------------
-     REGISTER ROUTES
-  ------------------------------ */
+  // ✅ REGISTER ALL ROUTES
   registerAuthRoutes(app);
-  registerUserRoutes(app);          // ✅ PROFILE SAVE FIX
+  registerUserRoutes(app); // ✅ THIS WAS MISSING
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
