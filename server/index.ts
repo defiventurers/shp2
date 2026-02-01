@@ -47,34 +47,47 @@ app.get("/api/__probe", (_req, res) => {
 });
 
 /* -----------------------------
-   BOOTSTRAP
+   ROUTES
+------------------------------ */
+registerAuthRoutes(app);
+registerUserRoutes(app);
+registerMedicineRoutes(app);
+registerCategoryRoutes(app);
+registerOrderRoutes(app);
+registerPrescriptionRoutes(app);
+
+/* -----------------------------
+   ERROR HANDLER
+------------------------------ */
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("UNHANDLED ERROR:", err);
+  res.status(500).json({ error: "Internal Server Error" });
+});
+
+/* -----------------------------
+   START SERVER FIRST
+------------------------------ */
+const port = Number(process.env.PORT || 10000);
+
+http.createServer(app).listen(port, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${port}`);
+});
+
+/* -----------------------------
+   BACKGROUND STARTUP TASKS
 ------------------------------ */
 (async () => {
   try {
     await seedDatabase();
     await migratePrescriptions();
 
-    // ⚠️ SAFE CSV IMPORT (DOES NOT CRASH)
-    await importMedicinesFromCSV();
+    if (process.env.IMPORT_MEDICINES === "true") {
+      console.log("📦 IMPORT_MEDICINES enabled — starting import in background");
+      importMedicinesFromCSV().catch(console.error);
+    } else {
+      console.log("ℹ️ IMPORT_MEDICINES disabled — skipping CSV import");
+    }
   } catch (err) {
     console.error("Startup task failed:", err);
   }
-
-  registerAuthRoutes(app);
-  registerUserRoutes(app);
-  registerMedicineRoutes(app);
-  registerCategoryRoutes(app);
-  registerOrderRoutes(app);
-  registerPrescriptionRoutes(app);
-
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("UNHANDLED ERROR:", err);
-    res.status(500).json({ error: "Internal Server Error" });
-  });
-
-  const port = Number(process.env.PORT || 10000);
-
-  http.createServer(app).listen(port, "0.0.0.0", () => {
-    console.log(`🚀 Server running on port ${port}`);
-  });
 })();
