@@ -24,18 +24,6 @@ const ALLOWED_STATUSES = [
   "delivered",
 ];
 
-/* =========================
-   STAFF AUTH GUARD (TEMP)
-========================= */
-function requireStaff(req: AuthRequest, res: Response): boolean {
-  const staffHeader = req.headers["x-staff-auth"];
-  if (staffHeader !== "true") {
-    res.status(403).json({ error: "Staff access only" });
-    return false;
-  }
-  return true;
-}
-
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
@@ -52,7 +40,6 @@ export function registerOrderRoutes(app: Express) {
           return res.status(401).json({ error: "Unauthorized" });
         }
 
-        /* Ensure user exists */
         const existingUser = await db.query.users.findFirst({
           where: eq(users.id, user.id),
         });
@@ -60,9 +47,9 @@ export function registerOrderRoutes(app: Express) {
         if (!existingUser) {
           await db.insert(users).values({
             id: user.id,
-            email: user.email ?? "dev@example.com",
-            firstName: user.name?.split(" ")[0] ?? "Dev",
-            lastName: user.name?.split(" ")[1] ?? "User",
+            email: user.email ?? "unknown@example.com",
+            firstName: user.name?.split(" ")[0] ?? "Customer",
+            lastName: user.name?.split(" ")[1] ?? "",
           });
         }
 
@@ -122,31 +109,48 @@ export function registerOrderRoutes(app: Express) {
   );
 
   /* =========================
-     GET USER ORDERS (CUSTOMER)
+     GET ORDERS
+     - Customer → own orders
+     - Staff → ALL orders
   ========================= */
-  app.get("/api/orders", requireAuth, async (req: AuthRequest, res) => {
-    const user = req.user;
+  app.get(
+    "/api/orders",
+    requireAuth,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const isStaff = req.headers["x-staff-auth"] === "true";
 
-    const userOrders = await db.query.orders.findMany({
-      where: eq(orders.userId, user.id),
-      with: { items: true },
-      orderBy: (orders, { desc }) => [desc(orders.createdAt)],
-    });
+        const result = isStaff
+          ? await db.query.orders.findMany({
+              with: { items: true },
+              orderBy: (o, { desc }) => [desc(o.createdAt)],
+            })
+          : await db.query.orders.findMany({
+              where: eq(orders.userId, req.user!.id),
+              with: { items: true },
+              orderBy: (o, { desc }) => [desc(o.createdAt)],
+            });
 
-    res.json(userOrders);
-  });
+        res.json(result);
+      } catch (err) {
+        console.error("FETCH ORDERS ERROR:", err);
+        res.status(500).json({ error: "Failed to fetch orders" });
+      }
+    }
+  );
 
   /* =========================
-     UPDATE ORDER STATUS (STAFF ONLY)
-     PATCH /api/orders/:id/status
+     UPDATE ORDER STATUS (STAFF)
   ========================= */
   app.patch(
     "/api/orders/:id/status",
     requireAuth,
     async (req: AuthRequest, res: Response) => {
       try {
-        // 🔒 STAFF GUARD
-        if (!requireStaff(req, res)) return;
+        const isStaff = req.headers["x-staff-auth"] === "true";
+        if (!isStaff) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
 
         const { id } = req.params;
         const { status } = req.body;
@@ -165,12 +169,9 @@ export function registerOrderRoutes(app: Express) {
           return res.status(404).json({ error: "Order not found" });
         }
 
-        res.json({
-          success: true,
-          order: updated,
-        });
+        res.json({ success: true, order: updated });
       } catch (err) {
-        console.error("❌ STATUS UPDATE ERROR:", err);
+        console.error("STATUS UPDATE ERROR:", err);
         res.status(500).json({ error: "Failed to update order status" });
       }
     }
