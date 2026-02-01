@@ -6,11 +6,17 @@ import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
 /**
- * ✅ FINAL, CORRECT LOCATION
- * Your CSV lives in /data (repo root level)
- * Render runtime: /opt/render/project/src/data
+ * 🚨 DO NOT USE process.cwd()
+ * Render runs tsx from different working dirs.
+ * We resolve from THIS FILE instead.
+ *
+ * server/scripts → ../../data
  */
-const DATA_DIR = path.resolve(process.cwd(), "data");
+const DATA_DIR = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname),
+  "../../data"
+);
+
 const MAX_MEDICINES = 50_000;
 
 export async function importMedicinesFromCSV() {
@@ -66,7 +72,6 @@ export async function importMedicinesFromCSV() {
             return;
           }
 
-          // ✅ INDIA DATASET FIELD MAPPING
           const name =
             row["Drug_Name"] ||
             row["Brand_Name"] ||
