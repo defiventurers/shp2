@@ -48,7 +48,7 @@ export default function StaffDashboard() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   /* -----------------------------
-     STAFF AUTH GUARD (FRONTEND)
+     STAFF AUTH GUARD
   ------------------------------ */
   useEffect(() => {
     const isStaff = localStorage.getItem("staff_auth") === "true";
@@ -58,7 +58,7 @@ export default function StaffDashboard() {
   }, [navigate]);
 
   /* -----------------------------
-     FETCH ALL ORDERS (STAFF)
+     FETCH ORDERS
   ------------------------------ */
   async function fetchOrders() {
     try {
@@ -66,16 +66,10 @@ export default function StaffDashboard() {
         `${import.meta.env.VITE_API_URL}/api/orders`,
         {
           credentials: "include",
-          headers: {
-            "x-staff-auth": "true",
-          },
+          headers: { "x-staff-auth": "true" },
         }
       );
-
-      if (!res.ok) {
-        throw new Error();
-      }
-
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setOrders(data);
     } catch {
@@ -91,7 +85,7 @@ export default function StaffDashboard() {
   }, []);
 
   /* -----------------------------
-     UPDATE ORDER STATUS (STAFF)
+     UPDATE STATUS
   ------------------------------ */
   async function updateStatus(orderId: string, status: string) {
     setUpdatingId(orderId);
@@ -109,10 +103,7 @@ export default function StaffDashboard() {
         }
       );
 
-      if (!res.ok) {
-        throw new Error();
-      }
-
+      if (!res.ok) throw new Error();
       await fetchOrders();
       toast({ title: "Order status updated" });
     } catch {
@@ -130,14 +121,26 @@ export default function StaffDashboard() {
     navigate("/staff/login");
   }
 
+  const pendingCount = orders.filter(
+    (o) => o.status === "pending"
+  ).length;
+
   return (
     <div className="min-h-screen max-w-lg mx-auto">
       {/* 🟢 STAFF MODE BANNER */}
-      <div className="sticky top-0 z-50 bg-green-50 border-b border-green-200 px-4 py-2 flex items-center gap-2">
-        <Shield className="w-4 h-4 text-green-700" />
-        <span className="text-xs font-medium text-green-800">
-          Staff / Pharmacist Mode
-        </span>
+      <div className="sticky top-0 z-50 bg-green-50 border-b border-green-200 px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-green-700" />
+          <span className="text-xs font-medium text-green-800">
+            Staff / Pharmacist Mode
+          </span>
+        </div>
+
+        {pendingCount > 0 && (
+          <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+            {pendingCount} pending
+          </span>
+        )}
       </div>
 
       <div className="p-4 space-y-6">
@@ -147,7 +150,7 @@ export default function StaffDashboard() {
         </h1>
 
         {/* =============================
-           ORDERS LIST
+           ORDERS
         ============================== */}
         {orders.length === 0 ? (
           <Card className="p-4 text-sm text-muted-foreground">
@@ -157,9 +160,15 @@ export default function StaffDashboard() {
           orders.map((order) => {
             const isOpen = expandedId === order.id;
             const currentIndex = STATUS_FLOW.indexOf(order.status);
+            const isDelivery = order.deliveryType === "delivery";
 
             return (
-              <Card key={order.id} className="p-3 space-y-3">
+              <Card
+                key={order.id}
+                className={`p-3 space-y-3 border ${
+                  isDelivery ? "bg-amber-50 border-amber-200" : ""
+                }`}
+              >
                 {/* HEADER */}
                 <div
                   className="flex items-center justify-between cursor-pointer"
@@ -171,10 +180,14 @@ export default function StaffDashboard() {
                     <p className="text-sm font-medium">
                       #{order.orderNumber}
                     </p>
-                    <p className="text-xs text-muted-foreground capitalize">
+                    <p className="text-xs text-muted-foreground capitalize flex items-center gap-1">
+                      {isDelivery && (
+                        <Truck className="w-3 h-3 text-amber-600" />
+                      )}
                       {order.deliveryType}
                     </p>
                   </div>
+
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">
                       ₹{Number(order.total).toFixed(0)}
@@ -195,7 +208,7 @@ export default function StaffDashboard() {
                         <Phone size={14} />
                         {order.customerPhone}
                       </p>
-                      {order.deliveryType === "delivery" && (
+                      {isDelivery && (
                         <p className="flex items-center gap-1">
                           <Truck size={14} />
                           {order.deliveryAddress}
