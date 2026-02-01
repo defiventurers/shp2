@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   User,
   FileText,
   Package,
-  Save,
-  Plus,
-  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  Check,
 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -16,39 +17,33 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartContext } from "@/context/CartContext";
 
+type OrderItem = {
+  medicineName: string;
+  quantity: number;
+  price: string;
+};
+
 type Order = {
   id: string;
   orderNumber: string;
   status: string;
   total: string;
   createdAt: string;
+  items?: OrderItem[];
 };
 
 export default function Profile() {
-  const { user, refetchAuth } = useAuth();
+  const { user } = useAuth();
   const { prescriptions, refreshPrescriptions } = useCartContext();
   const { toast } = useToast();
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [editingPrescriptionId, setEditingPrescriptionId] =
+    useState<string | null>(null);
+  const [newName, setNewName] = useState("");
 
   /* -----------------------------
-     Load user data into form
-  ------------------------------ */
-  useEffect(() => {
-    if (user) {
-      setName(user.name || "");
-      setPhone((user as any).phone || "");
-      setAddress((user as any).address || "");
-    }
-  }, [user]);
-
-  /* -----------------------------
-     Fetch Orders
+     Fetch Orders (with items)
   ------------------------------ */
   const { data: orders = [] } = useQuery<Order[]>({
     queryKey: ["/api/orders"],
@@ -63,93 +58,28 @@ export default function Profile() {
   });
 
   /* -----------------------------
-     Save profile
+     Rename Prescription
   ------------------------------ */
-  async function saveProfile() {
-    setSaving(true);
+  async function renamePrescription(id: string) {
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/users/me`,
+        `${import.meta.env.VITE_API_URL}/api/prescriptions/${id}`,
         {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, phone, address }),
-        }
-      );
-
-      if (!res.ok) throw new Error();
-
-      await refetchAuth();
-
-      toast({
-        title: "Profile updated",
-        description: "Your details were saved successfully",
-      });
-    } catch {
-      toast({
-        title: "Update failed",
-        description: "Could not save profile",
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  /* -----------------------------
-     Add images to prescription
-  ------------------------------ */
-  async function addImages(prescriptionId: string, files: FileList | null) {
-    if (!files || files.length === 0) return;
-
-    const formData = new FormData();
-    Array.from(files).forEach((f) =>
-      formData.append("images", f)
-    );
-
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/prescriptions/${prescriptionId}/images`,
-        {
-          method: "POST",
-          body: formData,
-          credentials: "include",
+          body: JSON.stringify({ name: newName }),
         }
       );
 
       if (!res.ok) throw new Error();
 
       await refreshPrescriptions();
-      toast({ title: "Images added" });
+      setEditingPrescriptionId(null);
+      toast({ title: "Prescription renamed" });
     } catch {
       toast({
-        title: "Failed to add images",
-        variant: "destructive",
-      });
-    }
-  }
-
-  /* -----------------------------
-     Remove image from prescription
-  ------------------------------ */
-  async function removeImage(prescriptionId: string, index: number) {
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/prescriptions/${prescriptionId}/images/${index}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        }
-      );
-
-      if (!res.ok) throw new Error();
-
-      await refreshPrescriptions();
-      toast({ title: "Image removed" });
-    } catch {
-      toast({
-        title: "Failed to remove image",
+        title: "Rename failed",
         variant: "destructive",
       });
     }
@@ -167,29 +97,10 @@ export default function Profile() {
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
       <h1 className="text-lg font-semibold">Profile</h1>
 
-      {/* -----------------------------
-         EDIT PROFILE
-      ------------------------------ */}
+      {/* =============================
+         PRESCRIPTIONS
+      ============================== */}
       <Card className="p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <User className="w-4 h-4 text-muted-foreground" />
-          <span className="font-medium">Your Details</span>
-        </div>
-
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
-        <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
-        <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address" />
-
-        <Button onClick={saveProfile} disabled={saving} className="w-full">
-          <Save size={14} className="mr-2" />
-          {saving ? "Saving..." : "Save Profile"}
-        </Button>
-      </Card>
-
-      {/* -----------------------------
-         PRESCRIPTIONS (EDITABLE)
-      ------------------------------ */}
-      <Card className="p-4 space-y-4">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="font-medium">Prescriptions</span>
@@ -201,65 +112,59 @@ export default function Profile() {
           </p>
         ) : (
           prescriptions.map((p) => (
-            <div key={p.id} className="space-y-2">
-              <p className="text-sm font-medium">
-                {name || "Prescription"} –{" "}
-                {new Date(p.createdAt).toLocaleDateString("en-GB")}
-              </p>
-
-              {/* IMAGE GRID */}
-              <div className="grid grid-cols-3 gap-2">
-                {p.imageUrls.map((url, idx) => (
-                  <div key={idx} className="relative">
-                    <img
-                      src={url}
-                      className="w-full h-24 object-cover rounded"
-                    />
-                    <button
-                      onClick={() => removeImage(p.id, idx)}
-                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
+            <div
+              key={p.id}
+              className="flex items-center justify-between border rounded-md p-2"
+            >
+              <div className="flex-1">
+                {editingPrescriptionId === p.id ? (
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className="h-8"
+                  />
+                ) : (
+                  <p className="text-sm font-medium">
+                    {p.extractedMedicines?.meta?.name ||
+                      `Prescription – ${new Date(
+                        p.createdAt
+                      ).toLocaleDateString("en-GB")}`}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {p.imageUrls.length} page(s)
+                </p>
               </div>
 
-              {/* ADD MORE */}
-              {p.imageUrls.length < 5 && (
-                <>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    hidden
-                    ref={(el) =>
-                      (fileInputRefs.current[p.id] = el)
-                    }
-                    onChange={(e) =>
-                      addImages(p.id, e.target.files)
-                    }
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      fileInputRefs.current[p.id]?.click()
-                    }
-                  >
-                    <Plus size={14} className="mr-1" />
-                    Add images
-                  </Button>
-                </>
+              {editingPrescriptionId === p.id ? (
+                <Button
+                  size="sm"
+                  onClick={() => renamePrescription(p.id)}
+                >
+                  <Check size={14} />
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingPrescriptionId(p.id);
+                    setNewName(
+                      p.extractedMedicines?.meta?.name || ""
+                    );
+                  }}
+                >
+                  <Pencil size={14} />
+                </Button>
               )}
             </div>
           ))
         )}
       </Card>
 
-      {/* -----------------------------
-         ORDERS
-      ------------------------------ */}
+      {/* =============================
+         ORDERS (EXPANDABLE)
+      ============================== */}
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Package className="w-4 h-4 text-muted-foreground" />
@@ -271,24 +176,60 @@ export default function Profile() {
             No orders placed yet.
           </p>
         ) : (
-          orders.map((order) => (
-            <div
-              key={order.id}
-              className="flex items-center justify-between border rounded-md p-2"
-            >
-              <div>
-                <p className="text-sm font-medium">
-                  #{order.orderNumber}
-                </p>
-                <p className="text-xs text-muted-foreground capitalize">
-                  {order.status}
-                </p>
+          orders.map((order) => {
+            const isOpen = expandedOrderId === order.id;
+
+            return (
+              <div
+                key={order.id}
+                className="border rounded-md p-2 space-y-2"
+              >
+                <div
+                  className="flex items-center justify-between cursor-pointer"
+                  onClick={() =>
+                    setExpandedOrderId(isOpen ? null : order.id)
+                  }
+                >
+                  <div>
+                    <p className="text-sm font-medium">
+                      #{order.orderNumber}
+                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {order.status}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">
+                      ₹{Number(order.total).toFixed(0)}
+                    </span>
+                    {isOpen ? (
+                      <ChevronUp size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
+                  </div>
+                </div>
+
+                {isOpen && order.items && (
+                  <div className="pt-2 space-y-1">
+                    {order.items.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex justify-between text-sm"
+                      >
+                        <span>
+                          {item.medicineName} × {item.quantity}
+                        </span>
+                        <span>
+                          ₹{Number(item.price).toFixed(0)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-semibold">
-                ₹{Number(order.total).toFixed(0)}
-              </p>
-            </div>
-          ))
+            );
+          })
         )}
       </Card>
     </div>
