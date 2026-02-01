@@ -1,6 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { User, FileText, Package, Save } from "lucide-react";
+import {
+  User,
+  FileText,
+  Package,
+  Save,
+  Plus,
+  Trash2,
+} from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,13 +26,15 @@ type Order = {
 
 export default function Profile() {
   const { user, refetchAuth } = useAuth();
-  const { prescriptions } = useCartContext();
+  const { prescriptions, refreshPrescriptions } = useCartContext();
   const { toast } = useToast();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   /* -----------------------------
      Load user data into form
@@ -88,6 +97,64 @@ export default function Profile() {
     }
   }
 
+  /* -----------------------------
+     Add images to prescription
+  ------------------------------ */
+  async function addImages(prescriptionId: string, files: FileList | null) {
+    if (!files || files.length === 0) return;
+
+    const formData = new FormData();
+    Array.from(files).forEach((f) =>
+      formData.append("images", f)
+    );
+
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/prescriptions/${prescriptionId}/images`,
+        {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) throw new Error();
+
+      await refreshPrescriptions();
+      toast({ title: "Images added" });
+    } catch {
+      toast({
+        title: "Failed to add images",
+        variant: "destructive",
+      });
+    }
+  }
+
+  /* -----------------------------
+     Remove image from prescription
+  ------------------------------ */
+  async function removeImage(prescriptionId: string, index: number) {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/prescriptions/${prescriptionId}/images/${index}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      if (!res.ok) throw new Error();
+
+      await refreshPrescriptions();
+      toast({ title: "Image removed" });
+    } catch {
+      toast({
+        title: "Failed to remove image",
+        variant: "destructive",
+      });
+    }
+  }
+
   if (!user) {
     return (
       <div className="p-4 text-center">
@@ -109,35 +176,20 @@ export default function Profile() {
           <span className="font-medium">Your Details</span>
         </div>
 
-        <div>
-          <label className="text-xs text-muted-foreground">Name</label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
+        <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
+        <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address" />
 
-        <div>
-          <label className="text-xs text-muted-foreground">Phone</label>
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </div>
-
-        <div>
-          <label className="text-xs text-muted-foreground">Address</label>
-          <Input value={address} onChange={(e) => setAddress(e.target.value)} />
-        </div>
-
-        <Button
-          onClick={saveProfile}
-          disabled={saving}
-          className="w-full flex items-center gap-2"
-        >
-          <Save size={14} />
+        <Button onClick={saveProfile} disabled={saving} className="w-full">
+          <Save size={14} className="mr-2" />
           {saving ? "Saving..." : "Save Profile"}
         </Button>
       </Card>
 
       {/* -----------------------------
-         PRESCRIPTIONS
+         PRESCRIPTIONS (EDITABLE)
       ------------------------------ */}
-      <Card className="p-4 space-y-3">
+      <Card className="p-4 space-y-4">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="font-medium">Prescriptions</span>
@@ -149,19 +201,57 @@ export default function Profile() {
           </p>
         ) : (
           prescriptions.map((p) => (
-            <div
-              key={p.id}
-              className="flex items-center justify-between border rounded-md p-2"
-            >
-              <div>
-                <p className="text-sm font-medium">
-                  {name || "Prescription"} –{" "}
-                  {new Date(p.createdAt).toLocaleDateString("en-GB")}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {p.imageUrls.length} page(s)
-                </p>
+            <div key={p.id} className="space-y-2">
+              <p className="text-sm font-medium">
+                {name || "Prescription"} –{" "}
+                {new Date(p.createdAt).toLocaleDateString("en-GB")}
+              </p>
+
+              {/* IMAGE GRID */}
+              <div className="grid grid-cols-3 gap-2">
+                {p.imageUrls.map((url, idx) => (
+                  <div key={idx} className="relative">
+                    <img
+                      src={url}
+                      className="w-full h-24 object-cover rounded"
+                    />
+                    <button
+                      onClick={() => removeImage(p.id, idx)}
+                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
               </div>
+
+              {/* ADD MORE */}
+              {p.imageUrls.length < 5 && (
+                <>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    hidden
+                    ref={(el) =>
+                      (fileInputRefs.current[p.id] = el)
+                    }
+                    onChange={(e) =>
+                      addImages(p.id, e.target.files)
+                    }
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      fileInputRefs.current[p.id]?.click()
+                    }
+                  >
+                    <Plus size={14} className="mr-1" />
+                    Add images
+                  </Button>
+                </>
+              )}
             </div>
           ))
         )}
