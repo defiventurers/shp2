@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CartProvider } from "@/context/CartContext";
@@ -18,7 +18,7 @@ import Admin from "@/pages/Admin";
 
 /* 🆕 STAFF PAGES */
 import StaffLogin from "@/pages/StaffLogin";
-import StaffDashboard from "@/pages/StaffDashboard"; // placeholder for now
+import StaffDashboard from "@/pages/StaffDashboard";
 
 function Router() {
   return (
@@ -36,7 +36,7 @@ function Router() {
       <Route path="/staff/login" component={StaffLogin} />
       <Route path="/staff" component={StaffDashboard} />
 
-      {/* ADMIN (UNCHANGED) */}
+      {/* ADMIN */}
       <Route path="/admin" component={Admin} />
 
       {/* FALLBACK */}
@@ -46,19 +46,26 @@ function Router() {
 }
 
 export default function App() {
+  const [location] = useLocation();
+
+  // 👇 detect staff routes
+  const isStaffRoute = location.startsWith("/staff");
+
   return (
     <TooltipProvider>
       <CartProvider>
         <div className="min-h-screen bg-background">
           <Header />
+
           <main className="pb-safe">
             <Router />
           </main>
 
-          {/* BottomNav remains customer-only for now */}
-          <BottomNav />
-          <WhatsAppButton />
+          {/* ❌ Hide customer UI on staff routes */}
+          {!isStaffRoute && <BottomNav />}
+          {!isStaffRoute && <WhatsAppButton />}
         </div>
+
         <Toaster />
       </CartProvider>
     </TooltipProvider>
