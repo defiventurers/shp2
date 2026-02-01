@@ -3,141 +3,127 @@ import path from "path";
 import zlib from "zlib";
 import csv from "csv-parser";
 import { db } from "../db";
-import { medicines, categories } from "@shared/schema";
+import { medicines, categories, orderItems, orders } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 /**
- * SAFE CSV IMPORT
- * - DOES NOT delete existing medicines
- * - ONLY inserts new ones
- * - FK-safe for existing orders
+ * ⚠️ DESTRUCTIVE CSV IMPORT
+ * This will WIPE orders, order_items, and medicines
+ * and replace them with CSV data.
+ *
+ * ENABLE ONLY ONCE.
  */
+const ENABLE_DESTRUCTIVE_RESET = true;
+
+/**
+ * Path to compressed CSV
+ * (relative to project root)
+ */
+const CSV_PATH = path.resolve(
+  process.cwd(),
+  "server/data/IndiaMedicinesandDrugInfoDataset.csv.gz"
+);
+
 export async function importMedicinesFromCSV() {
-  console.log("📦 Starting CSV medicine import (SAFE MODE)...");
+  console.log("📦 Starting CSV medicine import (DESTRUCTIVE MODE)");
 
-  const csvPath = path.join(
-    process.cwd(),
-    "server",
-    "data",
-    "IndiaMedicinesandDrugInfoDataset.csv.gz.csv.gz"
-  );
+  if (!ENABLE_DESTRUCTIVE_RESET) {
+    console.log("⏭️ Destructive reset disabled, skipping import");
+    return;
+  }
 
-  if (!fs.existsSync(csvPath)) {
+  if (!fs.existsSync(CSV_PATH)) {
     console.log("⚠️ CSV file not found, skipping import");
     return;
   }
 
-  console.log("📥 Importing medicines from CSV (no deletes)");
+  /* =========================
+     STEP 1 — WIPE DATA (ORDER)
+  ========================= */
+  console.log("🧨 Wiping order_items...");
+  await db.delete(orderItems);
 
-  const categoryCache = new Map<string, string>();
-  const existingMedicineNames = new Set<string>();
+  console.log("🧨 Wiping orders...");
+  await db.delete(orders);
 
-  // Load existing medicine names once
-  const existing = await db.query.medicines.findMany({
-    columns: { name: true },
-  });
+  console.log("🧨 Wiping medicines...");
+  await db.delete(medicines);
 
-  existing.forEach((m) => {
-    if (m.name) {
-      existingMedicineNames.add(m.name.toLowerCase());
-    }
-  });
+  console.log("🧨 Wiping categories...");
+  await db.delete(categories);
 
-  function normalizePrice(value: any): string {
-    const num = Number(value);
-    return isNaN(num) ? "0" : num.toFixed(2);
-  }
+  /* =========================
+     STEP 2 — LOAD CSV
+  ========================= */
+  const rows: any[] = [];
 
-  return new Promise<void>((resolve, reject) => {
-    fs.createReadStream(csvPath)
+  await new Promise<void>((resolve, reject) => {
+    fs.createReadStream(CSV_PATH)
       .pipe(zlib.createGunzip())
       .pipe(csv())
-      .on("data", async (row) => {
-        try {
-          const name =
-            row["drug_name"] ||
-            row["name"] ||
-            row["Drug Name"] ||
-            null;
-
-          if (!name) return;
-
-          const normalizedName = name.toLowerCase();
-          if (existingMedicineNames.has(normalizedName)) {
-            return; // skip duplicates
-          }
-
-          existingMedicineNames.add(normalizedName);
-
-          const categoryName =
-            row["category"] ||
-            row["Category"] ||
-            "General";
-
-          let categoryId = categoryCache.get(categoryName);
-
-          if (!categoryId) {
-            const [cat] = await db
-              .insert(categories)
-              .values({ name: categoryName })
-              .onConflictDoNothing()
-              .returning();
-
-            categoryId =
-              cat?.id ||
-              (
-                await db.query.categories.findFirst({
-                  where: (c, { eq }) => eq(c.name, categoryName),
-                })
-              )?.id;
-
-            if (categoryId) {
-              categoryCache.set(categoryName, categoryId);
-            }
-          }
-
-          await db.insert(medicines).values({
-            name,
-            genericName:
-              row["composition"] ||
-              row["Composition"] ||
-              null,
-            manufacturer:
-              row["manufacturer"] ||
-              row["Manufacturer"] ||
-              null,
-            dosage:
-              row["strength"] ||
-              row["Strength"] ||
-              null,
-            form:
-              row["dosage_form"] ||
-              row["Form"] ||
-              null,
-            price: normalizePrice(row["price"] || row["Price"]),
-            mrp: normalizePrice(row["price"] || row["Price"]),
-            stock: 100,
-            requiresPrescription:
-              String(row["schedule"] || "")
-                .toUpperCase()
-                .includes("H"),
-            isScheduleH:
-              String(row["schedule"] || "")
-                .toUpperCase()
-                .includes("H"),
-            description: row["uses"] || null,
-            categoryId,
-          });
-        } catch (err) {
-          console.error("❌ CSV row import failed:", err);
-        }
-      })
-      .on("end", () => {
-        console.log("✅ CSV medicine import completed (SAFE)");
-        resolve();
-      })
-      .on("error", (err) => {
-        console.error("❌ CSV stream error:", err);
-        reject(err);
-      });
+      .on("data", (row) => rows.push(row))
+      .on("end", resolve)
+      .on("error", reject);
   });
+
+  console.log(`📄 Parsed ${rows.length} CSV rows`);
+
+  /* =========================
+     STEP 3 — CATEGORY MAP
+  ========================= */
+  const categoryMap = new Map<string, string>();
+
+  async function getCategoryId(name: string) {
+    if (!name) return null;
+
+    if (categoryMap.has(name)) {
+      return categoryMap.get(name)!;
+    }
+
+    const [created] = await db
+      .insert(categories)
+      .values({ name })
+      .returning();
+
+    categoryMap.set(name, created.id);
+    return created.id;
+  }
+
+  /* =========================
+     STEP 4 — INSERT MEDICINES
+  ========================= */
+  let inserted = 0;
+
+  for (const row of rows) {
+    const name = row.drug_name?.trim();
+    if (!name) continue;
+
+    const categoryId = await getCategoryId(
+      row.category?.trim() || "General"
+    );
+
+    const schedule = String(row.schedule || "").toUpperCase();
+
+    await db.insert(medicines).values({
+      name,
+      genericName: row.composition || null,
+      manufacturer: row.manufacturer || null,
+      dosage: row.strength || null,
+      form: row.dosage_form || null,
+      description: row.uses || null,
+
+      price: Number(row.price) || 0,
+      mrp: Number(row.price) || 0,
+      stock: 100,
+
+      requiresPrescription: schedule.includes("H"),
+      isScheduleH: schedule.includes("H"),
+
+      categoryId,
+    });
+
+    inserted++;
+  }
+
+  console.log(`✅ Imported ${inserted} medicines from CSV`);
 }
