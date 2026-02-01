@@ -6,40 +6,46 @@ import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
 const DATA_DIR = path.join(process.cwd(), "server", "data");
-const CSV_FILE = "IndiaMedicinesandDrugInfoDataset.csv.gz.csv.gz";
 
 export async function importMedicinesFromCSV() {
-  const filePath = path.join(DATA_DIR, CSV_FILE);
-
   console.log("📦 Starting CSV medicine import (DESTRUCTIVE MODE)");
 
-  if (!fs.existsSync(filePath)) {
-    console.warn("⚠️ CSV file not found, skipping import");
+  if (!fs.existsSync(DATA_DIR)) {
+    console.warn("⚠️ server/data directory not found, skipping import");
     return;
   }
 
-  // 🔥 CLEAR DB SAFELY (ORDER IS IMPORTANT)
+  const files = fs
+    .readdirSync(DATA_DIR)
+    .filter(
+      (f) => f.endsWith(".csv") || f.endsWith(".csv.gz")
+    );
+
+  if (files.length === 0) {
+    console.warn("⚠️ No CSV files found in server/data, skipping import");
+    return;
+  }
+
+  const csvFile = files[0];
+  const filePath = path.join(DATA_DIR, csvFile);
+
+  console.log("📥 Found CSV file:", csvFile);
+
+  // 🔥 WIPE OLD MEDICINES ONLY (SAFE)
   await db.delete(medicines);
   console.log("🧨 Wiped medicines table");
 
   const categoryRows = await db.select().from(categories);
   const categoryMap = new Map<string, string>();
-  categoryRows.forEach((c) => categoryMap.set(c.name.toLowerCase(), c.id));
+  categoryRows.forEach((c) =>
+    categoryMap.set(c.name.toLowerCase(), c.id)
+  );
 
-  console.log("📥 Reading CSV file:", CSV_FILE);
+  const fileStream = fs.createReadStream(filePath);
 
-  const stream = fs.createReadStream(filePath);
-
-  // 🧠 Detect gzip safely
-  let inputStream: NodeJS.ReadableStream;
-
-  if (filePath.endsWith(".gz")) {
-    console.log("🧪 Attempting gzip decompression...");
-    inputStream = stream.pipe(zlib.createGunzip());
-  } else {
-    console.log("🧪 Treating file as plain CSV");
-    inputStream = stream;
-  }
+  const inputStream = csvFile.endsWith(".gz")
+    ? fileStream.pipe(zlib.createGunzip())
+    : fileStream;
 
   let inserted = 0;
 
@@ -83,17 +89,17 @@ export async function importMedicinesFromCSV() {
             });
 
             inserted++;
-          } catch (e) {
+          } catch {
             // skip bad rows silently
           }
         })
         .on("end", () => {
-          console.log(`✅ CSV import complete: ${inserted} medicines`);
+          console.log(
+            `✅ CSV import complete: ${inserted} medicines`
+          );
           resolve();
         })
-        .on("error", (err) => {
-          reject(err);
-        });
+        .on("error", reject);
     });
   } catch (err) {
     console.error("❌ CSV import failed:", err);
