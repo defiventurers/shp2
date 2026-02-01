@@ -5,13 +5,18 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
-const DATA_DIR = path.join(process.cwd(), "server", "data");
+/* ======================================================
+   📁 DATA DIRECTORY (PROJECT ROOT)
+   Render path: /opt/render/project/src/data
+====================================================== */
+const DATA_DIR = path.join(process.cwd(), "data");
 
 export async function importMedicinesFromCSV() {
   console.log("📦 Starting CSV medicine import (DESTRUCTIVE MODE)");
+  console.log("📁 Resolved DATA_DIR:", DATA_DIR);
 
   if (!fs.existsSync(DATA_DIR)) {
-    console.warn("⚠️ server/data directory not found, skipping import");
+    console.warn("⚠️ data directory not found, skipping import");
     return;
   }
 
@@ -22,7 +27,7 @@ export async function importMedicinesFromCSV() {
     );
 
   if (files.length === 0) {
-    console.warn("⚠️ No CSV files found in server/data, skipping import");
+    console.warn("⚠️ No CSV files found in /data, skipping import");
     return;
   }
 
@@ -30,8 +35,11 @@ export async function importMedicinesFromCSV() {
   const filePath = path.join(DATA_DIR, csvFile);
 
   console.log("📥 Found CSV file:", csvFile);
+  console.log("📄 Full CSV path:", filePath);
 
-  // 🔥 WIPE OLD MEDICINES ONLY (SAFE)
+  /* --------------------------------------------------
+     ⚠️ WIPE OLD MEDICINES ONLY (ORDERS SAFE)
+  -------------------------------------------------- */
   await db.delete(medicines);
   console.log("🧨 Wiped medicines table");
 
@@ -90,7 +98,7 @@ export async function importMedicinesFromCSV() {
 
             inserted++;
           } catch {
-            // skip bad rows silently
+            // silently skip malformed rows
           }
         })
         .on("end", () => {
