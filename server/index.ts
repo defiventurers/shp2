@@ -6,6 +6,9 @@ import cookieParser from "cookie-parser";
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
 
+/* 🆕 ONE-TIME MEDICINE IMPORT */
+import { importMedicinesFromCSV } from "./scripts/importMedicinesFromCSV";
+
 // ROUTES
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
@@ -52,17 +55,37 @@ app.get("/api/__probe", (_req, res) => {
   try {
     await seedDatabase();
     await migratePrescriptions();
+
+    /* ---------------------------------
+       🚀 ONE-TIME MEDICINE IMPORT
+       Controlled via ENV VAR
+    ---------------------------------- */
+    if (process.env.IMPORT_MEDICINES === "true") {
+      console.log("🚀 Starting one-time medicine import...");
+      try {
+        await importMedicinesFromCSV();
+        console.log("✅ Medicine import completed");
+      } catch (err) {
+        console.error("❌ Medicine import failed:", err);
+      }
+    }
   } catch (err) {
     console.error("Startup task failed:", err);
   }
 
+  /* -----------------------------
+     ROUTES
+  ------------------------------ */
   registerAuthRoutes(app);
-  registerUserRoutes(app);        // 👈 THIS NOW RESOLVES
+  registerUserRoutes(app);
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
 
+  /* -----------------------------
+     ERROR HANDLER
+  ------------------------------ */
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("UNHANDLED ERROR:", err);
     res.status(500).json({ error: "Internal Server Error" });
