@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  User,
   FileText,
   Package,
   ChevronDown,
   ChevronUp,
   Pencil,
   Check,
+  Trash2,
+  Plus,
+  X,
 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -38,9 +40,14 @@ export default function Profile() {
   const { toast } = useToast();
 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [expandedPrescriptionId, setExpandedPrescriptionId] =
+    useState<string | null>(null);
+
   const [editingPrescriptionId, setEditingPrescriptionId] =
     useState<string | null>(null);
   const [newName, setNewName] = useState("");
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* -----------------------------
      Fetch Orders (with items)
@@ -85,6 +92,80 @@ export default function Profile() {
     }
   }
 
+  /* -----------------------------
+     Delete Prescription
+  ------------------------------ */
+  async function deletePrescription(id: string) {
+    if (!confirm("Delete this prescription?")) return;
+
+    try {
+      await fetch(
+        `${import.meta.env.VITE_API_URL}/api/prescriptions/${id}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      await refreshPrescriptions();
+      toast({ title: "Prescription deleted" });
+    } catch {
+      toast({
+        title: "Delete failed",
+        variant: "destructive",
+      });
+    }
+  }
+
+  /* -----------------------------
+     Add Images
+  ------------------------------ */
+  async function addImages(id: string, files: File[]) {
+    const formData = new FormData();
+    files.forEach((f) => formData.append("images", f));
+
+    try {
+      await fetch(
+        `${import.meta.env.VITE_API_URL}/api/prescriptions/${id}/images`,
+        {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        }
+      );
+
+      await refreshPrescriptions();
+      toast({ title: "Images added" });
+    } catch {
+      toast({
+        title: "Add images failed",
+        variant: "destructive",
+      });
+    }
+  }
+
+  /* -----------------------------
+     Remove Image
+  ------------------------------ */
+  async function removeImage(id: string, index: number) {
+    try {
+      await fetch(
+        `${import.meta.env.VITE_API_URL}/api/prescriptions/${id}/images/${index}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
+
+      await refreshPrescriptions();
+    } catch {
+      toast({
+        title: "Remove image failed",
+        variant: "destructive",
+      });
+    }
+  }
+
   if (!user) {
     return (
       <div className="p-4 text-center">
@@ -106,64 +187,123 @@ export default function Profile() {
           <span className="font-medium">Prescriptions</span>
         </div>
 
-        {prescriptions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No prescriptions uploaded yet.
-          </p>
-        ) : (
-          prescriptions.map((p) => (
-            <div
-              key={p.id}
-              className="flex items-center justify-between border rounded-md p-2"
-            >
-              <div className="flex-1">
-                {editingPrescriptionId === p.id ? (
-                  <Input
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="h-8"
-                  />
-                ) : (
-                  <p className="text-sm font-medium">
-                    {p.extractedMedicines?.meta?.name ||
-                      `Prescription – ${new Date(
-                        p.createdAt
-                      ).toLocaleDateString("en-GB")}`}
+        {prescriptions.map((p) => {
+          const isOpen = expandedPrescriptionId === p.id;
+
+          return (
+            <div key={p.id} className="border rounded-md p-2 space-y-2">
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() =>
+                  setExpandedPrescriptionId(isOpen ? null : p.id)
+                }
+              >
+                <div className="flex-1">
+                  {editingPrescriptionId === p.id ? (
+                    <Input
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="h-8"
+                    />
+                  ) : (
+                    <p className="text-sm font-medium">
+                      {p.extractedMedicines?.meta?.name ||
+                        `Prescription – ${new Date(
+                          p.createdAt
+                        ).toLocaleDateString("en-GB")}`}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {p.imageUrls.length} page(s)
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  {p.imageUrls.length} page(s)
-                </p>
+                </div>
+
+                <div className="flex gap-2">
+                  {editingPrescriptionId === p.id ? (
+                    <Button size="sm" onClick={() => renamePrescription(p.id)}>
+                      <Check size={14} />
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingPrescriptionId(p.id);
+                        setNewName(
+                          p.extractedMedicines?.meta?.name || ""
+                        );
+                      }}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                  )}
+
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deletePrescription(p.id);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+
+                  {isOpen ? <ChevronUp /> : <ChevronDown />}
+                </div>
               </div>
 
-              {editingPrescriptionId === p.id ? (
-                <Button
-                  size="sm"
-                  onClick={() => renamePrescription(p.id)}
-                >
-                  <Check size={14} />
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setEditingPrescriptionId(p.id);
-                    setNewName(
-                      p.extractedMedicines?.meta?.name || ""
-                    );
-                  }}
-                >
-                  <Pencil size={14} />
-                </Button>
+              {isOpen && (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    {p.imageUrls.map((url, idx) => (
+                      <div key={idx} className="relative">
+                        <img
+                          src={url}
+                          className="w-full h-24 object-cover rounded"
+                        />
+                        <button
+                          onClick={() => removeImage(p.id, idx)}
+                          className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {p.imageUrls.length < 5 && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          addImages(p.id, files.slice(0, 5 - p.imageUrls.length));
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Plus size={14} /> Add images
+                      </Button>
+                    </>
+                  )}
+                </>
               )}
             </div>
-          ))
-        )}
+          );
+        })}
       </Card>
 
       {/* =============================
-         ORDERS (EXPANDABLE)
+         ORDERS
       ============================== */}
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -171,66 +311,53 @@ export default function Profile() {
           <span className="font-medium">Orders</span>
         </div>
 
-        {orders.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No orders placed yet.
-          </p>
-        ) : (
-          orders.map((order) => {
-            const isOpen = expandedOrderId === order.id;
+        {orders.map((order) => {
+          const isOpen = expandedOrderId === order.id;
 
-            return (
+          return (
+            <div key={order.id} className="border rounded-md p-2 space-y-2">
               <div
-                key={order.id}
-                className="border rounded-md p-2 space-y-2"
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() =>
+                  setExpandedOrderId(isOpen ? null : order.id)
+                }
               >
-                <div
-                  className="flex items-center justify-between cursor-pointer"
-                  onClick={() =>
-                    setExpandedOrderId(isOpen ? null : order.id)
-                  }
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      #{order.orderNumber}
-                    </p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {order.status}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">
-                      ₹{Number(order.total).toFixed(0)}
-                    </span>
-                    {isOpen ? (
-                      <ChevronUp size={16} />
-                    ) : (
-                      <ChevronDown size={16} />
-                    )}
-                  </div>
+                <div>
+                  <p className="text-sm font-medium">
+                    #{order.orderNumber}
+                  </p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {order.status}
+                  </p>
                 </div>
-
-                {isOpen && order.items && (
-                  <div className="pt-2 space-y-1">
-                    {order.items.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="flex justify-between text-sm"
-                      >
-                        <span>
-                          {item.medicineName} × {item.quantity}
-                        </span>
-                        <span>
-                          ₹{Number(item.price).toFixed(0)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">
+                    ₹{Number(order.total).toFixed(0)}
+                  </span>
+                  {isOpen ? <ChevronUp /> : <ChevronDown />}
+                </div>
               </div>
-            );
-          })
-        )}
+
+              {isOpen && order.items && (
+                <div className="pt-2 space-y-1">
+                  {order.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex justify-between text-sm"
+                    >
+                      <span>
+                        {item.medicineName} × {item.quantity}
+                      </span>
+                      <span>
+                        ₹{Number(item.price).toFixed(0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </Card>
     </div>
   );
