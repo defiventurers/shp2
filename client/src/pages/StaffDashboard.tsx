@@ -7,7 +7,6 @@ import {
   ChevronUp,
   Phone,
   Truck,
-  Mail,
   Bell,
   MessageCircle,
 } from "lucide-react";
@@ -15,6 +14,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
+/* =========================
+   TYPES
+========================= */
 type OrderItem = {
   medicineName: string;
   quantity: number;
@@ -58,12 +60,52 @@ function normalizeIndianPhone(input: string): string {
 }
 
 /* =========================
-   WHATSAPP MESSAGE
+   WHATSAPP MESSAGE BY STATUS
 ========================= */
-function buildWhatsAppMessage(order: Order) {
-  return encodeURIComponent(
-    `Hello ${order.customerName},\n\nYour order ${order.orderNumber} from Sacred Heart Pharmacy has been delivered successfully.\n\nThank you for choosing us 💚`
-  );
+function getWhatsAppMessage(order: Order, status: string) {
+  switch (status) {
+    case "confirmed":
+      return `Hello ${order.customerName},
+
+Your order ${order.orderNumber} from Sacred Heart Pharmacy has been *confirmed* ✅.
+We will notify you once it is ready.
+
+Thank you 💚`;
+
+    case "processing":
+      return `Hello ${order.customerName},
+
+Your order ${order.orderNumber} is currently being *processed* 🧑‍⚕️💊.
+We’ll update you shortly.
+
+Sacred Heart Pharmacy`;
+
+    case "ready":
+      if (order.deliveryType === "pickup") {
+        return `Hello ${order.customerName},
+
+Your order ${order.orderNumber} is *ready for pickup* 🏪.
+Please visit Sacred Heart Pharmacy at your convenience.
+
+Thank you 💚`;
+      }
+
+      return `Hello ${order.customerName},
+
+Your order ${order.orderNumber} is *ready* 🚚 and will be delivered shortly.
+
+Sacred Heart Pharmacy`;
+
+    case "delivered":
+      return `Hello ${order.customerName},
+
+Your order ${order.orderNumber} has been *delivered successfully* ✅📦.
+
+Thank you for choosing Sacred Heart Pharmacy 💚`;
+
+    default:
+      return null;
+  }
 }
 
 export default function StaffDashboard() {
@@ -94,7 +136,7 @@ export default function StaffDashboard() {
   }, []);
 
   /* -----------------------------
-     FETCH ORDERS
+     FETCH ORDERS (AUTO REFRESH)
   ------------------------------ */
   async function fetchOrders() {
     try {
@@ -131,7 +173,7 @@ export default function StaffDashboard() {
   }, []);
 
   /* -----------------------------
-     UPDATE STATUS
+     UPDATE STATUS + AUTO WHATSAPP
   ------------------------------ */
   async function updateStatus(order: Order, status: string) {
     setUpdatingId(order.id);
@@ -154,11 +196,18 @@ export default function StaffDashboard() {
 
       await fetchOrders();
 
-      // ✅ AUTO WHATSAPP ON DELIVERY
-      if (status === "delivered") {
+      // 🚀 AUTO WHATSAPP (EXCEPT PENDING)
+      if (status !== "pending") {
         const phone = normalizeIndianPhone(order.customerPhone);
-        const msg = buildWhatsAppMessage(order);
-        window.open(`https://wa.me/${phone.replace("+", "")}?text=${msg}`);
+        const message = getWhatsAppMessage(order, status);
+
+        if (phone && message) {
+          const url = `https://wa.me/${phone.replace(
+            "+",
+            ""
+          )}?text=${encodeURIComponent(message)}`;
+          window.open(url, "_blank");
+        }
       }
 
       toast({ title: "Order updated" });
@@ -290,7 +339,7 @@ export default function StaffDashboard() {
                   ))}
                 </div>
 
-                {/* STATUS */}
+                {/* STATUS CONTROL */}
                 <select
                   className="w-full border rounded-md p-2 text-sm"
                   value={order.status}
