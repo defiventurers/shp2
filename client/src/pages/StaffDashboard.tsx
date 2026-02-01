@@ -43,32 +43,27 @@ const STATUS_FLOW = [
   "delivered",
 ];
 
-/* =================================
-   🔢 PHONE NORMALIZATION (INDIA)
-================================= */
+/* =========================
+   PHONE NORMALIZATION (IN)
+========================= */
 function normalizeIndianPhone(input: string): string {
   if (!input) return "";
-
-  // remove spaces, hyphens, brackets
   let phone = input.replace(/[^\d+]/g, "");
 
-  // already +91xxxxxxxxxx
-  if (phone.startsWith("+91") && phone.length === 13) {
-    return phone;
-  }
+  if (phone.startsWith("+91") && phone.length === 13) return phone;
+  if (phone.startsWith("91") && phone.length === 12) return `+${phone}`;
+  if (phone.length === 10) return `+91${phone}`;
 
-  // 91xxxxxxxxxx
-  if (phone.startsWith("91") && phone.length === 12) {
-    return `+${phone}`;
-  }
-
-  // xxxxxxxxxx
-  if (phone.length === 10) {
-    return `+91${phone}`;
-  }
-
-  // fallback (return as-is)
   return phone;
+}
+
+/* =========================
+   WHATSAPP MESSAGE
+========================= */
+function buildWhatsAppMessage(order: Order) {
+  return encodeURIComponent(
+    `Hello ${order.customerName},\n\nYour order ${order.orderNumber} from Sacred Heart Pharmacy has been delivered successfully.\n\nThank you for choosing us 💚`
+  );
 }
 
 export default function StaffDashboard() {
@@ -86,14 +81,13 @@ export default function StaffDashboard() {
      STAFF AUTH GUARD
   ------------------------------ */
   useEffect(() => {
-    const isStaff = localStorage.getItem("staff_auth") === "true";
-    if (!isStaff) {
+    if (localStorage.getItem("staff_auth") !== "true") {
       navigate("/staff/login");
     }
   }, [navigate]);
 
   /* -----------------------------
-     INIT SOUND
+     SOUND INIT
   ------------------------------ */
   useEffect(() => {
     audioRef.current = new Audio("/ding.mp3");
@@ -113,6 +107,7 @@ export default function StaffDashboard() {
       );
 
       if (!res.ok) throw new Error();
+
       const data: Order[] = await res.json();
 
       if (data.length > prevOrderCount.current) {
@@ -138,11 +133,12 @@ export default function StaffDashboard() {
   /* -----------------------------
      UPDATE STATUS
   ------------------------------ */
-  async function updateStatus(orderId: string, status: string) {
-    setUpdatingId(orderId);
+  async function updateStatus(order: Order, status: string) {
+    setUpdatingId(order.id);
+
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/orders/${orderId}/status`,
+        `${import.meta.env.VITE_API_URL}/api/orders/${order.id}/status`,
         {
           method: "PATCH",
           credentials: "include",
@@ -155,8 +151,17 @@ export default function StaffDashboard() {
       );
 
       if (!res.ok) throw new Error();
+
       await fetchOrders();
-      toast({ title: "Order status updated" });
+
+      // ✅ AUTO WHATSAPP ON DELIVERY
+      if (status === "delivered") {
+        const phone = normalizeIndianPhone(order.customerPhone);
+        const msg = buildWhatsAppMessage(order);
+        window.open(`https://wa.me/${phone.replace("+", "")}?text=${msg}`);
+      }
+
+      toast({ title: "Order updated" });
     } catch {
       toast({
         title: "Failed to update status",
@@ -186,7 +191,7 @@ export default function StaffDashboard() {
         </h1>
 
         {pendingCount > 0 && (
-          <div className="flex items-center gap-1 text-sm bg-red-600 text-white px-3 py-1 rounded-full">
+          <div className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-full text-sm">
             <Bell size={14} />
             {pendingCount} Pending
           </div>
@@ -196,7 +201,7 @@ export default function StaffDashboard() {
       {/* ORDERS */}
       {orders.map((order) => {
         const isOpen = expandedId === order.id;
-        const normalizedPhone = normalizeIndianPhone(order.customerPhone);
+        const phone = normalizeIndianPhone(order.customerPhone);
 
         return (
           <Card
@@ -231,7 +236,6 @@ export default function StaffDashboard() {
               </div>
             </div>
 
-            {/* EXPANDED */}
             {isOpen && (
               <div className="space-y-4">
                 {/* CUSTOMER */}
@@ -239,43 +243,30 @@ export default function StaffDashboard() {
                   <p>
                     <strong>{order.customerName}</strong>
                   </p>
+                  <p className="text-xs">📞 {phone}</p>
 
-                  <p className="text-xs text-muted-foreground">
-                    📞 {normalizedPhone}
-                  </p>
-
-                  <div className="flex gap-4 mt-1">
+                  <div className="flex gap-4">
                     <a
-                      href={`tel:${normalizedPhone}`}
-                      className="flex items-center gap-1 text-green-700 text-sm"
+                      href={`tel:${phone}`}
+                      className="flex items-center gap-1 text-green-700"
                     >
                       <Phone size={14} />
                       Call
                     </a>
 
                     <a
-                      href={`https://wa.me/${normalizedPhone.replace(
-                        "+",
-                        ""
-                      )}?text=Hello%20from%20Sacred%20Heart%20Pharmacy%20regarding%20your%20order`}
+                      href={`https://wa.me/${phone.replace("+", "")}`}
                       target="_blank"
-                      className="flex items-center gap-1 text-green-700 text-sm"
+                      className="flex items-center gap-1 text-green-700"
                     >
                       <MessageCircle size={14} />
                       WhatsApp
                     </a>
                   </div>
 
-                  {order.customerEmail && (
-                    <p className="flex items-center gap-1 text-xs">
-                      <Mail size={12} />
-                      {order.customerEmail}
-                    </p>
-                  )}
-
                   {order.deliveryType === "delivery" &&
                     order.deliveryAddress && (
-                      <p className="flex items-center gap-1 text-xs">
+                      <p className="text-xs flex items-center gap-1">
                         <Truck size={12} />
                         {order.deliveryAddress}
                       </p>
@@ -305,7 +296,7 @@ export default function StaffDashboard() {
                   value={order.status}
                   disabled={updatingId === order.id}
                   onChange={(e) =>
-                    updateStatus(order.id, e.target.value)
+                    updateStatus(order, e.target.value)
                   }
                 >
                   {STATUS_FLOW.map((s) => (
