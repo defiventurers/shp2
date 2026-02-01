@@ -5,14 +5,25 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
-const DATA_DIR = path.join(process.cwd(), "server", "data");
-const MAX_MEDICINES = 50_000; // 🔥 HARD CAP (SAFE FOR RENDER FREE)
+/**
+ * ✅ CORRECT DATA DIRECTORY
+ * Repo structure:
+ * /data/IndiaMedicinesandDrugInfoDataset.csv.gz
+ */
+const DATA_DIR = path.join(process.cwd(), "data");
+
+/**
+ * 🔥 HARD SAFETY CAP
+ * Render Free cannot handle more safely
+ */
+const MAX_MEDICINES = 50_000;
 
 export async function importMedicinesFromCSV() {
   console.log("📦 Starting CSV medicine import (SAFE LIMITED MODE)");
+  console.log("📁 Resolved DATA_DIR:", DATA_DIR);
 
   if (!fs.existsSync(DATA_DIR)) {
-    console.warn("⚠️ server/data directory not found, skipping import");
+    console.warn("⚠️ data directory not found, skipping import");
     return;
   }
 
@@ -21,7 +32,7 @@ export async function importMedicinesFromCSV() {
     .filter((f) => f.endsWith(".csv") || f.endsWith(".csv.gz"));
 
   if (files.length === 0) {
-    console.warn("⚠️ No CSV files found in server/data, skipping import");
+    console.warn("⚠️ No CSV files found in data/, skipping import");
     return;
   }
 
@@ -30,10 +41,11 @@ export async function importMedicinesFromCSV() {
 
   console.log("📥 Found CSV file:", csvFile);
 
-  // ⚠️ WIPE ONLY medicines (NOT orders / order_items)
+  // ⚠️ WIPE ONLY medicines (SAFE)
   await db.delete(medicines);
   console.log("🧨 Wiped medicines table");
 
+  // Load categories
   const categoryRows = await db.select().from(categories);
   const categoryMap = new Map<string, string>();
   categoryRows.forEach((c) =>
@@ -41,11 +53,13 @@ export async function importMedicinesFromCSV() {
   );
 
   const fileStream = fs.createReadStream(filePath);
+
   const inputStream = csvFile.endsWith(".gz")
     ? fileStream.pipe(zlib.createGunzip())
     : fileStream;
 
   let inserted = 0;
+  let stoppedEarly = false;
 
   return new Promise<void>((resolve, reject) => {
     const parser = csv();
@@ -55,8 +69,13 @@ export async function importMedicinesFromCSV() {
       .on("data", async (row) => {
         try {
           if (inserted >= MAX_MEDICINES) {
-            console.log(`🛑 Reached ${MAX_MEDICINES} medicines, stopping import`);
-            parser.destroy(); // 🔥 STOP STREAM
+            if (!stoppedEarly) {
+              console.log(
+                `🛑 Reached ${MAX_MEDICINES} medicines — stopping import`
+              );
+              stoppedEarly = true;
+              parser.destroy(); // stop stream cleanly
+            }
             return;
           }
 
@@ -66,7 +85,9 @@ export async function importMedicinesFromCSV() {
             row["name"];
 
           const manufacturer =
-            row["Manufacturer"] || row["Company"] || null;
+            row["Manufacturer"] ||
+            row["Company"] ||
+            null;
 
           if (!name || !manufacturer) return;
           if (name.length > 80) return;
@@ -103,7 +124,7 @@ export async function importMedicinesFromCSV() {
             console.log(`➕ Inserted ${inserted} medicines`);
           }
         } catch {
-          // ignore bad rows
+          // silently skip malformed rows
         }
       })
       .on("end", () => {
