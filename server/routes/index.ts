@@ -1,18 +1,15 @@
 import type { Express } from "express";
 
 import { registerAuthRoutes } from "./auth";
-import { registerUserRoutes } from "./users"; // ✅ ADD THIS
+import { registerUserRoutes } from "./users"; // ✅ REQUIRED
 import { registerMedicineRoutes } from "./medicines";
 import { registerCategoryRoutes } from "./categories";
 import { registerOrderRoutes } from "./orders";
 import { registerPrescriptionRoutes } from "./prescriptions";
 
 export function registerRoutes(app: Express) {
-  // 🔐 Auth & user profile
   registerAuthRoutes(app);
-  registerUserRoutes(app); // ✅ PROFILE UPDATE ROUTE
-
-  // 📦 Core features
+  registerUserRoutes(app);        // ✅ THIS FIXES PROFILE SAVE
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
