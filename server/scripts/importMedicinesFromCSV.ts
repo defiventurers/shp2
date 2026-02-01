@@ -5,10 +5,10 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
-/* ======================================================
-   📁 DATA DIRECTORY (PROJECT ROOT)
-   Render path: /opt/render/project/src/data
-====================================================== */
+/**
+ * IMPORTANT:
+ * Your dataset lives in /data (NOT /server/data)
+ */
 const DATA_DIR = path.join(process.cwd(), "data");
 
 export async function importMedicinesFromCSV() {
@@ -27,7 +27,7 @@ export async function importMedicinesFromCSV() {
     );
 
   if (files.length === 0) {
-    console.warn("⚠️ No CSV files found in /data, skipping import");
+    console.warn("⚠️ No CSV files found in data/, skipping import");
     return;
   }
 
@@ -35,11 +35,8 @@ export async function importMedicinesFromCSV() {
   const filePath = path.join(DATA_DIR, csvFile);
 
   console.log("📥 Found CSV file:", csvFile);
-  console.log("📄 Full CSV path:", filePath);
 
-  /* --------------------------------------------------
-     ⚠️ WIPE OLD MEDICINES ONLY (ORDERS SAFE)
-  -------------------------------------------------- */
+  // 🔥 WIPE MEDICINES ONLY (orders & order_items already handled upstream)
   await db.delete(medicines);
   console.log("🧨 Wiped medicines table");
 
@@ -50,66 +47,59 @@ export async function importMedicinesFromCSV() {
   );
 
   const fileStream = fs.createReadStream(filePath);
-
   const inputStream = csvFile.endsWith(".gz")
     ? fileStream.pipe(zlib.createGunzip())
     : fileStream;
 
   let inserted = 0;
 
-  try {
-    await new Promise<void>((resolve, reject) => {
-      inputStream
-        .pipe(csv())
-        .on("data", async (row) => {
-          try {
-            const name =
-              row["Medicine Name"] ||
-              row["Drug Name"] ||
-              row["name"];
+  await new Promise<void>((resolve, reject) => {
+    inputStream
+      .pipe(csv())
+      .on("data", async (row) => {
+        try {
+          const name =
+            row["Medicine Name"] ||
+            row["Drug Name"] ||
+            row["name"];
 
-            if (!name) return;
+          if (!name) return;
 
-            const categoryName =
-              row["Therapeutic Class"] ||
-              row["Category"] ||
-              "Pain Relief";
+          const categoryName =
+            row["Therapeutic Class"] ||
+            row["Category"] ||
+            "Pain Relief";
 
-            const categoryId =
-              categoryMap.get(categoryName.toLowerCase()) ||
-              categoryMap.values().next().value;
+          const categoryId =
+            categoryMap.get(categoryName.toLowerCase()) ||
+            categoryMap.values().next().value;
 
-            await db.insert(medicines).values({
-              name: name.trim(),
-              genericName: row["Generic Name"] || null,
-              manufacturer: row["Manufacturer"] || null,
-              categoryId,
-              dosage: row["Dosage"] || null,
-              form: row["Form"] || null,
-              packSize: row["Pack Size"] || null,
-              price: "0",
-              mrp: "0",
-              stock: 100,
-              requiresPrescription:
-                row["Prescription Required"] === "Yes",
-              isScheduleH:
-                row["Schedule H"] === "Yes",
-            });
+          await db.insert(medicines).values({
+            name: name.trim(),
+            genericName: row["Generic Name"] || null,
+            manufacturer: row["Manufacturer"] || null,
+            categoryId,
+            dosage: row["Dosage"] || null,
+            form: row["Form"] || null,
+            packSize: row["Pack Size"] || null,
+            price: "0",
+            mrp: "0",
+            stock: 100,
+            requiresPrescription:
+              row["Prescription Required"] === "Yes",
+            isScheduleH:
+              row["Schedule H"] === "Yes",
+          });
 
-            inserted++;
-          } catch {
-            // silently skip malformed rows
-          }
-        })
-        .on("end", () => {
-          console.log(
-            `✅ CSV import complete: ${inserted} medicines`
-          );
-          resolve();
-        })
-        .on("error", reject);
-    });
-  } catch (err) {
-    console.error("❌ CSV import failed:", err);
-  }
+          inserted++;
+        } catch {
+          // skip bad rows safely
+        }
+      })
+      .on("end", () => {
+        console.log(`✅ CSV import complete: ${inserted} medicines`);
+        resolve();
+      })
+      .on("error", reject);
+  });
 }
