@@ -6,7 +6,7 @@ import cookieParser from "cookie-parser";
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
 
-// ROUTES — IMPORT DIRECTLY (NO INDEX)
+// ROUTES
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerMedicineRoutes } from "./routes/medicines";
@@ -39,7 +39,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 /* -----------------------------
-   HEALTH / DEBUG
+   HEALTH
 ------------------------------ */
 app.get("/api/__probe", (_req, res) => {
   res.json({ status: "ok" });
@@ -56,17 +56,13 @@ app.get("/api/__probe", (_req, res) => {
     console.error("Startup task failed:", err);
   }
 
-  // REGISTER ROUTES — EXPLICIT
   registerAuthRoutes(app);
-  registerUserRoutes(app);          // 👤 THIS WAS MISSING
+  registerUserRoutes(app);        // 👈 THIS NOW RESOLVES
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
 
-  /* -----------------------------
-     ERROR HANDLER
-  ------------------------------ */
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("UNHANDLED ERROR:", err);
     res.status(500).json({ error: "Internal Server Error" });
