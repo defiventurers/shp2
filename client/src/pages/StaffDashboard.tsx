@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
   Package,
@@ -8,6 +8,8 @@ import {
   Phone,
   Truck,
   Mail,
+  Bell,
+  MessageCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,9 @@ export default function StaffDashboard() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const prevOrderCount = useRef<number>(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   /* -----------------------------
      STAFF AUTH GUARD
   ------------------------------ */
@@ -60,7 +65,14 @@ export default function StaffDashboard() {
   }, [navigate]);
 
   /* -----------------------------
-     FETCH ALL ORDERS (STAFF)
+     INIT SOUND
+  ------------------------------ */
+  useEffect(() => {
+    audioRef.current = new Audio("/ding.mp3"); // put ding.mp3 in /public
+  }, []);
+
+  /* -----------------------------
+     FETCH ALL ORDERS
   ------------------------------ */
   async function fetchOrders() {
     try {
@@ -73,7 +85,15 @@ export default function StaffDashboard() {
       );
 
       if (!res.ok) throw new Error();
-      setOrders(await res.json());
+      const data: Order[] = await res.json();
+
+      // 🔔 SOUND ALERT FOR NEW ORDERS
+      if (data.length > prevOrderCount.current) {
+        audioRef.current?.play().catch(() => {});
+      }
+
+      prevOrderCount.current = data.length;
+      setOrders(data);
     } catch {
       toast({
         title: "Failed to load orders",
@@ -84,12 +104,12 @@ export default function StaffDashboard() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 60000); // 🔁 auto refresh
+    const interval = setInterval(fetchOrders, 60000);
     return () => clearInterval(interval);
   }, []);
 
   /* -----------------------------
-     UPDATE ORDER STATUS
+     UPDATE STATUS
   ------------------------------ */
   async function updateStatus(orderId: string, status: string) {
     setUpdatingId(orderId);
@@ -125,16 +145,28 @@ export default function StaffDashboard() {
     navigate("/staff/login");
   }
 
+  const pendingCount = orders.filter(
+    (o) => o.status === "pending"
+  ).length;
+
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
-      <h1 className="text-lg font-semibold flex items-center gap-2">
-        <Shield className="w-5 h-5 text-green-600" />
-        Staff Dashboard
-      </h1>
+      {/* HEADER */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <Shield className="w-5 h-5 text-green-600" />
+          Staff Dashboard
+        </h1>
 
-      {/* =============================
-         ORDERS
-      ============================== */}
+        {pendingCount > 0 && (
+          <div className="flex items-center gap-1 text-sm bg-red-600 text-white px-3 py-1 rounded-full">
+            <Bell size={14} />
+            {pendingCount} Pending
+          </div>
+        )}
+      </div>
+
+      {/* ORDERS */}
       {orders.length === 0 ? (
         <Card className="p-4 text-sm text-muted-foreground">
           No orders yet.
@@ -142,7 +174,6 @@ export default function StaffDashboard() {
       ) : (
         orders.map((order) => {
           const isOpen = expandedId === order.id;
-          const currentIndex = STATUS_FLOW.indexOf(order.status);
 
           return (
             <Card
@@ -180,25 +211,43 @@ export default function StaffDashboard() {
               {/* EXPANDED */}
               {isOpen && (
                 <div className="space-y-4">
-                  {/* CUSTOMER INFO */}
+                  {/* CUSTOMER */}
                   <div className="bg-muted/50 rounded-md p-3 text-sm space-y-1">
                     <p>
                       <strong>{order.customerName}</strong>
                     </p>
-                    <p className="flex items-center gap-1">
-                      <Phone size={14} /> {order.customerPhone}
-                    </p>
+
+                    <div className="flex gap-3 mt-1">
+                      <a
+                        href={`tel:${order.customerPhone}`}
+                        className="flex items-center gap-1 text-green-700 text-sm"
+                      >
+                        <Phone size={14} />
+                        Call
+                      </a>
+
+                      <a
+                        href={`https://wa.me/${order.customerPhone}?text=Hello%20from%20Sacred%20Heart%20Pharmacy%20regarding%20your%20order`}
+                        target="_blank"
+                        className="flex items-center gap-1 text-green-700 text-sm"
+                      >
+                        <MessageCircle size={14} />
+                        WhatsApp
+                      </a>
+                    </div>
 
                     {order.customerEmail && (
-                      <p className="flex items-center gap-1">
-                        <Mail size={14} /> {order.customerEmail}
+                      <p className="flex items-center gap-1 text-xs">
+                        <Mail size={12} />
+                        {order.customerEmail}
                       </p>
                     )}
 
                     {order.deliveryType === "delivery" &&
                       order.deliveryAddress && (
-                        <p className="flex items-center gap-1">
-                          <Truck size={14} /> {order.deliveryAddress}
+                        <p className="flex items-center gap-1 text-xs">
+                          <Truck size={12} />
+                          {order.deliveryAddress}
                         </p>
                       )}
                   </div>
@@ -220,7 +269,7 @@ export default function StaffDashboard() {
                     ))}
                   </div>
 
-                  {/* STATUS CONTROL */}
+                  {/* STATUS */}
                   <select
                     className="w-full border rounded-md p-2 text-sm"
                     value={order.status}
