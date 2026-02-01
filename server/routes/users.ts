@@ -7,10 +7,6 @@ import { eq } from "drizzle-orm";
 export function registerUserRoutes(app: Express) {
   console.log("👤 USER ROUTES REGISTERED");
 
-  /* ---------------------------------
-     UPDATE CURRENT USER
-     PATCH /api/users/me
-  ---------------------------------- */
   app.patch(
     "/api/users/me",
     requireAuth,
