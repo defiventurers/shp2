@@ -6,11 +6,13 @@ import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
 /**
- * One-time CSV import for Indian medicines dataset
- * REPLACES old medicine seed data
+ * SAFE CSV IMPORT
+ * - DOES NOT delete existing medicines
+ * - ONLY inserts new ones
+ * - FK-safe for existing orders
  */
 export async function importMedicinesFromCSV() {
-  console.log("📦 Starting CSV medicine import...");
+  console.log("📦 Starting CSV medicine import (SAFE MODE)...");
 
   const csvPath = path.join(
     process.cwd(),
@@ -24,21 +26,21 @@ export async function importMedicinesFromCSV() {
     return;
   }
 
-  /**
-   * 🔥 STEP 1: Clear existing medicines ONCE
-   */
-  const count = await db
-    .select({ count: medicines.id })
-    .from(medicines);
-
-  if (count.length > 0) {
-    console.log("🧹 Clearing existing medicines...");
-    await db.delete(medicines);
-  }
-
-  console.log("📥 Importing medicines from CSV...");
+  console.log("📥 Importing medicines from CSV (no deletes)");
 
   const categoryCache = new Map<string, string>();
+  const existingMedicineNames = new Set<string>();
+
+  // Load existing medicine names once
+  const existing = await db.query.medicines.findMany({
+    columns: { name: true },
+  });
+
+  existing.forEach((m) => {
+    if (m.name) {
+      existingMedicineNames.add(m.name.toLowerCase());
+    }
+  });
 
   function normalizePrice(value: any): string {
     const num = Number(value);
@@ -58,6 +60,13 @@ export async function importMedicinesFromCSV() {
             null;
 
           if (!name) return;
+
+          const normalizedName = name.toLowerCase();
+          if (existingMedicineNames.has(normalizedName)) {
+            return; // skip duplicates
+          }
+
+          existingMedicineNames.add(normalizedName);
 
           const categoryName =
             row["category"] ||
@@ -123,7 +132,7 @@ export async function importMedicinesFromCSV() {
         }
       })
       .on("end", () => {
-        console.log("✅ CSV medicine import completed");
+        console.log("✅ CSV medicine import completed (SAFE)");
         resolve();
       })
       .on("error", (err) => {
