@@ -48,7 +48,7 @@ export default function StaffDashboard() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   /* -----------------------------
-     STAFF AUTH GUARD
+     STAFF AUTH GUARD (FRONTEND)
   ------------------------------ */
   useEffect(() => {
     const isStaff = localStorage.getItem("staff_auth") === "true";
@@ -58,15 +58,23 @@ export default function StaffDashboard() {
   }, [navigate]);
 
   /* -----------------------------
-     FETCH ALL ORDERS
+     FETCH ALL ORDERS (STAFF)
   ------------------------------ */
   async function fetchOrders() {
     try {
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/orders`,
-        { credentials: "include" }
+        {
+          credentials: "include",
+          headers: {
+            "x-staff-auth": "true", // ✅ REQUIRED
+          },
+        }
       );
-      if (!res.ok) return;
+
+      if (!res.ok) {
+        throw new Error();
+      }
 
       const data = await res.json();
       setOrders(data);
@@ -83,7 +91,7 @@ export default function StaffDashboard() {
   }, []);
 
   /* -----------------------------
-     UPDATE ORDER STATUS
+     UPDATE ORDER STATUS (STAFF)
   ------------------------------ */
   async function updateStatus(orderId: string, status: string) {
     setUpdatingId(orderId);
@@ -92,13 +100,18 @@ export default function StaffDashboard() {
         `${import.meta.env.VITE_API_URL}/api/orders/${orderId}/status`,
         {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-staff-auth": "true", // ✅ REQUIRED
+          },
           credentials: "include",
           body: JSON.stringify({ status }),
         }
       );
 
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        throw new Error();
+      }
 
       await fetchOrders();
       toast({ title: "Order status updated" });
