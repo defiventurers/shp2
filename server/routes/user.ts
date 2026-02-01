@@ -38,9 +38,9 @@ export function registerUserRoutes(app: Express) {
           user: {
             id: updated.id,
             name: updated.firstName,
+            email: updated.email,
             phone: updated.phone,
             address: updated.address,
-            email: updated.email,
           },
         });
       } catch (err) {
