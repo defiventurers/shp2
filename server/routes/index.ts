@@ -1,7 +1,7 @@
 import type { Express } from "express";
 
 import { registerAuthRoutes } from "./auth";
-import { registerUserRoutes } from "./users"; // ✅ THIS WAS MISSING EARLIER
+import { registerUserRoutes } from "./users"; // ✅ MUST MATCH FILE NAME
 import { registerMedicineRoutes } from "./medicines";
 import { registerCategoryRoutes } from "./categories";
 import { registerOrderRoutes } from "./orders";
