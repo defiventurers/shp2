@@ -6,16 +6,11 @@ import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
 /**
- * ✅ ABSOLUTE, RENDER-SAFE PATH
- * process.cwd() === /opt/render/project/src
- * CSV lives in: /opt/render/project/src/server/data
+ * ✅ FINAL, CORRECT LOCATION
+ * Your CSV lives in /data (repo root level)
+ * Render runtime: /opt/render/project/src/data
  */
-const DATA_DIR = path.resolve(
-  process.cwd(),
-  "server",
-  "data"
-);
-
+const DATA_DIR = path.resolve(process.cwd(), "data");
 const MAX_MEDICINES = 50_000;
 
 export async function importMedicinesFromCSV() {
@@ -23,7 +18,7 @@ export async function importMedicinesFromCSV() {
   console.log("📁 DATA_DIR resolved to:", DATA_DIR);
 
   if (!fs.existsSync(DATA_DIR)) {
-    console.error("❌ server/data directory NOT FOUND");
+    console.error("❌ data directory NOT FOUND");
     return;
   }
 
@@ -32,7 +27,7 @@ export async function importMedicinesFromCSV() {
     .filter((f) => f.endsWith(".csv") || f.endsWith(".csv.gz"));
 
   if (files.length === 0) {
-    console.error("❌ No CSV files found in server/data");
+    console.error("❌ No CSV files found in /data");
     return;
   }
 
@@ -41,11 +36,10 @@ export async function importMedicinesFromCSV() {
 
   console.log("📥 Using CSV file:", filePath);
 
-  // 🔥 wipe medicines only
+  // ⚠️ wipe ONLY medicines
   await db.delete(medicines);
   console.log("🧨 Wiped medicines table");
 
-  // categories
   const categoryRows = await db.select().from(categories);
   const categoryMap = new Map<string, string>();
   categoryRows.forEach((c) =>
@@ -72,7 +66,7 @@ export async function importMedicinesFromCSV() {
             return;
           }
 
-          // ✅ CORRECT COLUMN MAPPING (INDIA DATASET)
+          // ✅ INDIA DATASET FIELD MAPPING
           const name =
             row["Drug_Name"] ||
             row["Brand_Name"] ||
