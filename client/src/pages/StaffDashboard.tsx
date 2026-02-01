@@ -62,7 +62,7 @@ export default function StaffDashboard() {
   /* -----------------------------
      FETCH ORDERS
   ------------------------------ */
-  async function fetchOrders() {
+  async function fetchOrders(silent = false) {
     try {
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/orders`,
@@ -71,19 +71,31 @@ export default function StaffDashboard() {
           headers: { "x-staff-auth": "true" },
         }
       );
+
       if (!res.ok) throw new Error();
       const data = await res.json();
       setOrders(data);
     } catch {
-      toast({
-        title: "Failed to load orders",
-        variant: "destructive",
-      });
+      if (!silent) {
+        toast({
+          title: "Failed to load orders",
+          variant: "destructive",
+        });
+      }
     }
   }
 
+  /* -----------------------------
+     INITIAL LOAD + AUTO REFRESH
+  ------------------------------ */
   useEffect(() => {
     fetchOrders();
+
+    const interval = setInterval(() => {
+      fetchOrders(true); // 🔁 silent refresh every 60s
+    }, 60_000);
+
+    return () => clearInterval(interval);
   }, []);
 
   /* -----------------------------
@@ -106,7 +118,7 @@ export default function StaffDashboard() {
       );
 
       if (!res.ok) throw new Error();
-      await fetchOrders();
+      await fetchOrders(true);
       toast({ title: "Order status updated" });
     } catch {
       toast({
