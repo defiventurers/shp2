@@ -67,7 +67,7 @@ export default function StaffDashboard() {
         {
           credentials: "include",
           headers: {
-            "x-staff-auth": "true", // ✅ REQUIRED
+            "x-staff-auth": "true",
           },
         }
       );
@@ -102,7 +102,7 @@ export default function StaffDashboard() {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            "x-staff-auth": "true", // ✅ REQUIRED
+            "x-staff-auth": "true",
           },
           credentials: "include",
           body: JSON.stringify({ status }),
@@ -131,140 +131,150 @@ export default function StaffDashboard() {
   }
 
   return (
-    <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
-      <h1 className="text-lg font-semibold flex items-center gap-2">
-        <Shield className="w-5 h-5 text-green-600" />
-        Staff Dashboard
-      </h1>
+    <div className="min-h-screen max-w-lg mx-auto">
+      {/* 🟢 STAFF MODE BANNER */}
+      <div className="sticky top-0 z-50 bg-green-50 border-b border-green-200 px-4 py-2 flex items-center gap-2">
+        <Shield className="w-4 h-4 text-green-700" />
+        <span className="text-xs font-medium text-green-800">
+          Staff / Pharmacist Mode
+        </span>
+      </div>
 
-      {/* =============================
-         ORDERS LIST
-      ============================== */}
-      {orders.length === 0 ? (
-        <Card className="p-4 text-sm text-muted-foreground">
-          No orders yet.
-        </Card>
-      ) : (
-        orders.map((order) => {
-          const isOpen = expandedId === order.id;
-          const currentIndex = STATUS_FLOW.indexOf(order.status);
+      <div className="p-4 space-y-6">
+        <h1 className="text-lg font-semibold flex items-center gap-2">
+          <Shield className="w-5 h-5 text-green-600" />
+          Staff Dashboard
+        </h1>
 
-          return (
-            <Card key={order.id} className="p-3 space-y-3">
-              {/* HEADER */}
-              <div
-                className="flex items-center justify-between cursor-pointer"
-                onClick={() =>
-                  setExpandedId(isOpen ? null : order.id)
-                }
-              >
-                <div>
-                  <p className="text-sm font-medium">
-                    #{order.orderNumber}
-                  </p>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    {order.deliveryType}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">
-                    ₹{Number(order.total).toFixed(0)}
-                  </span>
-                  {isOpen ? <ChevronUp /> : <ChevronDown />}
-                </div>
-              </div>
+        {/* =============================
+           ORDERS LIST
+        ============================== */}
+        {orders.length === 0 ? (
+          <Card className="p-4 text-sm text-muted-foreground">
+            No orders yet.
+          </Card>
+        ) : (
+          orders.map((order) => {
+            const isOpen = expandedId === order.id;
+            const currentIndex = STATUS_FLOW.indexOf(order.status);
 
-              {/* EXPANDED */}
-              {isOpen && (
-                <div className="space-y-3">
-                  {/* CUSTOMER */}
-                  <div className="text-sm space-y-1">
-                    <p>
-                      <strong>{order.customerName}</strong>
+            return (
+              <Card key={order.id} className="p-3 space-y-3">
+                {/* HEADER */}
+                <div
+                  className="flex items-center justify-between cursor-pointer"
+                  onClick={() =>
+                    setExpandedId(isOpen ? null : order.id)
+                  }
+                >
+                  <div>
+                    <p className="text-sm font-medium">
+                      #{order.orderNumber}
                     </p>
-                    <p className="flex items-center gap-1">
-                      <Phone size={14} />
-                      {order.customerPhone}
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {order.deliveryType}
                     </p>
-                    {order.deliveryType === "delivery" && (
-                      <p className="flex items-center gap-1">
-                        <Truck size={14} />
-                        {order.deliveryAddress}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">
+                      ₹{Number(order.total).toFixed(0)}
+                    </span>
+                    {isOpen ? <ChevronUp /> : <ChevronDown />}
+                  </div>
+                </div>
+
+                {/* EXPANDED */}
+                {isOpen && (
+                  <div className="space-y-3">
+                    {/* CUSTOMER */}
+                    <div className="text-sm space-y-1">
+                      <p>
+                        <strong>{order.customerName}</strong>
                       </p>
-                    )}
-                  </div>
+                      <p className="flex items-center gap-1">
+                        <Phone size={14} />
+                        {order.customerPhone}
+                      </p>
+                      {order.deliveryType === "delivery" && (
+                        <p className="flex items-center gap-1">
+                          <Truck size={14} />
+                          {order.deliveryAddress}
+                        </p>
+                      )}
+                    </div>
 
-                  {/* ITEMS */}
-                  <div className="border-t pt-2 space-y-1">
-                    {order.items.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="flex justify-between text-sm"
-                      >
-                        <span>
-                          {item.medicineName} × {item.quantity}
-                        </span>
-                        <span>
-                          ₹{Number(item.price).toFixed(0)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* STATUS TIMELINE */}
-                  <div className="border-t pt-3">
-                    <p className="text-xs font-medium mb-2">
-                      Order Status
-                    </p>
-                    <div className="flex justify-between text-[10px]">
-                      {STATUS_FLOW.map((step, idx) => (
+                    {/* ITEMS */}
+                    <div className="border-t pt-2 space-y-1">
+                      {order.items.map((item, idx) => (
                         <div
-                          key={step}
-                          className={`flex-1 text-center ${
-                            idx < currentIndex
-                              ? "text-green-600"
-                              : idx === currentIndex
-                              ? "text-blue-600 font-semibold"
-                              : "text-muted-foreground"
-                          }`}
+                          key={idx}
+                          className="flex justify-between text-sm"
                         >
-                          {step}
+                          <span>
+                            {item.medicineName} × {item.quantity}
+                          </span>
+                          <span>
+                            ₹{Number(item.price).toFixed(0)}
+                          </span>
                         </div>
                       ))}
                     </div>
-                  </div>
 
-                  {/* STATUS CONTROL */}
-                  <div className="pt-2">
-                    <select
-                      className="w-full border rounded-md p-2 text-sm"
-                      value={order.status}
-                      disabled={updatingId === order.id}
-                      onChange={(e) =>
-                        updateStatus(order.id, e.target.value)
-                      }
-                    >
-                      {STATUS_FLOW.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-            </Card>
-          );
-        })
-      )}
+                    {/* STATUS TIMELINE */}
+                    <div className="border-t pt-3">
+                      <p className="text-xs font-medium mb-2">
+                        Order Status
+                      </p>
+                      <div className="flex justify-between text-[10px]">
+                        {STATUS_FLOW.map((step, idx) => (
+                          <div
+                            key={step}
+                            className={`flex-1 text-center ${
+                              idx < currentIndex
+                                ? "text-green-600"
+                                : idx === currentIndex
+                                ? "text-blue-600 font-semibold"
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {step}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
-      <Button
-        variant="destructive"
-        className="w-full"
-        onClick={logout}
-      >
-        Logout Staff
-      </Button>
+                    {/* STATUS CONTROL */}
+                    <div className="pt-2">
+                      <select
+                        className="w-full border rounded-md p-2 text-sm"
+                        value={order.status}
+                        disabled={updatingId === order.id}
+                        onChange={(e) =>
+                          updateStatus(order.id, e.target.value)
+                        }
+                      >
+                        {STATUS_FLOW.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })
+        )}
+
+        <Button
+          variant="destructive"
+          className="w-full"
+          onClick={logout}
+        >
+          Logout Staff
+        </Button>
+      </div>
     </div>
   );
 }
