@@ -7,7 +7,7 @@ import {
   ChevronUp,
   Phone,
   Truck,
-  MessageCircle,
+  Mail,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ type Order = {
   deliveryAddress?: string | null;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string | null;
   createdAt: string;
   items: OrderItem[];
 };
@@ -47,7 +48,6 @@ export default function StaffDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [showPendingOnly, setShowPendingOnly] = useState(false);
 
   /* -----------------------------
      STAFF AUTH GUARD
@@ -60,9 +60,9 @@ export default function StaffDashboard() {
   }, [navigate]);
 
   /* -----------------------------
-     FETCH ORDERS
+     FETCH ALL ORDERS (STAFF)
   ------------------------------ */
-  async function fetchOrders(silent = false) {
+  async function fetchOrders() {
     try {
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/orders`,
@@ -73,33 +73,23 @@ export default function StaffDashboard() {
       );
 
       if (!res.ok) throw new Error();
-      const data = await res.json();
-      setOrders(data);
+      setOrders(await res.json());
     } catch {
-      if (!silent) {
-        toast({
-          title: "Failed to load orders",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Failed to load orders",
+        variant: "destructive",
+      });
     }
   }
 
-  /* -----------------------------
-     INITIAL LOAD + AUTO REFRESH
-  ------------------------------ */
   useEffect(() => {
     fetchOrders();
-
-    const interval = setInterval(() => {
-      fetchOrders(true); // 🔁 silent refresh every 60s
-    }, 60_000);
-
+    const interval = setInterval(fetchOrders, 60000); // 🔁 auto refresh
     return () => clearInterval(interval);
   }, []);
 
   /* -----------------------------
-     UPDATE STATUS
+     UPDATE ORDER STATUS
   ------------------------------ */
   async function updateStatus(orderId: string, status: string) {
     setUpdatingId(orderId);
@@ -108,17 +98,17 @@ export default function StaffDashboard() {
         `${import.meta.env.VITE_API_URL}/api/orders/${orderId}/status`,
         {
           method: "PATCH",
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
             "x-staff-auth": "true",
           },
-          credentials: "include",
           body: JSON.stringify({ status }),
         }
       );
 
       if (!res.ok) throw new Error();
-      await fetchOrders(true);
+      await fetchOrders();
       toast({ title: "Order status updated" });
     } catch {
       toast({
@@ -135,194 +125,130 @@ export default function StaffDashboard() {
     navigate("/staff/login");
   }
 
-  const pendingCount = orders.filter(
-    (o) => o.status === "pending"
-  ).length;
-
-  const visibleOrders = showPendingOnly
-    ? orders.filter((o) => o.status === "pending")
-    : orders;
-
   return (
-    <div className="min-h-screen max-w-lg mx-auto">
-      {/* 🟢 STAFF MODE HEADER */}
-      <div className="sticky top-0 z-50 bg-green-50 border-b border-green-200 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-green-700" />
-          <span className="text-xs font-medium text-green-800">
-            Staff / Pharmacist Mode
-          </span>
-        </div>
+    <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
+      <h1 className="text-lg font-semibold flex items-center gap-2">
+        <Shield className="w-5 h-5 text-green-600" />
+        Staff Dashboard
+      </h1>
 
-        {pendingCount > 0 && (
-          <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-            {pendingCount} pending
-          </span>
-        )}
-      </div>
+      {/* =============================
+         ORDERS
+      ============================== */}
+      {orders.length === 0 ? (
+        <Card className="p-4 text-sm text-muted-foreground">
+          No orders yet.
+        </Card>
+      ) : (
+        orders.map((order) => {
+          const isOpen = expandedId === order.id;
+          const currentIndex = STATUS_FLOW.indexOf(order.status);
 
-      <div className="p-4 space-y-4">
-        {/* FILTER */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={() => setShowPendingOnly((p) => !p)}
-        >
-          {showPendingOnly ? "Show All Orders" : "Show Pending Only"}
-        </Button>
-
-        {/* ORDERS */}
-        {visibleOrders.length === 0 ? (
-          <Card className="p-4 text-sm text-muted-foreground">
-            No orders to show.
-          </Card>
-        ) : (
-          visibleOrders.map((order) => {
-            const isOpen = expandedId === order.id;
-            const currentIndex = STATUS_FLOW.indexOf(order.status);
-            const isDelivery = order.deliveryType === "delivery";
-
-            return (
-              <Card
-                key={order.id}
-                className={`p-3 space-y-3 border ${
-                  isDelivery ? "bg-amber-50 border-amber-200" : ""
-                }`}
+          return (
+            <Card
+              key={order.id}
+              className={`p-3 space-y-3 ${
+                order.deliveryType === "delivery"
+                  ? "border-l-4 border-green-600"
+                  : ""
+              }`}
+            >
+              {/* HEADER */}
+              <div
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() =>
+                  setExpandedId(isOpen ? null : order.id)
+                }
               >
-                {/* HEADER */}
-                <div
-                  className="flex items-center justify-between cursor-pointer"
-                  onClick={() =>
-                    setExpandedId(isOpen ? null : order.id)
-                  }
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      #{order.orderNumber}
-                    </p>
-                    <p className="text-xs text-muted-foreground capitalize flex items-center gap-1">
-                      {isDelivery && (
-                        <Truck className="w-3 h-3 text-amber-600" />
-                      )}
-                      {order.deliveryType}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">
-                      ₹{Number(order.total).toFixed(0)}
-                    </span>
-                    {isOpen ? <ChevronUp /> : <ChevronDown />}
-                  </div>
+                <div>
+                  <p className="text-sm font-medium">
+                    #{order.orderNumber}
+                  </p>
+                  <p className="text-xs text-muted-foreground capitalize">
+                    {order.deliveryType}
+                  </p>
                 </div>
 
-                {/* EXPANDED */}
-                {isOpen && (
-                  <div className="space-y-3">
-                    {/* CUSTOMER ACTIONS */}
-                    <div className="flex gap-2">
-                      <a
-                        href={`tel:${order.customerPhone}`}
-                        className="flex-1"
-                      >
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full flex items-center gap-2"
-                        >
-                          <Phone size={14} />
-                          Call
-                        </Button>
-                      </a>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">
+                    ₹{Number(order.total).toFixed(0)}
+                  </span>
+                  {isOpen ? <ChevronUp /> : <ChevronDown />}
+                </div>
+              </div>
 
-                      <a
-                        href={`https://wa.me/91${order.customerPhone}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1"
-                      >
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full flex items-center gap-2"
-                        >
-                          <MessageCircle size={14} />
-                          WhatsApp
-                        </Button>
-                      </a>
-                    </div>
+              {/* EXPANDED */}
+              {isOpen && (
+                <div className="space-y-4">
+                  {/* CUSTOMER INFO */}
+                  <div className="bg-muted/50 rounded-md p-3 text-sm space-y-1">
+                    <p>
+                      <strong>{order.customerName}</strong>
+                    </p>
+                    <p className="flex items-center gap-1">
+                      <Phone size={14} /> {order.customerPhone}
+                    </p>
 
-                    {/* ITEMS */}
-                    <div className="border-t pt-2 space-y-1">
-                      {order.items.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="flex justify-between text-sm"
-                        >
-                          <span>
-                            {item.medicineName} × {item.quantity}
-                          </span>
-                          <span>
-                            ₹{Number(item.price).toFixed(0)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* STATUS TIMELINE */}
-                    <div className="border-t pt-3">
-                      <p className="text-xs font-medium mb-2">
-                        Order Status
+                    {order.customerEmail && (
+                      <p className="flex items-center gap-1">
+                        <Mail size={14} /> {order.customerEmail}
                       </p>
-                      <div className="flex justify-between text-[10px]">
-                        {STATUS_FLOW.map((step, idx) => (
-                          <div
-                            key={step}
-                            className={`flex-1 text-center ${
-                              idx < currentIndex
-                                ? "text-green-600"
-                                : idx === currentIndex
-                                ? "text-blue-600 font-semibold"
-                                : "text-muted-foreground"
-                            }`}
-                          >
-                            {step}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    )}
 
-                    {/* STATUS CONTROL */}
-                    <select
-                      className="w-full border rounded-md p-2 text-sm"
-                      value={order.status}
-                      disabled={updatingId === order.id}
-                      onChange={(e) =>
-                        updateStatus(order.id, e.target.value)
-                      }
-                    >
-                      {STATUS_FLOW.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
+                    {order.deliveryType === "delivery" &&
+                      order.deliveryAddress && (
+                        <p className="flex items-center gap-1">
+                          <Truck size={14} /> {order.deliveryAddress}
+                        </p>
+                      )}
                   </div>
-                )}
-              </Card>
-            );
-          })
-        )}
 
-        <Button
-          variant="destructive"
-          className="w-full"
-          onClick={logout}
-        >
-          Logout Staff
-        </Button>
-      </div>
+                  {/* ITEMS */}
+                  <div className="border-t pt-2 space-y-1">
+                    {order.items.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex justify-between text-sm"
+                      >
+                        <span>
+                          {item.medicineName} × {item.quantity}
+                        </span>
+                        <span>
+                          ₹{Number(item.price).toFixed(0)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* STATUS CONTROL */}
+                  <select
+                    className="w-full border rounded-md p-2 text-sm"
+                    value={order.status}
+                    disabled={updatingId === order.id}
+                    onChange={(e) =>
+                      updateStatus(order.id, e.target.value)
+                    }
+                  >
+                    {STATUS_FLOW.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </Card>
+          );
+        })
+      )}
+
+      <Button
+        variant="destructive"
+        className="w-full"
+        onClick={logout}
+      >
+        Logout Staff
+      </Button>
     </div>
   );
 }
