@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { categories, medicines } from "@shared/schema";
+import { categories } from "@shared/schema";
 
 const medicineCategories = [
   { name: "Pain Relief", icon: "pill" },
@@ -14,10 +14,6 @@ const medicineCategories = [
   { name: "First Aid", icon: "bandage" },
 ];
 
-const medicineData = [
-  /* 🔴 KEEP YOUR ENTIRE medicineData ARRAY EXACTLY AS IT IS 🔴 */
-];
-
 export async function seedDatabase() {
   console.log("Seeding database...");
 
@@ -29,42 +25,13 @@ export async function seedDatabase() {
       return;
     }
 
-    // Insert categories
-    const categoryMap = new Map<string, string>();
+    // ✅ INSERT ONLY CATEGORIES
     for (const cat of medicineCategories) {
-      const [inserted] = await db
-        .insert(categories)
-        .values(cat)
-        .returning({ id: categories.id });
-
-      categoryMap.set(cat.name, inserted.id);
+      await db.insert(categories).values(cat);
     }
 
     console.log(`Inserted ${medicineCategories.length} categories`);
-
-    // Insert medicines
-    for (const med of medicineData) {
-      const categoryId = categoryMap.get(med.category);
-      if (!categoryId) continue;
-
-      await db.insert(medicines).values({
-        name: med.name,
-        genericName: med.genericName,
-        manufacturer: med.manufacturer,
-        categoryId,
-        dosage: med.dosage,
-        form: med.form,
-        packSize: med.packSize,
-        price: med.price.toString(),
-        mrp: med.mrp.toString(),
-        stock: med.stock,
-        requiresPrescription: med.requiresPrescription,
-        isScheduleH: med.isScheduleH,
-      });
-    }
-
-    console.log(`Inserted ${medicineData.length} medicines`);
-    console.log("Database seeded successfully!");
+    console.log("Database seeded successfully (categories only)");
   } catch (error) {
     console.error("Error seeding database:", error);
     throw error;
