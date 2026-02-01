@@ -16,7 +16,14 @@ type Order = {
 
 export default function Profile() {
   const { user } = useAuth();
-  const { prescriptions } = useCartContext();
+  const { prescriptions, refreshPrescriptions } = useCartContext();
+
+  /* -----------------------------
+     FORCE REFRESH ON OPEN
+  ------------------------------ */
+  useEffect(() => {
+    refreshPrescriptions();
+  }, [refreshPrescriptions]);
 
   /* -----------------------------
      Fetch Orders
@@ -86,7 +93,7 @@ export default function Profile() {
             >
               <div>
                 <p className="text-sm font-medium">
-                  {user.name || "Prescription"} –{" "}
+                  {user.name?.split(" ")[0] || "Prescription"} –{" "}
                   {new Date(p.createdAt).toLocaleDateString("en-GB")}
                 </p>
                 <p className="text-xs text-muted-foreground">
