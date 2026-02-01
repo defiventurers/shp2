@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Trash2, Edit3, Check, X } from "lucide-react";
+import {
+  FileText,
+  Trash2,
+  Edit3,
+  Check,
+  X,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,12 +17,20 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useCartContext } from "@/context/CartContext";
 
+type OrderItem = {
+  medicineName: string;
+  quantity: number;
+  price: string;
+  total: string;
+};
+
 type Order = {
   id: string;
   orderNumber: string;
   status: string;
   total: string;
   createdAt: string;
+  items: OrderItem[];
 };
 
 export default function Profile() {
@@ -24,9 +40,10 @@ export default function Profile() {
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   /* -----------------------------
-     Fetch Orders (read-only for now)
+     Fetch Orders (WITH ITEMS)
   ------------------------------ */
   const { data: orders = [] } = useQuery<Order[]>({
     queryKey: ["/api/orders"],
@@ -109,8 +126,12 @@ export default function Profile() {
          USER INFO
       ============================== */}
       <Card className="p-4 space-y-2">
-        <p className="text-sm"><strong>Name:</strong> {user.name}</p>
-        <p className="text-sm"><strong>Email:</strong> {user.email}</p>
+        <p className="text-sm">
+          <strong>Name:</strong> {user.name}
+        </p>
+        <p className="text-sm">
+          <strong>Email:</strong> {user.email}
+        </p>
       </Card>
 
       {/* =============================
@@ -129,7 +150,6 @@ export default function Profile() {
         ) : (
           prescriptions.map((p) => {
             const displayName =
-              (p.extractedMedicines as any)?.meta?.name ||
               `${user.name || "Prescription"} – ${new Date(
                 p.createdAt
               ).toLocaleDateString("en-GB")}`;
@@ -139,7 +159,6 @@ export default function Profile() {
                 key={p.id}
                 className="border rounded-md p-3 space-y-2"
               >
-                {/* NAME ROW */}
                 {editingId === p.id ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -167,7 +186,9 @@ export default function Profile() {
                 ) : (
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium">{displayName}</p>
+                      <p className="text-sm font-medium">
+                        {displayName}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {p.imageUrls.length} page(s)
                       </p>
@@ -195,7 +216,6 @@ export default function Profile() {
                   </div>
                 )}
 
-                {/* IMAGE PREVIEW */}
                 <div className="flex gap-2 overflow-x-auto">
                   {p.imageUrls.map((url, idx) => (
                     <img
@@ -212,7 +232,7 @@ export default function Profile() {
       </Card>
 
       {/* =============================
-         ORDERS (READ ONLY FOR NOW)
+         ORDERS (EXPANDABLE)
       ============================== */}
       <Card className="p-4 space-y-3">
         <span className="font-medium">Orders</span>
@@ -222,24 +242,61 @@ export default function Profile() {
             No orders placed yet.
           </p>
         ) : (
-          orders.map((o) => (
-            <div
-              key={o.id}
-              className="flex justify-between border rounded-md p-2"
-            >
-              <div>
-                <p className="text-sm font-medium">
-                  #{o.orderNumber}
-                </p>
-                <p className="text-xs text-muted-foreground capitalize">
-                  {o.status}
-                </p>
+          orders.map((o) => {
+            const expanded = expandedOrderId === o.id;
+
+            return (
+              <div
+                key={o.id}
+                className="border rounded-md p-3 space-y-2"
+              >
+                <button
+                  className="flex items-center justify-between w-full"
+                  onClick={() =>
+                    setExpandedOrderId(expanded ? null : o.id)
+                  }
+                >
+                  <div className="text-left">
+                    <p className="text-sm font-medium">
+                      #{o.orderNumber}
+                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {o.status}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">
+                      ₹{Number(o.total).toFixed(0)}
+                    </span>
+                    {expanded ? (
+                      <ChevronUp size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
+                  </div>
+                </button>
+
+                {expanded && (
+                  <div className="pt-2 space-y-2 border-t">
+                    {o.items.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="flex justify-between text-sm"
+                      >
+                        <div>
+                          {item.medicineName} × {item.quantity}
+                        </div>
+                        <div>
+                          ₹{Number(item.total).toFixed(0)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <p className="text-sm font-semibold">
-                ₹{Number(o.total).toFixed(0)}
-              </p>
-            </div>
-          ))
+            );
+          })
         )}
       </Card>
     </div>
