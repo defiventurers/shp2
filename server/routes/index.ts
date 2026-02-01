@@ -48,6 +48,9 @@ app.get("/api/debug/auth", (req: Request, res: Response) => {
   });
 });
 
+/* -----------------------------
+   HEALTH
+------------------------------ */
 app.get("/api/__probe", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -60,7 +63,7 @@ app.get("/api/__probe", (_req, res) => {
     await seedDatabase();
     await migratePrescriptions();
   } catch (err) {
-    console.error("Startup task failed:", err);
+    console.error("Startup error:", err);
   }
 
   console.log("🌤️ Cloudinary configured:", {
@@ -71,21 +74,18 @@ app.get("/api/__probe", (_req, res) => {
 
   // ✅ REGISTER ALL ROUTES
   registerAuthRoutes(app);
-  registerUserRoutes(app); // ✅ THIS WAS MISSING
+  registerUserRoutes(app);            // ✅ THIS FIXES PROFILE SAVE
   registerMedicineRoutes(app);
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
 
-  /* -----------------------------
-     ERROR HANDLER
-  ------------------------------ */
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("UNHANDLED ERROR:", err);
     res.status(500).json({ error: "Internal Server Error" });
   });
 
-  const port = parseInt(process.env.PORT || "10000", 10);
+  const port = Number(process.env.PORT || 10000);
 
   http.createServer(app).listen(port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${port}`);
