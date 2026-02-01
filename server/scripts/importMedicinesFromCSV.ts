@@ -5,14 +5,25 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
-const DATA_DIR = path.join(process.cwd(), "server", "data");
-const MAX_MEDICINES = 50_000; // safe cap for Render free tier
+/**
+ * ✅ ABSOLUTE, RENDER-SAFE PATH
+ * process.cwd() === /opt/render/project/src
+ * CSV lives in: /opt/render/project/src/server/data
+ */
+const DATA_DIR = path.resolve(
+  process.cwd(),
+  "server",
+  "data"
+);
+
+const MAX_MEDICINES = 50_000;
 
 export async function importMedicinesFromCSV() {
   console.log("📦 Starting CSV medicine import (SAFE LIMITED MODE)");
+  console.log("📁 DATA_DIR resolved to:", DATA_DIR);
 
   if (!fs.existsSync(DATA_DIR)) {
-    console.warn("⚠️ server/data directory not found, skipping import");
+    console.error("❌ server/data directory NOT FOUND");
     return;
   }
 
@@ -21,16 +32,16 @@ export async function importMedicinesFromCSV() {
     .filter((f) => f.endsWith(".csv") || f.endsWith(".csv.gz"));
 
   if (files.length === 0) {
-    console.warn("⚠️ No CSV files found in server/data, skipping import");
+    console.error("❌ No CSV files found in server/data");
     return;
   }
 
   const csvFile = files[0];
   const filePath = path.join(DATA_DIR, csvFile);
 
-  console.log("📥 Found CSV file:", csvFile);
+  console.log("📥 Using CSV file:", filePath);
 
-  // 🚨 wipe medicines ONLY
+  // 🔥 wipe medicines only
   await db.delete(medicines);
   console.log("🧨 Wiped medicines table");
 
@@ -61,7 +72,7 @@ export async function importMedicinesFromCSV() {
             return;
           }
 
-          // ✅ CORRECT COLUMN MAPPING (THIS IS THE FIX)
+          // ✅ CORRECT COLUMN MAPPING (INDIA DATASET)
           const name =
             row["Drug_Name"] ||
             row["Brand_Name"] ||
@@ -75,8 +86,7 @@ export async function importMedicinesFromCSV() {
             null;
 
           const categoryName =
-            row["Therapeutic_Class"] ||
-            "General";
+            row["Therapeutic_Class"] || "General";
 
           const categoryId =
             categoryMap.get(categoryName.toLowerCase()) ||
@@ -103,7 +113,7 @@ export async function importMedicinesFromCSV() {
             console.log(`➕ Inserted ${inserted} medicines`);
           }
         } catch {
-          // silently skip bad rows
+          // skip bad rows
         }
       })
       .on("end", () => {
