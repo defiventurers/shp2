@@ -24,11 +24,23 @@ const ALLOWED_STATUSES = [
   "delivered",
 ];
 
+/* =========================
+   STAFF AUTH GUARD (TEMP)
+========================= */
+function requireStaff(req: AuthRequest, res: Response): boolean {
+  const staffHeader = req.headers["x-staff-auth"];
+  if (staffHeader !== "true") {
+    res.status(403).json({ error: "Staff access only" });
+    return false;
+  }
+  return true;
+}
+
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
   /* =========================
-     CREATE ORDER
+     CREATE ORDER (CUSTOMER)
   ========================= */
   app.post(
     "/api/orders",
@@ -125,7 +137,7 @@ export function registerOrderRoutes(app: Express) {
   });
 
   /* =========================
-     UPDATE ORDER STATUS (STAFF)
+     UPDATE ORDER STATUS (STAFF ONLY)
      PATCH /api/orders/:id/status
   ========================= */
   app.patch(
@@ -133,6 +145,9 @@ export function registerOrderRoutes(app: Express) {
     requireAuth,
     async (req: AuthRequest, res: Response) => {
       try {
+        // 🔒 STAFF GUARD
+        if (!requireStaff(req, res)) return;
+
         const { id } = req.params;
         const { status } = req.body;
 
