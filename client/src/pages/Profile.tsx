@@ -34,6 +34,22 @@ type Order = {
   items?: OrderItem[];
 };
 
+const STATUS_STEPS = [
+  "pending",
+  "confirmed",
+  "processing",
+  "ready",
+  "delivered",
+];
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Placed",
+  confirmed: "Confirmed",
+  processing: "Processing",
+  ready: "Ready",
+  delivered: "Delivered",
+};
+
 export default function Profile() {
   const { user } = useAuth();
   const { prescriptions, refreshPrescriptions } = useCartContext();
@@ -283,7 +299,10 @@ export default function Profile() {
                         hidden
                         onChange={(e) => {
                           const files = Array.from(e.target.files || []);
-                          addImages(p.id, files.slice(0, 5 - p.imageUrls.length));
+                          addImages(
+                            p.id,
+                            files.slice(0, 5 - p.imageUrls.length)
+                          );
                         }}
                       />
                       <Button
@@ -303,7 +322,7 @@ export default function Profile() {
       </Card>
 
       {/* =============================
-         ORDERS
+         ORDERS + STATUS TIMELINE
       ============================== */}
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -313,6 +332,7 @@ export default function Profile() {
 
         {orders.map((order) => {
           const isOpen = expandedOrderId === order.id;
+          const currentIndex = STATUS_STEPS.indexOf(order.status);
 
           return (
             <div key={order.id} className="border rounded-md p-2 space-y-2">
@@ -338,22 +358,58 @@ export default function Profile() {
                 </div>
               </div>
 
-              {isOpen && order.items && (
-                <div className="pt-2 space-y-1">
-                  {order.items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between text-sm"
-                    >
-                      <span>
-                        {item.medicineName} × {item.quantity}
-                      </span>
-                      <span>
-                        ₹{Number(item.price).toFixed(0)}
-                      </span>
+              {isOpen && (
+                <>
+                  {/* STATUS TIMELINE */}
+                  <div className="flex justify-between items-center mt-3">
+                    {STATUS_STEPS.map((step, idx) => {
+                      const isDone = idx < currentIndex;
+                      const isCurrent = idx === currentIndex;
+
+                      return (
+                        <div
+                          key={step}
+                          className="flex flex-col items-center flex-1"
+                        >
+                          <div
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs
+                              ${
+                                isDone
+                                  ? "bg-green-600 text-white"
+                                  : isCurrent
+                                  ? "bg-amber-500 text-white"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                          >
+                            {isDone ? "✓" : idx + 1}
+                          </div>
+                          <span className="text-[10px] mt-1 text-center">
+                            {STATUS_LABELS[step]}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ORDER ITEMS */}
+                  {order.items && (
+                    <div className="pt-3 space-y-1">
+                      {order.items.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex justify-between text-sm"
+                        >
+                          <span>
+                            {item.medicineName} × {item.quantity}
+                          </span>
+                          <span>
+                            ₹{Number(item.price).toFixed(0)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
           );
