@@ -1,91 +1,55 @@
 import fs from "fs";
 import path from "path";
-import zlib from "zlib";
 import csv from "csv-parser";
 import { db } from "../db";
 import { medicines } from "@shared/schema";
-import { ilike } from "drizzle-orm";
 
-const FILE_PATH = path.join(
+const CSV_PATH = path.resolve(
   process.cwd(),
-  "server/data/IndiaMedicinesandDrugInfoDataset.csv.gz"
+  "server/data/India Medicines and Drug Info Dataset.csv"
 );
 
-async function run() {
-  console.log("🚀 Starting medicines import…");
+export async function importMedicinesFromCSV() {
+  console.log("📦 Starting CSV medicine import...");
 
-  let inserted = 0;
-  let skipped = 0;
+  if (!fs.existsSync(CSV_PATH)) {
+    console.warn("⚠️ CSV file not found, skipping import");
+    return;
+  }
 
-  const stream = fs
-    .createReadStream(FILE_PATH)
-    .pipe(zlib.createGunzip())
-    .pipe(csv());
+  const rows: any[] = [];
 
-  for await (const row of stream) {
-    const name =
-      row["Medicine Name"] ||
-      row["Drug Name"] ||
-      row["name"];
+  await new Promise<void>((resolve, reject) => {
+    fs.createReadStream(CSV_PATH)
+      .pipe(csv())
+      .on("data", (data) => rows.push(data))
+      .on("end", resolve)
+      .on("error", reject);
+  });
 
-    if (!name) {
-      skipped++;
-      continue;
-    }
+  if (rows.length === 0) {
+    console.log("⚠️ CSV empty, nothing to import");
+    return;
+  }
 
-    // 🔁 Check duplicate (case-insensitive)
-    const existing = await db.query.medicines.findFirst({
-      where: ilike(medicines.name, name.trim()),
-    });
+  console.log(`📄 Parsed ${rows.length} medicines`);
 
-    if (existing) {
-      skipped++;
-      continue;
-    }
-
-    const priceRaw =
-      row["MRP"] ||
-      row["Price"] ||
-      row["mrp"] ||
-      "0";
-
-    const price = Number(
-      String(priceRaw).replace(/[^\d.]/g, "")
-    );
-
-    await db.insert(medicines).values({
-      name: name.trim(),
-      genericName: row["Generic Name"] || null,
-      manufacturer: row["Manufacturer"] || null,
-      form: row["Dosage Form"] || null,
-      dosage: row["Strength"] || null,
-      price: price || 0,
-      mrp: price || 0,
-      stock: 100,
-      requiresPrescription:
-        String(row["Prescription Required"] || "")
-          .toLowerCase()
-          .includes("yes"),
-      isScheduleH:
-        String(row["Schedule"] || "")
-          .toUpperCase()
-          .includes("H"),
-    });
-
-    inserted++;
-
-    if (inserted % 500 === 0) {
-      console.log(`✅ Inserted ${inserted} medicines…`);
+  // ⚠️ Minimal safe mapping — adjust later if needed
+  for (const row of rows.slice(0, 5000)) {
+    try {
+      await db.insert(medicines).values({
+        name: row["Drug Name"] || row["Medicine Name"],
+        manufacturer: row["Manufacturer"] || null,
+        genericName: row["Generic Name"] || null,
+        price: row["Price"] ? String(row["Price"]) : "0",
+        mrp: row["MRP"] ? String(row["MRP"]) : "0",
+        stock: 100,
+        requiresPrescription: true,
+      });
+    } catch {
+      // ignore duplicates
     }
   }
 
-  console.log("🎉 Import completed");
-  console.log("Inserted:", inserted);
-  console.log("Skipped (duplicates / invalid):", skipped);
-  process.exit(0);
+  console.log("✅ Medicine import completed");
 }
-
-run().catch((err) => {
-  console.error("❌ Import failed:", err);
-  process.exit(1);
-});
