@@ -7,12 +7,11 @@ import { medicines, categories } from "@shared/schema";
 
 /**
  * One-time CSV import for Indian medicines dataset
- * Safe to run on every startup (skips if data exists)
+ * REPLACES old medicine seed data
  */
 export async function importMedicinesFromCSV() {
   console.log("📦 Starting CSV medicine import...");
 
-  // ✅ EXACT PATH (matches your repo)
   const csvPath = path.join(
     process.cwd(),
     "server",
@@ -25,12 +24,19 @@ export async function importMedicinesFromCSV() {
     return;
   }
 
-  // ✅ Prevent duplicate imports
-  const existing = await db.query.medicines.findFirst();
-  if (existing) {
-    console.log("ℹ️ Medicines already exist, skipping CSV import");
-    return;
+  /**
+   * 🔥 STEP 1: Clear existing medicines ONCE
+   */
+  const count = await db
+    .select({ count: medicines.id })
+    .from(medicines);
+
+  if (count.length > 0) {
+    console.log("🧹 Clearing existing medicines...");
+    await db.delete(medicines);
   }
+
+  console.log("📥 Importing medicines from CSV...");
 
   const categoryCache = new Map<string, string>();
 
@@ -41,7 +47,7 @@ export async function importMedicinesFromCSV() {
 
   return new Promise<void>((resolve, reject) => {
     fs.createReadStream(csvPath)
-      .pipe(zlib.createGunzip()) // ✅ handle .gz
+      .pipe(zlib.createGunzip())
       .pipe(csv())
       .on("data", async (row) => {
         try {
