@@ -31,12 +31,16 @@ export default function Inventory() {
      Fetch medicines
   ------------------------------ */
   const {
-    data: medicines = [],
-    isLoading: medicinesLoading,
-  } = useQuery<MedicinesResponse>({
-    queryKey: ["/api/medicines"],
-    select: (res) => res.medicines,
-  });
+  data: medicines = [],
+  isLoading: medicinesLoading,
+} = useQuery<MedicinesResponse>({
+  queryKey: ["/api/medicines", 1],
+  queryFn: async () => {
+    const res = await fetch("/api/medicines?page=1&limit=50");
+    return res.json();
+  },
+  select: (res) => res.medicines,
+});
 
   /* -----------------------------
      Fetch categories
