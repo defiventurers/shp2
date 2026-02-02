@@ -3,12 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "npm install",
     "start": "npx tsx server/index.ts",
-    "import:medicines": "tsx server/scripts/importMedicinesFromCSV.ts",
-    "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "import:bangalore": "tsx server/scripts/importBangaloreInventory.ts"
   },
   "dependencies": {
     "express": "^4.21.2",
@@ -21,7 +17,7 @@
     "pg": "^8.16.3",
     "drizzle-orm": "^0.39.3",
     "drizzle-zod": "^0.7.0",
-    "tsx": "^4.20.5",
-    "csv-parser": "^3.0.0"
+    "csv-parser": "^3.0.0",
+    "tsx": "^4.20.5"
   }
 }
