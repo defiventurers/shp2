@@ -1,33 +1,37 @@
 import type { Express, Request, Response } from "express";
 import { importBangaloreInventory } from "../scripts/importBangaloreInventory";
 
-let isRunning = false;
-
+/**
+ * Admin-only routes for one-time / controlled imports
+ * NOTE: No auth for now (internal use only)
+ */
 export function registerAdminImportRoutes(app: Express) {
-  app.post("/api/admin/import/bangalore", async (_req: Request, res: Response) => {
-    if (isRunning) {
-      return res.status(409).json({
-        success: false,
-        message: "Import already running",
-      });
-    }
+  console.log("🛠️ ADMIN IMPORT ROUTES REGISTERED");
 
-    isRunning = true;
+  /**
+   * POST /api/admin/import/bangalore
+   * Imports Bangalore 45k inventory in SAFE batches
+   */
+  app.post(
+    "/api/admin/import/bangalore",
+    async (_req: Request, res: Response) => {
+      try {
+        console.log("🚀 Bangalore inventory import triggered via API");
 
-    try {
-      const result = await importBangaloreInventory();
-      res.json({
-        success: true,
-        ...result,
-      });
-    } catch (err: any) {
-      console.error("❌ Import failed:", err);
-      res.status(500).json({
-        success: false,
-        error: err.message,
-      });
-    } finally {
-      isRunning = false;
+        const result = await importBangaloreInventory();
+
+        res.json({
+          success: true,
+          message: "Bangalore inventory import completed",
+          ...result,
+        });
+      } catch (err) {
+        console.error("❌ Bangalore import failed:", err);
+        res.status(500).json({
+          success: false,
+          error: "Bangalore inventory import failed",
+        });
+      }
     }
-  });
+  );
 }
