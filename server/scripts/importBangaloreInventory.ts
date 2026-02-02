@@ -1,100 +1,82 @@
 import fs from "fs";
 import path from "path";
+import zlib from "zlib";
 import csv from "csv-parser";
 import { db } from "../db";
 import { medicines } from "@shared/schema";
 
 const DATA_DIR = path.join(process.cwd(), "server", "data");
-const FILE_NAME = "bangalore_inventory_45k_master.csv";
+const CSV_FILE = "bangalore_inventory_45k_master.csv";
+const MAX_ROWS = 45_000;
 
-// SAFE LIMITS FOR RENDER FREE
-const BATCH_SIZE = 9000;
+function isGzip(filePath: string): boolean {
+  const fd = fs.openSync(filePath, "r");
+  const buffer = Buffer.alloc(2);
+  fs.readSync(fd, buffer, 0, 2, 0);
+  fs.closeSync(fd);
+  return buffer[0] === 0x1f && buffer[1] === 0x8b;
+}
 
-export async function importMedicinesFromCSV() {
-  const offset = Number(process.env.IMPORT_OFFSET || 0);
-
-  const filePath = path.join(DATA_DIR, FILE_NAME);
+export async function importBangaloreInventory() {
+  const filePath = path.join(DATA_DIR, CSV_FILE);
 
   console.log("📦 Starting Bangalore inventory import");
-  console.log("📥 Using CSV:", FILE_NAME);
-  console.log("➡️ IMPORT_OFFSET:", offset);
 
   if (!fs.existsSync(filePath)) {
-    console.error("❌ CSV file not found:", filePath);
+    console.error("❌ CSV NOT FOUND:", filePath);
     return;
   }
 
-  // 🔥 ONLY CLEAR TABLE ON FIRST BATCH
-  if (offset === 0) {
-    console.log("🧨 Clearing existing medicines...");
-    await db.delete(medicines);
-  }
+  console.log("📥 Using CSV:", CSV_FILE);
 
-  let seen = 0;
+  await db.delete(medicines);
+  console.log("🧨 Medicines table cleared");
+
+  const fileStream = fs.createReadStream(filePath);
+  const stream = isGzip(filePath)
+    ? fileStream.pipe(zlib.createGunzip())
+    : fileStream;
+
   let inserted = 0;
-  let skipped = 0;
 
   return new Promise<void>((resolve, reject) => {
-    const stream = fs
-      .createReadStream(filePath)
-      .pipe(csv());
+    stream
+      .pipe(csv())
+      .on("data", async (row) => {
+        if (inserted >= MAX_ROWS) return;
 
-    stream.on("data", async (row) => {
-      try {
-        seen++;
+        const name = row["medicine_name"];
+        const manufacturer = row["manufacturer"];
+        const price = row["price"];
 
-        // Skip until offset
-        if (seen <= offset) return;
+        if (!name || !manufacturer || !price) return;
 
-        // Stop after batch
-        if (inserted >= BATCH_SIZE) {
-          console.log("🛑 Batch limit reached, stopping stream");
-          stream.destroy();
-          return;
+        try {
+          await db.insert(medicines).values({
+            name: name.trim(),
+            manufacturer: manufacturer.trim(),
+            genericName: row["composition"] || null,
+            price: String(price),
+            mrp: String(price),
+            packSize: Number(row["pack_size"] || 1),
+            stock: 100,
+            requiresPrescription: row["rx_flag"] === "true",
+            isScheduleH: row["rx_flag"] === "true",
+          });
+
+          inserted++;
+
+          if (inserted % 1000 === 0) {
+            console.log(`➕ Inserted ${inserted} medicines`);
+          }
+        } catch {
+          /* skip bad row */
         }
-
-        const medicineName = row["medicine_name"]?.trim();
-        const manufacturer = row["manufacturer"]?.trim();
-        const price = Number(row["price"]);
-
-        if (!medicineName || !manufacturer || !price) {
-          skipped++;
-          return;
-        }
-
-        await db.insert(medicines).values({
-          name: medicineName,
-          manufacturer,
-          genericName: row["composition"] || null,
-          price: price.toString(),
-          mrp: price.toString(),
-          packSize: row["pack_size"] || null,
-          stock: 100,
-          requiresPrescription: row["rx_flag"] === "true",
-          isScheduleH: row["rx_flag"] === "true",
-          isAyurvedic: row["ayurvedic_flag"] === "true",
-        });
-
-        inserted++;
-
-        if (inserted % 1000 === 0) {
-          console.log(`➕ Inserted ${inserted} medicines`);
-        }
-      } catch {
-        skipped++;
-      }
-    });
-
-    stream.on("end", () => {
-      console.log("✅ Batch complete");
-      console.log("📊 Inserted:", inserted);
-      console.log("⚠️ Skipped:", skipped);
-      resolve();
-    });
-
-    stream.on("error", (err) => {
-      console.error("❌ CSV import failed:", err);
-      reject(err);
-    });
+      })
+      .on("end", () => {
+        console.log(`✅ Import completed: ${inserted} medicines`);
+        resolve();
+      })
+      .on("error", reject);
   });
 }
