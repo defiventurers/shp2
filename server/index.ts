@@ -41,7 +41,7 @@ async function startServer() {
   app.use(express.urlencoded({ extended: false }));
 
   /* -----------------------------
-     HEALTH
+     HEALTH CHECK
   ------------------------------ */
   app.get("/api/__probe", (_req, res) => {
     res.json({ status: "ok" });
@@ -49,6 +49,7 @@ async function startServer() {
 
   /* -----------------------------
      STARTUP TASKS (SAFE)
+     ⚠️ NO MEDICINE IMPORT HERE
   ------------------------------ */
   try {
     await seedDatabase();
@@ -68,7 +69,7 @@ async function startServer() {
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
 
-  // 🔥 MANUAL BATCH IMPORT ENDPOINT
+  // ✅ ADMIN IMPORT ROUTE (MANUAL ONLY)
   registerAdminImportRoutes(app);
 
   /* -----------------------------
@@ -80,7 +81,7 @@ async function startServer() {
   });
 
   /* -----------------------------
-     START SERVER
+     START SERVER (LAST)
   ------------------------------ */
   const port = Number(process.env.PORT || 10000);
 
