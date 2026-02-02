@@ -41,23 +41,17 @@ async function startServer() {
   app.use(express.urlencoded({ extended: false }));
 
   /* -----------------------------
-     HEALTH CHECK
+     HEALTH
   ------------------------------ */
   app.get("/api/__probe", (_req, res) => {
     res.json({ status: "ok" });
   });
 
   /* -----------------------------
-     STARTUP TASKS (SAFE)
-     ⚠️ NO MEDICINE IMPORT HERE
+     BOOT TASKS (SAFE)
   ------------------------------ */
-  try {
-    await seedDatabase();
-    await migratePrescriptions();
-  } catch (err) {
-    console.error("❌ Startup task failed:", err);
-    process.exit(1);
-  }
+  await seedDatabase();
+  await migratePrescriptions();
 
   /* -----------------------------
      ROUTES
@@ -68,9 +62,7 @@ async function startServer() {
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
-
-  // ✅ ADMIN IMPORT ROUTE (MANUAL ONLY)
-  registerAdminImportRoutes(app);
+  registerAdminImportRoutes(app); // 👈 ONLY IMPORT HOOK
 
   /* -----------------------------
      ERROR HANDLER
@@ -81,10 +73,9 @@ async function startServer() {
   });
 
   /* -----------------------------
-     START SERVER (LAST)
+     START SERVER
   ------------------------------ */
   const port = Number(process.env.PORT || 10000);
-
   http.createServer(app).listen(port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${port}`);
   });
