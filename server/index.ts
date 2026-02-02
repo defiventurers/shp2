@@ -13,6 +13,7 @@ import { registerMedicineRoutes } from "./routes/medicines";
 import { registerCategoryRoutes } from "./routes/categories";
 import { registerOrderRoutes } from "./routes/orders";
 import { registerPrescriptionRoutes } from "./routes/prescriptions";
+import { registerAdminImportRoutes } from "./routes/adminImport";
 
 console.log("🔥 SERVER INDEX EXECUTED 🔥");
 
@@ -67,6 +68,9 @@ async function startServer() {
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
 
+  // 🔥 MANUAL BATCH IMPORT ENDPOINT
+  registerAdminImportRoutes(app);
+
   /* -----------------------------
      ERROR HANDLER
   ------------------------------ */
@@ -79,6 +83,7 @@ async function startServer() {
      START SERVER
   ------------------------------ */
   const port = Number(process.env.PORT || 10000);
+
   http.createServer(app).listen(port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${port}`);
   });
