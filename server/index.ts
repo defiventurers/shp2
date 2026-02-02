@@ -13,7 +13,7 @@ import { registerMedicineRoutes } from "./routes/medicines";
 import { registerCategoryRoutes } from "./routes/categories";
 import { registerOrderRoutes } from "./routes/orders";
 import { registerPrescriptionRoutes } from "./routes/prescriptions";
-import { registerAdminImportRoutes } from "./routes/adminImport";
+import { registerAdminRoutes } from "./routes/admin";
 
 console.log("🔥 SERVER INDEX EXECUTED 🔥");
 
