@@ -3,99 +3,95 @@ import path from "path";
 import zlib from "zlib";
 import csv from "csv-parser";
 import { db } from "../db";
-import { medicines } from "@shared/schema";
-
-/**
- * Bangalore-only inventory importer
- * FULL REPLACEMENT of medicines table
- */
+import { medicines, categories } from "@shared/schema";
 
 const DATA_DIR = path.join(process.cwd(), "server", "data");
-const CSV_FILE = "bangalore_inventory_45k_master.csv"; // 🔥 EXACT FILE
-const MAX_ROWS = 46000; // hard safety cap
+const CSV_FILE = "bangalore_inventory_45k_master.csv";
+const BATCH_SIZE = 500; // 🔒 SAFE FOR RENDER
+const MAX_MEDICINES = 45_000;
 
-export async function importMedicinesFromCSV() {
-  console.log("📦 Starting Bangalore inventory import");
+async function run() {
+  console.log("📦 Bangalore inventory import started");
 
-  const csvPath = path.join(DATA_DIR, CSV_FILE);
+  const filePath = path.join(DATA_DIR, CSV_FILE);
 
-  if (!fs.existsSync(csvPath)) {
-    console.error("❌ CSV file NOT FOUND:", csvPath);
-    return;
+  if (!fs.existsSync(filePath)) {
+    console.error("❌ CSV file NOT FOUND:", filePath);
+    process.exit(1);
   }
 
-  /* -----------------------------
-     FULL REPLACEMENT (SAFE)
-  ------------------------------ */
-  console.log("🧨 Clearing existing medicines...");
+  console.log("📥 Using CSV:", CSV_FILE);
+
+  // Clear medicines ONLY
   await db.delete(medicines);
+  console.log("🧨 Medicines table cleared");
 
-  const stream = fs.createReadStream(csvPath);
+  const categoryRows = await db.select().from(categories);
+  const categoryMap = new Map<string, string>();
+  categoryRows.forEach(c =>
+    categoryMap.set(c.name.toLowerCase(), c.id)
+  );
 
-  let inputStream: NodeJS.ReadableStream = stream;
+  const buffer: any[] = [];
+  let inserted = 0;
 
-  if (CSV_FILE.endsWith(".gz")) {
-    inputStream = stream.pipe(zlib.createGunzip());
+  const stream = fs
+    .createReadStream(filePath)
+    .pipe(zlib.createGunzip())
+    .pipe(csv());
+
+  for await (const row of stream) {
+    if (inserted >= MAX_MEDICINES) break;
+
+    const name = row.medicine_name?.trim();
+    const manufacturer = row.manufacturer?.trim();
+    const price = Number(row.price);
+
+    if (!name || !manufacturer || !price) continue;
+
+    buffer.push({
+      name,
+      manufacturer,
+      genericName: row.composition || null,
+      categoryId:
+        categoryMap.get(
+          row.ayurvedic_flag === "true"
+            ? "ayurvedic"
+            : row.rx_flag === "true"
+            ? "prescription"
+            : "otc"
+        ) ?? categoryRows[0].id,
+      dosage: null,
+      form: null,
+      packSize: Number(row.pack_size) || null,
+      price: price.toString(),
+      mrp: price.toString(),
+      stock: 100,
+      requiresPrescription: row.rx_flag === "true",
+      isScheduleH: row.rx_flag === "true",
+    });
+
+    if (buffer.length >= BATCH_SIZE) {
+      await db.insert(medicines).values(buffer);
+      inserted += buffer.length;
+      buffer.length = 0;
+
+      if (inserted % 5000 === 0) {
+        console.log(`➕ Inserted ${inserted} medicines`);
+      }
+    }
   }
 
-  let inserted = 0;
-  const seen = new Set<string>(); // (name + manufacturer) uniqueness
+  if (buffer.length) {
+    await db.insert(medicines).values(buffer);
+    inserted += buffer.length;
+  }
 
-  return new Promise<void>((resolve, reject) => {
-    inputStream
-      .pipe(csv())
-      .on("data", async (row) => {
-        try {
-          if (inserted >= MAX_ROWS) return;
-
-          const name = row["medicine_name"]?.trim();
-          const priceRaw = row["price"];
-
-          if (!name || !priceRaw) return;
-
-          const manufacturer =
-            row["manufacturer"]?.trim() || "Unknown";
-
-          const uniqueKey = `${name.toLowerCase()}::${manufacturer.toLowerCase()}`;
-          if (seen.has(uniqueKey)) return;
-          seen.add(uniqueKey);
-
-          const price = Number(priceRaw);
-          if (Number.isNaN(price)) return;
-
-          await db.insert(medicines).values({
-            name,
-            manufacturer,
-            genericName: row["composition"] || null,
-            price: price.toFixed(2),
-            mrp: price.toFixed(2),
-            packSize: row["pack_size"]
-              ? Number(row["pack_size"])
-              : null,
-            stock: 999,
-
-            // 🔑 FLAGS DRIVE APP LOGIC
-            requiresPrescription: row["rx_flag"] === "true",
-            isScheduleH: row["rx_flag"] === "true",
-            isAyurvedic: row["ayurvedic_flag"] === "true",
-          });
-
-          inserted++;
-
-          if (inserted % 1000 === 0) {
-            console.log(`➕ Inserted ${inserted} medicines`);
-          }
-        } catch {
-          // skip bad rows safely
-        }
-      })
-      .on("end", () => {
-        console.log(`✅ Import complete: ${inserted} medicines`);
-        resolve();
-      })
-      .on("error", (err) => {
-        console.error("❌ Import failed:", err);
-        reject(err);
-      });
-  });
+  console.log(`✅ Import complete: ${inserted} medicines`);
+  process.exit(0);
 }
+
+run().catch(err => {
+  console.error("❌ Import failed:", err);
+  process.exit(1);
+});
