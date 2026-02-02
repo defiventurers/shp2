@@ -1,8 +1,8 @@
 import type { Express, Response } from "express";
 import { db } from "../db";
-import { orders, orderItems, users } from "@shared/schema";
+import { orders, orderItems, users, medicines } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 /* =========================
    Order Number Generator
@@ -40,6 +40,9 @@ export function registerOrderRoutes(app: Express) {
           return res.status(401).json({ error: "Unauthorized" });
         }
 
+        /* -------------------------
+           Ensure user exists
+        -------------------------- */
         const existingUser = await db.query.users.findFirst({
           where: eq(users.id, user.id),
         });
@@ -66,6 +69,34 @@ export function registerOrderRoutes(app: Express) {
           notes,
         } = req.body;
 
+        if (!Array.isArray(items) || items.length === 0) {
+          return res.status(400).json({ error: "Order items required" });
+        }
+
+        /* -------------------------
+           VALIDATE MEDICINES
+        -------------------------- */
+        const medicineIds = items.map((i: any) => i.medicineId);
+
+        const validMedicines = await db
+          .select({ id: medicines.id })
+          .from(medicines)
+          .where(inArray(medicines.id, medicineIds));
+
+        const validIds = new Set(validMedicines.map(m => m.id));
+
+        const invalid = medicineIds.filter(id => !validIds.has(id));
+
+        if (invalid.length > 0) {
+          return res.status(400).json({
+            error: "Invalid medicine selected",
+            invalidMedicineIds: invalid,
+          });
+        }
+
+        /* -------------------------
+           CREATE ORDER
+        -------------------------- */
         const [order] = await db
           .insert(orders)
           .values({
@@ -84,18 +115,19 @@ export function registerOrderRoutes(app: Express) {
           })
           .returning();
 
-        if (items?.length) {
-          await db.insert(orderItems).values(
-            items.map((item: any) => ({
-              orderId: order.id,
-              medicineId: item.medicineId,
-              medicineName: item.medicineName,
-              quantity: item.quantity,
-              price: item.price,
-              total: item.price * item.quantity,
-            }))
-          );
-        }
+        /* -------------------------
+           INSERT ORDER ITEMS
+        -------------------------- */
+        await db.insert(orderItems).values(
+          items.map((item: any) => ({
+            orderId: order.id,
+            medicineId: item.medicineId,
+            medicineName: item.medicineName,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.price * item.quantity,
+          }))
+        );
 
         res.json({
           success: true,
@@ -110,8 +142,6 @@ export function registerOrderRoutes(app: Express) {
 
   /* =========================
      GET ORDERS
-     - Customer → own orders
-     - Staff → ALL orders
   ========================= */
   app.get(
     "/api/orders",
