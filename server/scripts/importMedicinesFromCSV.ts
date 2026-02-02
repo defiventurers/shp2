@@ -6,132 +6,88 @@ import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
 const DATA_DIR = path.join(process.cwd(), "server", "data");
-const MAX_MEDICINES = 50_000;
+const MAX_MEDICINES = 50_000; // safe for Render free tier
+
+function extractName(product: string) {
+  return product.split("MRP")[0].trim();
+}
+
+function extractManufacturer(product: string) {
+  const parts = product.split("\n").map(p => p.trim());
+  return parts.find(p => /Ltd|Pharma|Healthcare|Laboratories/i.test(p)) || null;
+}
+
+function extractPackSize(product: string) {
+  const match = product.match(/strip of .*? tablets/i);
+  return match ? match[0] : null;
+}
 
 export async function importMedicinesFromCSV() {
-  console.log("📦 Starting CSV medicine import (SAFE LIMITED MODE)");
-  console.log("📁 DATA_DIR resolved to:", DATA_DIR);
+  console.log("📦 Starting CSV medicine import (SAFE MODE)");
 
   if (!fs.existsSync(DATA_DIR)) {
     console.error("❌ server/data directory NOT FOUND");
     return;
   }
 
-  const files = fs
-    .readdirSync(DATA_DIR)
-    .filter((f) => f.endsWith(".csv") || f.endsWith(".csv.gz"));
-
+  const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith(".csv.gz"));
   if (files.length === 0) {
-    console.error("❌ No CSV files found in server/data");
+    console.error("❌ No CSV.gz file found");
     return;
   }
 
-  const csvFile = files[0];
-  const filePath = path.join(DATA_DIR, csvFile);
+  const filePath = path.join(DATA_DIR, files[0]);
+  console.log("📥 Importing:", files[0]);
 
-  console.log("📥 Found CSV file:", csvFile);
-
-  // Wipe medicines only (safe)
+  // wipe medicines only
   await db.delete(medicines);
-  console.log("🧨 Wiped medicines table");
+  console.log("🧨 Medicines table cleared");
 
-  const categoryRows = await db.select().from(categories);
-  const defaultCategoryId = categoryRows[0]?.id;
-
-  if (!defaultCategoryId) {
-    console.error("❌ No categories found — aborting import");
+  const [defaultCategory] = await db.select().from(categories).limit(1);
+  if (!defaultCategory) {
+    console.error("❌ No categories found");
     return;
   }
-
-  const fileStream = fs.createReadStream(filePath);
-  const inputStream = csvFile.endsWith(".gz")
-    ? fileStream.pipe(zlib.createGunzip())
-    : fileStream;
 
   let inserted = 0;
-  let loggedHeaders = false;
 
-  return new Promise<void>((resolve, reject) => {
-    const parser = csv();
+  const stream = fs
+    .createReadStream(filePath)
+    .pipe(zlib.createGunzip())
+    .pipe(csv());
 
-    inputStream
-      .pipe(parser)
-      .on("data", async (row) => {
-        try {
-          if (!loggedHeaders) {
-            console.log("🧾 CSV HEADERS:", Object.keys(row));
-            loggedHeaders = true;
-          }
+  for await (const row of stream) {
+    if (inserted >= MAX_MEDICINES) break;
 
-          if (inserted >= MAX_MEDICINES) {
-            console.log(`🛑 Reached ${MAX_MEDICINES} medicines, stopping`);
-            parser.destroy();
-            return;
-          }
+    const rawProduct = row["Product Name"];
+    if (!rawProduct) continue;
 
-          // 🔑 FLEXIBLE FIELD MAPPING
-          const name =
-            row["medicine_name"] ||
-            row["drug_name"] ||
-            row["brand_name"] ||
-            row["Medicine Name"] ||
-            row["Drug Name"];
+    const name = extractName(rawProduct);
+    if (!name || name.length > 120) continue;
 
-          if (!name) return;
+    const manufacturer = extractManufacturer(rawProduct);
+    const packSize = extractPackSize(rawProduct);
 
-          const manufacturer =
-            row["manufacturer_name"] ||
-            row["Manufacturer"] ||
-            row["Company"] ||
-            null;
+    await db.insert(medicines).values({
+      name,
+      genericName: row["Composition"] || null,
+      manufacturer,
+      categoryId: defaultCategory.id,
+      dosage: null,
+      form: null,
+      packSize,
+      price: "0",
+      mrp: "0",
+      stock: 100,
+      requiresPrescription: rawProduct.includes("Prescription Required"),
+      isScheduleH: rawProduct.includes("Prescription Required"),
+    });
 
-          const dosage =
-            row["strength"] ||
-            row["dosage"] ||
-            row["Dosage"] ||
-            null;
+    inserted++;
+    if (inserted % 1000 === 0) {
+      console.log(`➕ Inserted ${inserted} medicines`);
+    }
+  }
 
-          const form =
-            row["dosage_form"] ||
-            row["Form"] ||
-            null;
-
-          const schedule =
-            row["schedule"] ||
-            row["Schedule"] ||
-            "";
-
-          await db.insert(medicines).values({
-            name: String(name).trim(),
-            genericName: row["composition"] || null,
-            manufacturer,
-            categoryId: defaultCategoryId,
-            dosage,
-            form,
-            packSize: null,
-            price: "0",
-            mrp: "0",
-            stock: 100,
-            requiresPrescription: schedule.includes("H"),
-            isScheduleH: schedule.includes("H"),
-          });
-
-          inserted++;
-
-          if (inserted % 1000 === 0) {
-            console.log(`➕ Inserted ${inserted} medicines`);
-          }
-        } catch (err) {
-          // skip bad rows safely
-        }
-      })
-      .on("end", () => {
-        console.log(`✅ CSV import complete: ${inserted} medicines`);
-        resolve();
-      })
-      .on("error", (err) => {
-        console.error("❌ CSV import failed:", err);
-        reject(err);
-      });
-  });
+  console.log(`✅ Import complete: ${inserted} medicines`);
 }
