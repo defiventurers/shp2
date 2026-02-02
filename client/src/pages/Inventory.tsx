@@ -1,18 +1,16 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Search, Filter, X } from "lucide-react";
-
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MedicineCard } from "@/components/MedicineCard";
 import { InventorySkeleton } from "@/components/LoadingSpinner";
-
 import type { Medicine, Category } from "@shared/schema";
 
 /* -----------------------------
-   API response shapes
+   API response
 ------------------------------ */
 type MedicinesResponse = {
   success: boolean;
@@ -28,53 +26,58 @@ type CategoriesResponse = {
   categories: Category[];
 };
 
+const PAGE_SIZE = 50;
+
 export default function Inventory() {
-  /* -----------------------------
-     Local state
-  ------------------------------ */
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
-  const [page, setPage] = useState(1);
-  const [allMedicines, setAllMedicines] = useState<Medicine[]>([]);
-
   /* -----------------------------
-     Fetch medicines (PAGINATED)
+     Medicines (PAGINATED)
   ------------------------------ */
   const {
     data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     isLoading,
-    isFetching,
-  } = useQuery<MedicinesResponse>({
-    queryKey: ["/api/medicines", page],
-    queryFn: async () => {
+  } = useInfiniteQuery<MedicinesResponse>({
+    queryKey: ["medicines"],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) => {
       const res = await fetch(
-        `/api/medicines?page=${page}&limit=50`
+        `/api/medicines?page=${pageParam}&limit=${PAGE_SIZE}`
       );
       return res.json();
     },
-    keepPreviousData: true,
-    onSuccess: (res) => {
-      setAllMedicines((prev) =>
-        page === 1 ? res.medicines : [...prev, ...res.medicines]
-      );
-    },
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.page + 1 : undefined,
   });
 
+  const medicines = useMemo(
+    () => data?.pages.flatMap((p) => p.medicines) ?? [],
+    [data]
+  );
+
   /* -----------------------------
-     Fetch categories
+     Categories
   ------------------------------ */
-  const { data: categories = [] } = useQuery<CategoriesResponse>({
-    queryKey: ["/api/categories"],
-    select: (res) => res.categories,
+  const { data: categories = [] } = useInfiniteQuery<CategoriesResponse>({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      return res.json();
+    },
+    select: (res) => res.pages?.[0]?.categories ?? [],
+    initialPageParam: 1,
   });
 
   /* -----------------------------
-     Filtering logic (CLIENT SIDE)
+     Filtering
   ------------------------------ */
   const filteredMedicines = useMemo(() => {
-    return allMedicines.filter((medicine) => {
+    return medicines.filter((medicine) => {
       const matchesSearch =
         searchQuery === "" ||
         medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -88,7 +91,7 @@ export default function Inventory() {
 
       return matchesSearch && matchesCategory && matchesStock;
     });
-  }, [allMedicines, searchQuery, selectedCategory, showOnlyInStock]);
+  }, [medicines, searchQuery, selectedCategory, showOnlyInStock]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -103,15 +106,12 @@ export default function Inventory() {
      Render
   ------------------------------ */
   return (
-    <div className="min-h-screen bg-background pb-20">
-      {/* SEARCH + FILTER BAR */}
-      <div className="sticky top-14 z-30 bg-background border-b border-border">
+    <div className="min-h-screen bg-background pb-24">
+      <div className="sticky top-14 z-30 bg-background border-b">
         <div className="px-4 py-3 max-w-7xl mx-auto">
-          {/* SEARCH */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              type="search"
               placeholder="Search medicines, brands..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -120,39 +120,36 @@ export default function Inventory() {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          {/* FILTERS */}
-          <ScrollArea className="w-full whitespace-nowrap mt-3">
+          <ScrollArea className="mt-3">
             <div className="flex gap-2 pb-2">
               <Button
-                variant={showOnlyInStock ? "default" : "outline"}
                 size="sm"
+                variant={showOnlyInStock ? "default" : "outline"}
                 onClick={() => setShowOnlyInStock(!showOnlyInStock)}
               >
                 <Filter className="w-3 h-3 mr-1" />
-                In Stock
+                In stock
               </Button>
 
-              {categories.map((category) => (
+              {categories.map((cat) => (
                 <Badge
-                  key={category.id}
-                  variant={
-                    selectedCategory === category.id ? "default" : "secondary"
-                  }
-                  className="cursor-pointer"
+                  key={cat.id}
+                  variant={selectedCategory === cat.id ? "default" : "secondary"}
                   onClick={() =>
                     setSelectedCategory(
-                      selectedCategory === category.id ? null : category.id
+                      selectedCategory === cat.id ? null : cat.id
                     )
                   }
+                  className="cursor-pointer"
                 >
-                  {category.name}
+                  {cat.name}
                 </Badge>
               ))}
             </div>
@@ -160,30 +157,21 @@ export default function Inventory() {
           </ScrollArea>
 
           {hasActiveFilters && (
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-xs text-muted-foreground">
-                {filteredMedicines.length} results loaded
-              </p>
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Clear all
-              </Button>
+            <div className="flex justify-between mt-2 text-xs">
+              <span>{filteredMedicines.length} results</span>
+              <button onClick={clearFilters}>Clear</button>
             </div>
           )}
         </div>
       </div>
 
-      {/* RESULTS */}
       <div className="px-4 py-4 max-w-7xl mx-auto">
-        {isLoading && page === 1 ? (
+        {isLoading ? (
           <InventorySkeleton />
         ) : filteredMedicines.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Search className="w-8 h-8 text-muted-foreground mb-4" />
-            <h3 className="font-medium text-lg mb-1">No medicines found</h3>
-            <p className="text-muted-foreground text-sm">
-              No medicines match your current filters.
-            </p>
-          </div>
+          <p className="text-center text-muted-foreground py-20">
+            No medicines found
+          </p>
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -192,14 +180,13 @@ export default function Inventory() {
               ))}
             </div>
 
-            {/* LOAD MORE */}
-            {data?.hasMore && (
-              <div className="flex justify-center py-6">
+            {hasNextPage && (
+              <div className="flex justify-center mt-6">
                 <Button
-                  onClick={() => setPage((p) => p + 1)}
-                  disabled={isFetching}
+                  onClick={() => fetchNextPage()}
+                  disabled={isFetchingNextPage}
                 >
-                  {isFetching ? "Loading..." : "Load more"}
+                  {isFetchingNextPage ? "Loading…" : "Load more"}
                 </Button>
               </div>
             )}
