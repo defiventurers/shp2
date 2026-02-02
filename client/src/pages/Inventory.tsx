@@ -1,12 +1,14 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Filter, X } from "lucide-react";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MedicineCard } from "@/components/MedicineCard";
 import { InventorySkeleton } from "@/components/LoadingSpinner";
+
 import type { Medicine, Category } from "@shared/schema";
 
 /* -----------------------------
@@ -15,6 +17,10 @@ import type { Medicine, Category } from "@shared/schema";
 type MedicinesResponse = {
   success: boolean;
   medicines: Medicine[];
+  page: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
 };
 
 type CategoriesResponse = {
@@ -23,24 +29,38 @@ type CategoriesResponse = {
 };
 
 export default function Inventory() {
+  /* -----------------------------
+     Local state
+  ------------------------------ */
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
+  const [page, setPage] = useState(1);
+  const [allMedicines, setAllMedicines] = useState<Medicine[]>([]);
+
   /* -----------------------------
-     Fetch medicines
+     Fetch medicines (PAGINATED)
   ------------------------------ */
   const {
-  data: medicines = [],
-  isLoading: medicinesLoading,
-} = useQuery<MedicinesResponse>({
-  queryKey: ["/api/medicines", 1],
-  queryFn: async () => {
-    const res = await fetch("/api/medicines?page=1&limit=50");
-    return res.json();
-  },
-  select: (res) => res.medicines,
-});
+    data,
+    isLoading,
+    isFetching,
+  } = useQuery<MedicinesResponse>({
+    queryKey: ["/api/medicines", page],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/medicines?page=${page}&limit=50`
+      );
+      return res.json();
+    },
+    keepPreviousData: true,
+    onSuccess: (res) => {
+      setAllMedicines((prev) =>
+        page === 1 ? res.medicines : [...prev, ...res.medicines]
+      );
+    },
+  });
 
   /* -----------------------------
      Fetch categories
@@ -51,10 +71,10 @@ export default function Inventory() {
   });
 
   /* -----------------------------
-     Filtering logic
+     Filtering logic (CLIENT SIDE)
   ------------------------------ */
   const filteredMedicines = useMemo(() => {
-    return medicines.filter((medicine) => {
+    return allMedicines.filter((medicine) => {
       const matchesSearch =
         searchQuery === "" ||
         medicine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -68,7 +88,7 @@ export default function Inventory() {
 
       return matchesSearch && matchesCategory && matchesStock;
     });
-  }, [medicines, searchQuery, selectedCategory, showOnlyInStock]);
+  }, [allMedicines, searchQuery, selectedCategory, showOnlyInStock]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -84,8 +104,10 @@ export default function Inventory() {
   ------------------------------ */
   return (
     <div className="min-h-screen bg-background pb-20">
+      {/* SEARCH + FILTER BAR */}
       <div className="sticky top-14 z-30 bg-background border-b border-border">
         <div className="px-4 py-3 max-w-7xl mx-auto">
+          {/* SEARCH */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -105,6 +127,7 @@ export default function Inventory() {
             )}
           </div>
 
+          {/* FILTERS */}
           <ScrollArea className="w-full whitespace-nowrap mt-3">
             <div className="flex gap-2 pb-2">
               <Button
@@ -139,7 +162,7 @@ export default function Inventory() {
           {hasActiveFilters && (
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-muted-foreground">
-                {filteredMedicines.length} results found
+                {filteredMedicines.length} results loaded
               </p>
               <Button variant="ghost" size="sm" onClick={clearFilters}>
                 Clear all
@@ -149,8 +172,9 @@ export default function Inventory() {
         </div>
       </div>
 
+      {/* RESULTS */}
       <div className="px-4 py-4 max-w-7xl mx-auto">
-        {medicinesLoading ? (
+        {isLoading && page === 1 ? (
           <InventorySkeleton />
         ) : filteredMedicines.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -161,11 +185,25 @@ export default function Inventory() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredMedicines.map((medicine) => (
-              <MedicineCard key={medicine.id} medicine={medicine} />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredMedicines.map((medicine) => (
+                <MedicineCard key={medicine.id} medicine={medicine} />
+              ))}
+            </div>
+
+            {/* LOAD MORE */}
+            {data?.hasMore && (
+              <div className="flex justify-center py-6">
+                <Button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={isFetching}
+                >
+                  {isFetching ? "Loading..." : "Load more"}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
