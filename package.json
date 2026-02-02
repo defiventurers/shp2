@@ -4,9 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "npx tsx server/index.ts",
-    "dev": "NODE_ENV=development tsx server/index.ts",
-    "check": "tsc",
-    "db:push": "drizzle-kit push"
+    "import:bangalore": "tsx server/scripts/importBangaloreInventory.ts"
   },
   "dependencies": {
     "express": "^4.21.2",
