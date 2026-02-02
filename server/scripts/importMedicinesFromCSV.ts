@@ -3,92 +3,99 @@ import path from "path";
 import zlib from "zlib";
 import csv from "csv-parser";
 import { db } from "../db";
-import { medicines, categories } from "@shared/schema";
+import { medicines } from "@shared/schema";
 
-// 🔥 FIXED: Render runs from /opt/render/project/src
-const DATA_DIR = path.join(process.cwd(), "data");
-const MAX_MEDICINES = 50_000;
+/**
+ * Bangalore-only inventory importer
+ * FULL REPLACEMENT of medicines table
+ */
 
-function extractName(product: string) {
-  return product.split("MRP")[0].trim();
-}
-
-function extractManufacturer(product: string) {
-  const parts = product.split("\n").map(p => p.trim());
-  return parts.find(p => /Ltd|Pharma|Healthcare|Laboratories/i.test(p)) || null;
-}
-
-function extractPackSize(product: string) {
-  const match = product.match(/strip of .*? tablets/i);
-  return match ? match[0] : null;
-}
+const DATA_DIR = path.join(process.cwd(), "server", "data");
+const CSV_FILE = "bangalore_inventory_45k_master.csv"; // 🔥 EXACT FILE
+const MAX_ROWS = 46000; // hard safety cap
 
 export async function importMedicinesFromCSV() {
-  console.log("📦 Starting CSV medicine import (SAFE MODE)");
-  console.log("📁 DATA_DIR resolved to:", DATA_DIR);
+  console.log("📦 Starting Bangalore inventory import");
 
-  if (!fs.existsSync(DATA_DIR)) {
-    console.error("❌ DATA_DIR does not exist:", DATA_DIR);
+  const csvPath = path.join(DATA_DIR, CSV_FILE);
+
+  if (!fs.existsSync(csvPath)) {
+    console.error("❌ CSV file NOT FOUND:", csvPath);
     return;
   }
 
-  const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith(".csv.gz"));
-
-  if (files.length === 0) {
-    console.error("❌ No .csv.gz file found in", DATA_DIR);
-    return;
-  }
-
-  const filePath = path.join(DATA_DIR, files[0]);
-  console.log("📥 Found CSV:", files[0]);
-
-  // wipe medicines only
+  /* -----------------------------
+     FULL REPLACEMENT (SAFE)
+  ------------------------------ */
+  console.log("🧨 Clearing existing medicines...");
   await db.delete(medicines);
-  console.log("🧨 Medicines table cleared");
 
-  const [defaultCategory] = await db.select().from(categories).limit(1);
-  if (!defaultCategory) {
-    console.error("❌ No categories found");
-    return;
+  const stream = fs.createReadStream(csvPath);
+
+  let inputStream: NodeJS.ReadableStream = stream;
+
+  if (CSV_FILE.endsWith(".gz")) {
+    inputStream = stream.pipe(zlib.createGunzip());
   }
 
   let inserted = 0;
+  const seen = new Set<string>(); // (name + manufacturer) uniqueness
 
-  const stream = fs
-    .createReadStream(filePath)
-    .pipe(zlib.createGunzip())
-    .pipe(csv());
+  return new Promise<void>((resolve, reject) => {
+    inputStream
+      .pipe(csv())
+      .on("data", async (row) => {
+        try {
+          if (inserted >= MAX_ROWS) return;
 
-  for await (const row of stream) {
-    if (inserted >= MAX_MEDICINES) break;
+          const name = row["medicine_name"]?.trim();
+          const priceRaw = row["price"];
 
-    const rawProduct = row["Product Name"];
-    if (!rawProduct) continue;
+          if (!name || !priceRaw) return;
 
-    const name = extractName(rawProduct);
-    if (!name || name.length > 120) continue;
+          const manufacturer =
+            row["manufacturer"]?.trim() || "Unknown";
 
-    await db.insert(medicines).values({
-      name,
-      genericName: row["Composition"] || null,
-      manufacturer: extractManufacturer(rawProduct),
-      categoryId: defaultCategory.id,
-      dosage: null,
-      form: null,
-      packSize: extractPackSize(rawProduct),
-      price: "0",
-      mrp: "0",
-      stock: 100,
-      requiresPrescription: rawProduct.includes("Prescription Required"),
-      isScheduleH: rawProduct.includes("Prescription Required"),
-    });
+          const uniqueKey = `${name.toLowerCase()}::${manufacturer.toLowerCase()}`;
+          if (seen.has(uniqueKey)) return;
+          seen.add(uniqueKey);
 
-    inserted++;
+          const price = Number(priceRaw);
+          if (Number.isNaN(price)) return;
 
-    if (inserted % 1000 === 0) {
-      console.log(`➕ Inserted ${inserted} medicines`);
-    }
-  }
+          await db.insert(medicines).values({
+            name,
+            manufacturer,
+            genericName: row["composition"] || null,
+            price: price.toFixed(2),
+            mrp: price.toFixed(2),
+            packSize: row["pack_size"]
+              ? Number(row["pack_size"])
+              : null,
+            stock: 999,
 
-  console.log(`✅ CSV import complete: ${inserted} medicines`);
+            // 🔑 FLAGS DRIVE APP LOGIC
+            requiresPrescription: row["rx_flag"] === "true",
+            isScheduleH: row["rx_flag"] === "true",
+            isAyurvedic: row["ayurvedic_flag"] === "true",
+          });
+
+          inserted++;
+
+          if (inserted % 1000 === 0) {
+            console.log(`➕ Inserted ${inserted} medicines`);
+          }
+        } catch {
+          // skip bad rows safely
+        }
+      })
+      .on("end", () => {
+        console.log(`✅ Import complete: ${inserted} medicines`);
+        resolve();
+      })
+      .on("error", (err) => {
+        console.error("❌ Import failed:", err);
+        reject(err);
+      });
+  });
 }
