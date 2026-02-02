@@ -47,8 +47,7 @@ async function startServer() {
   });
 
   /* -----------------------------
-     STARTUP TASKS (SAFE ONLY)
-     ❗ NO CSV IMPORTS HERE
+     STARTUP TASKS (SAFE)
   ------------------------------ */
   try {
     await seedDatabase();
@@ -77,10 +76,9 @@ async function startServer() {
   });
 
   /* -----------------------------
-     START SERVER (LAST)
+     START SERVER
   ------------------------------ */
   const port = Number(process.env.PORT || 10000);
-
   http.createServer(app).listen(port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${port}`);
   });
