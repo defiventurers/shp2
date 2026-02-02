@@ -3,17 +3,18 @@ import http from "http";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
+// startup tasks
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
 
-// ROUTES
+// routes
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerMedicineRoutes } from "./routes/medicines";
 import { registerCategoryRoutes } from "./routes/categories";
 import { registerOrderRoutes } from "./routes/orders";
 import { registerPrescriptionRoutes } from "./routes/prescriptions";
-import { registerAdminRoutes } from "./routes/admin";
+import { registerAdminRoutes } from "./routes/admin"; // ✅ FIXED
 
 console.log("🔥 SERVER INDEX EXECUTED 🔥");
 
@@ -48,7 +49,8 @@ async function startServer() {
   });
 
   /* -----------------------------
-     BOOT TASKS (SAFE)
+     STARTUP TASKS
+     (NO IMPORTS HERE ANYMORE)
   ------------------------------ */
   await seedDatabase();
   await migratePrescriptions();
@@ -62,7 +64,7 @@ async function startServer() {
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
-  registerAdminImportRoutes(app); // 👈 ONLY IMPORT HOOK
+  registerAdminRoutes(app); // ✅ REQUIRED
 
   /* -----------------------------
      ERROR HANDLER
@@ -76,6 +78,7 @@ async function startServer() {
      START SERVER
   ------------------------------ */
   const port = Number(process.env.PORT || 10000);
+
   http.createServer(app).listen(port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${port}`);
   });
