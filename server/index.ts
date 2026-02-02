@@ -5,7 +5,6 @@ import cookieParser from "cookie-parser";
 
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
-import { importMedicinesFromCSV } from "./scripts/importMedicinesFromCSV";
 
 // ROUTES
 import { registerAuthRoutes } from "./routes/auth";
@@ -65,7 +64,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 /* -----------------------------
-   START SERVER FIRST
+   START SERVER
 ------------------------------ */
 const port = Number(process.env.PORT || 10000);
 
@@ -74,19 +73,12 @@ http.createServer(app).listen(port, "0.0.0.0", () => {
 });
 
 /* -----------------------------
-   BACKGROUND STARTUP TASKS
+   SAFE STARTUP TASKS (NO CSV)
 ------------------------------ */
 (async () => {
   try {
-    await seedDatabase();
-    await migratePrescriptions();
-
-    if (process.env.IMPORT_MEDICINES === "true") {
-      console.log("📦 IMPORT_MEDICINES enabled — starting import in background");
-      importMedicinesFromCSV().catch(console.error);
-    } else {
-      console.log("ℹ️ IMPORT_MEDICINES disabled — skipping CSV import");
-    }
+    await seedDatabase();        // categories only (idempotent)
+    await migratePrescriptions(); // schema fixes only
   } catch (err) {
     console.error("Startup task failed:", err);
   }
