@@ -3,120 +3,93 @@ import path from "path";
 import csv from "csv-parser";
 import { db } from "../db";
 import { medicines } from "@shared/schema";
-import { sql } from "drizzle-orm";
 
-const CSV_PATH = path.join(
-  process.cwd(),
-  "server",
-  "data",
-  "bangalore_inventory_45k_master.csv"
-);
+const CSV_PATHS = [
+  path.join(process.cwd(), "server", "data", "bangalore_inventory_45k_master.csv"),
+  path.join(process.cwd(), "data", "bangalore_inventory_45k_master.csv"),
+];
 
-const BATCH_SIZE = 5000;
-const IMPORT_KEY = "bangalore_inventory";
+const BATCH_SIZE = 500;
+const MAX_ROWS = 50_000;
 
-/* ----------------------------------
-   Ensure import_state table exists
------------------------------------ */
-async function ensureImportStateTable() {
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS import_state (
-      key TEXT PRIMARY KEY,
-      last_row INTEGER NOT NULL DEFAULT 0,
-      updated_at TIMESTAMP DEFAULT now()
-    );
-  `);
-}
-
-/* ----------------------------------
-   Get last imported row
------------------------------------ */
-async function getLastRow(): Promise<number> {
-  const result = await db.execute(sql`
-    SELECT last_row FROM import_state WHERE key = ${IMPORT_KEY};
-  `);
-
-  // @ts-ignore
-  return result.rows?.[0]?.last_row ?? 0;
-}
-
-/* ----------------------------------
-   Update cursor
------------------------------------ */
-async function updateLastRow(row: number) {
-  await db.execute(sql`
-    INSERT INTO import_state (key, last_row)
-    VALUES (${IMPORT_KEY}, ${row})
-    ON CONFLICT (key)
-    DO UPDATE SET
-      last_row = EXCLUDED.last_row,
-      updated_at = now();
-  `);
-}
-
-/* ----------------------------------
-   Main import function
------------------------------------ */
 export async function importBangaloreInventory() {
-  console.log("📦 Bangalore inventory batch import started");
+  console.log("📦 Bangalore inventory import started");
 
-  if (!fs.existsSync(CSV_PATH)) {
-    throw new Error(`CSV not found at ${CSV_PATH}`);
+  const csvPath = CSV_PATHS.find((p) => fs.existsSync(p));
+
+  if (!csvPath) {
+    throw new Error(
+      "CSV NOT FOUND. Checked:\n" + CSV_PATHS.join("\n")
+    );
   }
 
-  await ensureImportStateTable();
+  console.log("📥 Using CSV:", csvPath);
 
-  const startRow = await getLastRow();
-  const endRow = startRow + BATCH_SIZE;
+  // 🔥 FULL REPLACEMENT
+  console.log("🧨 Clearing existing medicines...");
+  await db.delete(medicines);
 
-  console.log(`📍 Importing rows ${startRow} → ${endRow}`);
-
-  let currentRow = 0;
+  let buffer: any[] = [];
   let inserted = 0;
+  let skipped = 0;
 
   return new Promise<void>((resolve, reject) => {
-    fs.createReadStream(CSV_PATH)
+    fs.createReadStream(csvPath)
       .pipe(csv())
       .on("data", async (row) => {
         try {
-          if (currentRow < startRow) {
-            currentRow++;
+          if (inserted >= MAX_ROWS) return;
+
+          const name = row.medicine_name?.trim();
+          const manufacturer = row.manufacturer?.trim();
+          const price = parseFloat(row.price);
+
+          if (!name || !manufacturer || isNaN(price)) {
+            skipped++;
             return;
           }
 
-          if (currentRow >= endRow) {
-            return;
-          }
-
-          currentRow++;
-
-          const name = row["medicine_name"]?.trim();
-          const manufacturer = row["manufacturer"]?.trim();
-          const price = parseFloat(row["price"]);
-
-          if (!name || !manufacturer || isNaN(price)) return;
-
-          await db.insert(medicines).values({
+          buffer.push({
             name,
             manufacturer,
-            genericName: row["composition"] || null,
-            price: price.toString(),
-            mrp: price.toString(),
-            packSize: row["pack_size"] || null,
-            stock: 999,
-            requiresPrescription: row["rx_flag"] === "true",
-            isScheduleH: row["rx_flag"] === "true",
+            genericName: row.composition || null,
+            price: price.toFixed(2),
+            mrp: price.toFixed(2),
+            packSize: row.pack_size ? Number(row.pack_size) : null,
+            stock: 100,
+            requiresPrescription: row.rx_flag === "true" || row.rx_flag === true,
+            isScheduleH: row.rx_flag === "true" || row.rx_flag === true,
+            isOtc: row.otc_flag === "true" || row.otc_flag === true,
+            isAyurvedic: row.ayurvedic_flag === "true" || row.ayurvedic_flag === true,
           });
 
-          inserted++;
-        } catch {
-          // skip bad rows silently
+          if (buffer.length >= BATCH_SIZE) {
+            await db.insert(medicines).values(buffer);
+            inserted += buffer.length;
+            buffer = [];
+
+            if (inserted % 5000 === 0) {
+              console.log(`➕ Inserted ${inserted} medicines`);
+            }
+          }
+        } catch (err) {
+          skipped++;
         }
       })
       .on("end", async () => {
-        await updateLastRow(endRow);
-        console.log(`✅ Imported ${inserted} medicines`);
-        resolve();
+        try {
+          if (buffer.length > 0) {
+            await db.insert(medicines).values(buffer);
+            inserted += buffer.length;
+          }
+
+          console.log("✅ Bangalore inventory import completed");
+          console.log(`📊 Inserted: ${inserted}`);
+          console.log(`⚠️ Skipped: ${skipped}`);
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
       })
       .on("error", reject);
   });
