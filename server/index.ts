@@ -5,7 +5,6 @@ import cookieParser from "cookie-parser";
 
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
-import { importMedicinesFromCSV } from "./scripts/importMedicinesFromCSV";
 
 // ROUTES
 import { registerAuthRoutes } from "./routes/auth";
@@ -48,22 +47,15 @@ async function startServer() {
   });
 
   /* -----------------------------
-     STARTUP TASKS (BLOCKING)
+     STARTUP TASKS (SAFE ONLY)
+     ❗ NO CSV IMPORTS HERE
   ------------------------------ */
   try {
     await seedDatabase();
     await migratePrescriptions();
-
-    if (process.env.IMPORT_MEDICINES === "true") {
-      console.log("📦 IMPORT_MEDICINES enabled — importing medicines BEFORE server start");
-      await importMedicinesFromCSV(); // 🔥 CRITICAL FIX
-      console.log("✅ Medicine import completed");
-    } else {
-      console.log("ℹ️ IMPORT_MEDICINES disabled — skipping CSV import");
-    }
   } catch (err) {
     console.error("❌ Startup task failed:", err);
-    process.exit(1); // fail fast
+    process.exit(1);
   }
 
   /* -----------------------------
