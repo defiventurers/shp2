@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Search, Filter, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -9,16 +9,11 @@ import { MedicineCard } from "@/components/MedicineCard";
 import { InventorySkeleton } from "@/components/LoadingSpinner";
 import type { Medicine, Category } from "@shared/schema";
 
-/* -----------------------------
-   API response
------------------------------- */
+const PAGE_SIZE = 50;
+
 type MedicinesResponse = {
   success: boolean;
   medicines: Medicine[];
-  page: number;
-  limit: number;
-  total: number;
-  hasMore: boolean;
 };
 
 type CategoriesResponse = {
@@ -26,55 +21,46 @@ type CategoriesResponse = {
   categories: Category[];
 };
 
-const PAGE_SIZE = 50;
-
 export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showOnlyInStock, setShowOnlyInStock] = useState(false);
 
   /* -----------------------------
-     Medicines (PAGINATED)
+     PAGINATED MEDICINES FETCH
   ------------------------------ */
   const {
     data,
+    isLoading,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    isLoading,
   } = useInfiniteQuery<MedicinesResponse>({
     queryKey: ["medicines"],
-    initialPageParam: 1,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam = 1 }) => {
       const res = await fetch(
         `/api/medicines?page=${pageParam}&limit=${PAGE_SIZE}`
       );
       return res.json();
     },
-    getNextPageParam: (lastPage) =>
-      lastPage.hasMore ? lastPage.page + 1 : undefined,
-  });
-
-  const medicines = useMemo(
-    () => data?.pages.flatMap((p) => p.medicines) ?? [],
-    [data]
-  );
-
-  /* -----------------------------
-     Categories
-  ------------------------------ */
-  const { data: categories = [] } = useInfiniteQuery<CategoriesResponse>({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const res = await fetch("/api/categories");
-      return res.json();
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.medicines.length < PAGE_SIZE) return undefined;
+      return allPages.length + 1;
     },
-    select: (res) => res.pages?.[0]?.categories ?? [],
-    initialPageParam: 1,
+  });
+
+  const medicines = data?.pages.flatMap((p) => p.medicines) ?? [];
+
+  /* -----------------------------
+     FETCH CATEGORIES
+  ------------------------------ */
+  const { data: categories = [] } = useQuery<CategoriesResponse>({
+    queryKey: ["/api/categories"],
+    select: (res) => res.categories,
   });
 
   /* -----------------------------
-     Filtering
+     FILTERING
   ------------------------------ */
   const filteredMedicines = useMemo(() => {
     return medicines.filter((medicine) => {
@@ -93,25 +79,36 @@ export default function Inventory() {
     });
   }, [medicines, searchQuery, selectedCategory, showOnlyInStock]);
 
-  const clearFilters = () => {
-    setSearchQuery("");
-    setSelectedCategory(null);
-    setShowOnlyInStock(false);
-  };
+  /* -----------------------------
+     AUTO LOAD MORE ON SCROLL
+  ------------------------------ */
+  useEffect(() => {
+    const onScroll = () => {
+      if (
+        window.innerHeight + window.scrollY >=
+          document.body.offsetHeight - 300 &&
+        hasNextPage &&
+        !isFetchingNextPage
+      ) {
+        fetchNextPage();
+      }
+    };
 
-  const hasActiveFilters =
-    Boolean(searchQuery) || Boolean(selectedCategory) || showOnlyInStock;
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   /* -----------------------------
-     Render
+     UI
   ------------------------------ */
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <div className="sticky top-14 z-30 bg-background border-b">
+    <div className="min-h-screen bg-background pb-20">
+      <div className="sticky top-14 z-30 bg-background border-b border-border">
         <div className="px-4 py-3 max-w-7xl mx-auto">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
+              type="search"
               placeholder="Search medicines, brands..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -127,41 +124,36 @@ export default function Inventory() {
             )}
           </div>
 
-          <ScrollArea className="mt-3">
+          <ScrollArea className="w-full whitespace-nowrap mt-3">
             <div className="flex gap-2 pb-2">
               <Button
-                size="sm"
                 variant={showOnlyInStock ? "default" : "outline"}
+                size="sm"
                 onClick={() => setShowOnlyInStock(!showOnlyInStock)}
               >
                 <Filter className="w-3 h-3 mr-1" />
-                In stock
+                In Stock
               </Button>
 
-              {categories.map((cat) => (
+              {categories.map((category) => (
                 <Badge
-                  key={cat.id}
-                  variant={selectedCategory === cat.id ? "default" : "secondary"}
-                  onClick={() =>
-                    setSelectedCategory(
-                      selectedCategory === cat.id ? null : cat.id
-                    )
+                  key={category.id}
+                  variant={
+                    selectedCategory === category.id ? "default" : "secondary"
                   }
                   className="cursor-pointer"
+                  onClick={() =>
+                    setSelectedCategory(
+                      selectedCategory === category.id ? null : category.id
+                    )
+                  }
                 >
-                  {cat.name}
+                  {category.name}
                 </Badge>
               ))}
             </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
-
-          {hasActiveFilters && (
-            <div className="flex justify-between mt-2 text-xs">
-              <span>{filteredMedicines.length} results</span>
-              <button onClick={clearFilters}>Clear</button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -169,7 +161,7 @@ export default function Inventory() {
         {isLoading ? (
           <InventorySkeleton />
         ) : filteredMedicines.length === 0 ? (
-          <p className="text-center text-muted-foreground py-20">
+          <p className="text-center py-16 text-muted-foreground">
             No medicines found
           </p>
         ) : (
@@ -180,15 +172,10 @@ export default function Inventory() {
               ))}
             </div>
 
-            {hasNextPage && (
-              <div className="flex justify-center mt-6">
-                <Button
-                  onClick={() => fetchNextPage()}
-                  disabled={isFetchingNextPage}
-                >
-                  {isFetchingNextPage ? "Loading…" : "Load more"}
-                </Button>
-              </div>
+            {isFetchingNextPage && (
+              <p className="text-center py-6 text-sm text-muted-foreground">
+                Loading more medicines…
+              </p>
             )}
           </>
         )}
