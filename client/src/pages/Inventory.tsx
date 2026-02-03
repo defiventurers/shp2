@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Search, Filter, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,15 @@ import { MedicineCard } from "@/components/MedicineCard";
 import { InventorySkeleton } from "@/components/LoadingSpinner";
 import type { Medicine, Category } from "@shared/schema";
 
-/* -----------------------------
+/* =========================
+   CONFIG (CRITICAL)
+========================= */
+const API_BASE =
+  "https://sacredheartpharma-backend.onrender.com";
+
+/* =========================
    Debounce hook
------------------------------- */
+========================= */
 function useDebounce<T>(value: T, delay = 400) {
   const [debounced, setDebounced] = useState(value);
 
@@ -23,9 +29,6 @@ function useDebounce<T>(value: T, delay = 400) {
   return debounced;
 }
 
-/* -----------------------------
-   API response
------------------------------- */
 type MedicinesResponse = {
   success: boolean;
   medicines: Medicine[];
@@ -40,9 +43,9 @@ export default function Inventory() {
 
   const debouncedSearch = useDebounce(searchQuery);
 
-  /* -----------------------------
-     Infinite medicines query
-  ------------------------------ */
+  /* =========================
+     MEDICINES (INFINITE)
+  ========================= */
   const {
     data,
     isLoading,
@@ -57,45 +60,51 @@ export default function Inventory() {
       showOnlyInStock,
     ],
     queryFn: async ({ pageParam = 1 }) => {
-      const params = new URLSearchParams({
-        page: String(pageParam),
-        limit: "50",
-        search: debouncedSearch,
-      });
+      const params = new URLSearchParams();
+      params.set("page", String(pageParam));
+      params.set("limit", "50");
 
-      if (selectedCategory) params.append("categoryId", selectedCategory);
-      if (showOnlyInStock) params.append("inStock", "true");
+      if (debouncedSearch.trim())
+        params.set("search", debouncedSearch.trim());
+      if (selectedCategory)
+        params.set("categoryId", selectedCategory);
+      if (showOnlyInStock)
+        params.set("inStock", "true");
 
-      const res = await fetch(`/api/medicines?${params}`);
+      const res = await fetch(
+        `${API_BASE}/api/medicines?${params.toString()}`
+      );
+
+      if (!res.ok) throw new Error("Failed to fetch medicines");
+
       return res.json();
     },
     getNextPageParam: (lastPage) =>
       lastPage.hasMore ? lastPage.page + 1 : undefined,
-    keepPreviousData: true,
   });
 
   const medicines = data?.pages.flatMap((p) => p.medicines) ?? [];
 
-  /* -----------------------------
-     Categories
-  ------------------------------ */
-  const { data: categories = [] } = useInfiniteQuery<any>({
+  /* =========================
+     CATEGORIES (NORMAL QUERY)
+  ========================= */
+  const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ["categories"],
     queryFn: async () => {
-      const res = await fetch("/api/categories");
-      return res.json();
+      const res = await fetch(`${API_BASE}/api/categories`);
+      const json = await res.json();
+      return json.categories ?? [];
     },
-    select: (res) => res.pages?.[0]?.categories ?? [],
   });
 
-  /* -----------------------------
-     Infinite scroll observer
-  ------------------------------ */
+  /* =========================
+     Infinite scroll
+  ========================= */
   useEffect(() => {
     const onScroll = () => {
       if (
         window.innerHeight + window.scrollY >=
-          document.body.offsetHeight - 400 &&
+          document.body.offsetHeight - 300 &&
         hasNextPage &&
         !isFetchingNextPage
       ) {
@@ -107,18 +116,17 @@ export default function Inventory() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  /* -----------------------------
-     Render
-  ------------------------------ */
+  /* =========================
+     UI
+  ========================= */
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
+      {/* Search + Filters */}
       <div className="sticky top-14 z-30 bg-background border-b">
-        <div className="px-4 py-3 max-w-7xl mx-auto">
+        <div className="px-4 py-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" />
             <Input
-              type="search"
               placeholder="Search medicines, brands..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -145,10 +153,12 @@ export default function Inventory() {
                 In Stock
               </Button>
 
-              {categories.map((c: Category) => (
+              {categories.map((c) => (
                 <Badge
                   key={c.id}
-                  variant={selectedCategory === c.id ? "default" : "secondary"}
+                  variant={
+                    selectedCategory === c.id ? "default" : "secondary"
+                  }
                   onClick={() =>
                     setSelectedCategory(
                       selectedCategory === c.id ? null : c.id
@@ -165,24 +175,20 @@ export default function Inventory() {
       </div>
 
       {/* Inventory */}
-      <div className="px-4 py-4 max-w-7xl mx-auto">
+      <div className="px-4 py-4">
         {isLoading && <InventorySkeleton />}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {medicines.map((medicine) => (
-            <MedicineCard key={medicine.id} medicine={medicine} />
+        <div className="grid gap-3">
+          {medicines.map((m) => (
+            <MedicineCard key={m.id} medicine={m} />
           ))}
         </div>
 
-        {isFetchingNextPage && (
-          <div className="mt-6">
-            <InventorySkeleton />
-          </div>
-        )}
+        {isFetchingNextPage && <InventorySkeleton />}
 
         {!hasNextPage && medicines.length > 0 && (
           <p className="text-center text-xs text-muted-foreground mt-6">
-            You’ve reached the end of inventory
+            End of inventory
           </p>
         )}
       </div>
