@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCartContext } from "@/context/CartContext";
 import type { Medicine } from "@shared/schema";
+import { cn } from "@/lib/utils";
 
 interface MedicineCardProps {
   medicine: Medicine;
@@ -17,20 +18,32 @@ export function MedicineCard({ medicine }: MedicineCardProps) {
 
   const stock = medicine.stock;
   const isOutOfStock = stock <= 0;
+  const isRx = medicine.isScheduleH === true;
 
   const add = () => !isOutOfStock && addItem(medicine, 1);
-  const inc = () => quantityInCart < stock && updateQuantity(medicine.id, quantityInCart + 1);
+  const inc = () =>
+    quantityInCart < stock &&
+    updateQuantity(medicine.id, quantityInCart + 1);
   const dec = () =>
     quantityInCart > 1
       ? updateQuantity(medicine.id, quantityInCart - 1)
       : removeItem(medicine.id);
 
   return (
-    <Card className="p-3 space-y-2">
-      {/* NAME + RX */}
+    <Card
+      className={cn(
+        "p-3 space-y-2",
+        isRx && "border-red-500 bg-red-50/40",
+        isOutOfStock && "opacity-60"
+      )}
+    >
+      {/* NAME + RX BADGE */}
       <div className="flex items-start gap-2">
-        {medicine.isScheduleH && (
-          <Badge variant="destructive" className="text-[10px] shrink-0">
+        {isRx && (
+          <Badge
+            variant="destructive"
+            className="text-[10px] shrink-0"
+          >
             Rx
           </Badge>
         )}
@@ -43,7 +56,14 @@ export function MedicineCard({ medicine }: MedicineCardProps) {
       {/* QUANTITY */}
       {medicine.packSize && (
         <p className="text-xs text-muted-foreground">
-          Qty: {medicine.packSize} units
+          Qty: {Number(medicine.packSize)} tabs
+        </p>
+      )}
+
+      {/* RX WARNING TEXT */}
+      {isRx && (
+        <p className="text-xs text-red-600 font-medium">
+          Prescription required
         </p>
       )}
 
