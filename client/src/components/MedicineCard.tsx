@@ -13,149 +13,89 @@ interface MedicineCardProps {
 export function MedicineCard({ medicine }: MedicineCardProps) {
   const { items, addItem, updateQuantity, removeItem } = useCartContext();
 
-  const cartItem = items.find((i) => i.medicine.id === medicine.id);
+  const cartItem = items.find(i => i.medicine.id === medicine.id);
   const quantity = cartItem?.quantity ?? 0;
 
   const stock = medicine.stock;
   const isOutOfStock = stock <= 0;
-  const isLowStock = stock > 0 && stock <= 10;
 
   const price = Number(medicine.price);
-  const mrp = Number(medicine.mrp);
-  const discount =
-    mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0;
-
-  const handleAdd = () => {
-    if (!isOutOfStock) addItem(medicine, 1);
-  };
-
-  const handleIncrement = () => {
-    if (quantity < stock) updateQuantity(medicine.id, quantity + 1);
-  };
-
-  const handleDecrement = () => {
-    if (quantity > 1) updateQuantity(medicine.id, quantity - 1);
-    else removeItem(medicine.id);
-  };
 
   return (
-    <Card
-      className={cn(
-        "p-3 transition-all",
-        isOutOfStock && "opacity-60"
-      )}
-    >
+    <Card className={cn("p-3", isOutOfStock && "opacity-60")}>
       <div className="flex gap-3">
         {/* Icon */}
-        <div className="h-12 w-12 flex-shrink-0 rounded-lg bg-green-50 flex items-center justify-center">
-          <Pill className="h-6 w-6 text-green-600" />
+        <div className="h-11 w-11 rounded-lg bg-green-50 flex items-center justify-center">
+          <Pill className="h-5 w-5 text-green-600" />
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Title + badges */}
-          <div className="flex justify-between gap-2">
+          {/* Top row */}
+          <div className="flex justify-between items-start gap-2">
             <div className="min-w-0">
-              <h3 className="font-medium text-sm truncate">
+              <p className="font-medium text-sm truncate">
                 {medicine.name}
-              </h3>
+              </p>
 
               {medicine.genericName && (
-                <p className="text-xs text-muted-foreground truncate">
+                <p className="text-xs text-slate-500 truncate">
                   {medicine.genericName}
                 </p>
               )}
 
               {medicine.manufacturer && medicine.manufacturer !== "nan" && (
-                <p className="text-xs text-slate-500 truncate">
+                <p className="text-xs text-slate-400 truncate">
                   {medicine.manufacturer}
                 </p>
               )}
 
               {medicine.packSize && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-400">
                   Pack: {medicine.packSize} units
                 </p>
               )}
             </div>
 
-            <div className="flex flex-col items-end gap-1">
-              {medicine.isScheduleH && (
-                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                  Rx
-                </Badge>
-              )}
-
-              {isLowStock && !isOutOfStock && (
-                <Badge className="text-[10px] bg-amber-100 text-amber-800">
-                  {stock} left
-                </Badge>
-              )}
-
-              {isOutOfStock && (
-                <Badge className="text-[10px] bg-red-100 text-red-800">
-                  Out of stock
-                </Badge>
-              )}
-            </div>
+            {/* RX badge */}
+            {medicine.isScheduleH && (
+              <Badge variant="destructive" className="text-[10px]">
+                Rx
+              </Badge>
+            )}
           </div>
 
-          {/* Price + actions */}
+          {/* Bottom row */}
           <div className="mt-2 flex items-center justify-between">
-            <div>
-              <span className="font-semibold text-base">
-                ₹{price.toFixed(0)}
-              </span>
+            <span className="font-semibold text-base">
+              ₹{price.toFixed(0)}
+            </span>
 
-              {discount > 0 && (
-                <span className="ml-1 text-xs text-green-600">
-                  ({discount}% off)
-                </span>
-              )}
-            </div>
-
-            {/* Add / Quantity */}
             {quantity === 0 ? (
               <Button
                 size="sm"
-                onClick={handleAdd}
                 disabled={isOutOfStock}
-                className="h-8 px-3"
+                onClick={() => addItem(medicine, 1)}
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add
               </Button>
             ) : (
               <div className="flex items-center gap-1 bg-green-50 rounded-full px-1">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleDecrement}
-                  className="h-7 w-7 rounded-full"
-                >
+                <Button size="icon" variant="ghost" onClick={() => updateQuantity(medicine.id, quantity - 1)}>
                   <Minus className="h-3 w-3" />
                 </Button>
-
-                <span className="w-6 text-center text-sm font-medium">
-                  {quantity}
-                </span>
-
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleIncrement}
-                  disabled={quantity >= stock}
-                  className="h-7 w-7 rounded-full"
-                >
+                <span className="w-6 text-center text-sm">{quantity}</span>
+                <Button size="icon" variant="ghost" onClick={() => updateQuantity(medicine.id, quantity + 1)}>
                   <Plus className="h-3 w-3" />
                 </Button>
               </div>
             )}
           </div>
 
-          {/* Rx warning */}
+          {/* Prescription warning */}
           {medicine.isScheduleH && (
-            <div className="mt-2 flex items-center gap-1 text-xs text-amber-600">
+            <div className="mt-1 flex items-center gap-1 text-[11px] text-red-600">
               <AlertTriangle className="h-3 w-3" />
               Prescription required
             </div>
