@@ -6,7 +6,7 @@ import cookieParser from "cookie-parser";
 // startup tasks
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
-import { db } from "./db"; // ✅ REQUIRED FOR MIGRATION
+import { db } from "./db";
 
 // routes
 import { registerAuthRoutes } from "./routes/auth";
@@ -23,15 +23,12 @@ async function startServer() {
   const app = express();
 
   /* -----------------------------
-     CORS
+     ✅ CORS (FINAL – SINGLE DOMAIN)
   ------------------------------ */
   app.use(
     cors({
-      origin: [
-        "https://shp2.vercel.app",
-        "http://localhost:5173",
-      ],
-      credentials: true,
+      origin: "https://shpharma.vercel.app", // ✅ ONLY allowed frontend
+      credentials: true,                     // ✅ REQUIRED for cookies
     })
   );
 
@@ -43,7 +40,7 @@ async function startServer() {
   app.use(express.urlencoded({ extended: false }));
 
   /* -----------------------------
-     HEALTH
+     HEALTH CHECK
   ------------------------------ */
   app.get("/api/__probe", (_req, res) => {
     res.json({ status: "ok" });
@@ -56,8 +53,7 @@ async function startServer() {
   await migratePrescriptions();
 
   /* -----------------------------
-     🔧 ONE-TIME SCHEMA FIXES
-     (SAFE TO RUN MULTIPLE TIMES)
+     SAFE SCHEMA FIXES
   ------------------------------ */
   try {
     console.log("🧹 Ensuring MRP is nullable");
@@ -66,8 +62,7 @@ async function startServer() {
       ALTER COLUMN mrp DROP NOT NULL
     `);
     console.log("✅ MRP constraint removed (or already nullable)");
-  } catch (err: any) {
-    // Postgres throws error if already nullable — ignore safely
+  } catch {
     console.log("ℹ️ MRP already nullable, skipping");
   }
 
@@ -80,13 +75,13 @@ async function startServer() {
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
-  registerAdminRoutes(app); // ✅ REQUIRED
+  registerAdminRoutes(app);
 
   /* -----------------------------
      ERROR HANDLER
   ------------------------------ */
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("UNHANDLED ERROR:", err);
+    console.error("❌ UNHANDLED ERROR:", err);
     res.status(500).json({ error: "Internal Server Error" });
   });
 
