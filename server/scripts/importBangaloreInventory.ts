@@ -11,6 +11,10 @@ const CSV_PATH = path.join(
   "easyload_inventory.csv"
 );
 
+function normalizeKey(key: string) {
+  return key.replace(/\ufeff/g, "").trim().toLowerCase();
+}
+
 export async function importBangaloreInventory() {
   console.log("📦 Starting inventory import");
   console.log("📍 CSV PATH:", CSV_PATH);
@@ -22,12 +26,10 @@ export async function importBangaloreInventory() {
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
 
-  const categoryMap = new Map<string, string>();
-  const allCategories = await db.select().from(categories);
-
-  for (const c of allCategories) {
-    categoryMap.set(c.name.toUpperCase(), c.id);
-  }
+  const categoryRows = await db.select().from(categories);
+  const categoryMap = new Map(
+    categoryRows.map((c) => [c.name.toUpperCase(), c.id])
+  );
 
   let inserted = 0;
   let skipped = 0;
@@ -35,28 +37,37 @@ export async function importBangaloreInventory() {
 
   await new Promise<void>((resolve, reject) => {
     fs.createReadStream(CSV_PATH)
-      .pipe(csv())
+      .pipe(
+        csv({
+          mapHeaders: ({ header }) => normalizeKey(header),
+        })
+      )
+      .on("headers", (headers) => {
+        console.log("🧠 Detected CSV headers:", headers);
+      })
       .on("data", (row) => {
         try {
-          const name = row["Medicine Name"]?.trim();
+          const name = row["medicine name"];
           if (!name) return skipped++;
 
-          const priceRaw = row["Price"]?.toString();
-          const price = Number(priceRaw?.replace(/[₹,]/g, ""));
+          const price = Number(
+            String(row["price"]).replace(/[₹,]/g, "")
+          );
           if (!price || Number.isNaN(price)) return skipped++;
 
-          const rxRaw = row["Is Prescription Required?"];
+          const rxRaw = row["is prescription required?"];
           const requiresPrescription =
             rxRaw === 1 ||
             rxRaw === "1" ||
             String(rxRaw).toLowerCase() === "yes" ||
             String(rxRaw).toLowerCase() === "true";
 
-          const packSize = Number(row["Pack-Size"]) || 0;
-          const manufacturer = row["Manufacturer"] || "Not Known";
-          const imageUrl = row["Image URL"] || null;
+          const packSize = Number(row["pack-size"]) || 0;
+          const manufacturer = row["manufacturer"] || "Not Known";
+          const imageUrl = row["image url"] || null;
 
-          const categoryName = row["Category"]?.toUpperCase() || "NO CATEGORY";
+          const categoryName =
+            row["category"]?.toUpperCase() || "NO CATEGORY";
           const categoryId = categoryMap.get(categoryName) || null;
 
           batch.push({
