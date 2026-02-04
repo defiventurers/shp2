@@ -1,83 +1,112 @@
 import type { Express, Request, Response } from "express";
-import { db } from "../db";
-import { medicines, orders, orderItems } from "@shared/schema";
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
-
-function parsePrice(value?: string): number {
-  if (!value) return 0;
-  return Number(
-    value.replace(/₹/g, "").replace(/,/g, "").trim()
-  ) || 0;
-}
-
-function parseBoolean(value?: string): boolean {
-  return value?.toLowerCase().trim() === "true";
-}
+import { db } from "../db";
+import { medicines, orders, orderItems } from "@shared/schema";
 
 export function registerAdminRoutes(app: Express) {
   console.log("🛠️ ADMIN ROUTES REGISTERED");
 
+  /**
+   * POST /api/admin/import-inventory
+   * Imports EASYLOAD inventory CSV
+   */
   app.post("/api/admin/import-inventory", async (_req: Request, res: Response) => {
-    console.log("🚨 ADMIN INVENTORY IMPORT TRIGGERED");
-
     const csvPath = path.join(
       process.cwd(),
-      "server/data/easyload_inventory.csv"
+      "server",
+      "data",
+      "easyload_inventory.csv"
     );
 
-    console.log(`📥 Using CSV: ${csvPath}`);
-
     if (!fs.existsSync(csvPath)) {
-      return res.status(400).json({ error: "CSV file not found" });
+      return res.status(404).json({
+        error: "CSV file not found at server/data/easyload_inventory.csv",
+      });
     }
 
-    try {
-      // 🔥 Clear dependent tables in correct order
-      await db.delete(orderItems);
-      await db.delete(orders);
-      await db.delete(medicines);
+    console.log("🚨 ADMIN INVENTORY IMPORT TRIGGERED");
+    console.log(`📥 Using CSV: ${csvPath}`);
 
+    try {
+      /* -----------------------------
+         HARD RESET (SAFE ORDER)
+      ------------------------------ */
+      await db.delete(orderItems);
       console.log("🧨 order_items cleared");
+
+      await db.delete(orders);
       console.log("🧨 orders cleared");
+
+      await db.delete(medicines);
       console.log("🧨 medicines cleared");
 
-      const rows: any[] = [];
+      /* -----------------------------
+         CSV STREAM IMPORT
+      ------------------------------ */
+      let count = 0;
+      const batch: any[] = [];
 
       await new Promise<void>((resolve, reject) => {
         fs.createReadStream(csvPath)
           .pipe(csv())
-          .on("data", (row) => rows.push(row))
-          .on("end", resolve)
+          .on("data", (row) => {
+            try {
+              const rawPrice =
+                row["Price"]?.toString().trim() ?? "0";
+
+              const price = Number(
+                rawPrice.replace(/[₹,]/g, "")
+              );
+
+              if (Number.isNaN(price)) return;
+
+              const isRx =
+                row["Is Prescription Required?"]
+                  ?.toString()
+                  .toLowerCase() === "yes";
+
+              batch.push({
+                name: row["Medicine Name"]?.trim(),
+                price,
+                mrp: price, // ✅ ALWAYS SET
+                stock: Number(row["Quantity"] || 0),
+                manufacturer: row["Manufacturer"] || null,
+                imageUrl: row["Image URL"] || null,
+                isScheduleH: isRx,
+                requiresPrescription: isRx,
+              });
+
+              count++;
+
+              if (batch.length === 500) {
+                db.insert(medicines)
+                  .values(batch.splice(0))
+                  .then(() => {
+                    console.log(`➕ Inserted ${count} medicines`);
+                  })
+                  .catch(reject);
+              }
+            } catch (err) {
+              reject(err);
+            }
+          })
+          .on("end", async () => {
+            if (batch.length) {
+              await db.insert(medicines).values(batch);
+              console.log(`➕ Inserted ${count} medicines`);
+            }
+
+            console.log(`✅ IMPORT COMPLETE: ${count} medicines`);
+            resolve();
+          })
           .on("error", reject);
       });
 
-      let inserted = 0;
-
-      for (const row of rows) {
-        await db.insert(medicines).values({
-          name: row["Medicine Name"]?.trim(),
-          price: parsePrice(row["Price"]),
-          requiresPrescription: parseBoolean(
-            row["Is Prescription Required?"]
-          ),
-          stock: Number(row["Quantity"]) || 0,
-          manufacturer: row["Manufacturer"] || null,
-          imageUrl: row["Image URL"] || null,
-        });
-
-        inserted++;
-        if (inserted % 500 === 0) {
-          console.log(`➕ Inserted ${inserted} medicines`);
-        }
-      }
-
-      console.log(`✅ IMPORT COMPLETE: ${inserted} medicines`);
-
       res.json({
         success: true,
-        count: inserted,
+        message: `Inventory import completed successfully (${count} items)`,
       });
     } catch (err) {
       console.error("❌ IMPORT FAILED:", err);
