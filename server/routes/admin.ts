@@ -1,31 +1,36 @@
 import type { Express, Request, Response } from "express";
-import path from "path";
-import fs from "fs";
-import csv from "csv-parser";
 import { db } from "../db";
-import { medicines } from "@shared/schema";
+import { medicines, orders, orderItems } from "@shared/schema";
+import fs from "fs";
+import path from "path";
+import csv from "csv-parser";
 
 export function registerAdminRoutes(app: Express) {
   console.log("🛠️ ADMIN ROUTES REGISTERED");
 
   app.post("/api/admin/import-inventory", async (_req: Request, res: Response) => {
+    console.log("🚨 ADMIN INVENTORY IMPORT TRIGGERED");
+
+    const csvPath = path.join(
+      process.cwd(),
+      "server/data/easyload_inventory.csv"
+    );
+
+    console.log(`📥 Using CSV: ${csvPath}`);
+
+    if (!fs.existsSync(csvPath)) {
+      return res.status(400).json({ error: "CSV file not found" });
+    }
+
     try {
-      console.log("🚨 ADMIN INVENTORY IMPORT TRIGGERED");
-
-      const csvPath = path.join(
-        process.cwd(),
-        "server/data/easyload_inventory.csv"
-      );
-
-      console.log("📥 Using CSV:", csvPath);
-
-      if (!fs.existsSync(csvPath)) {
-        throw new Error("CSV file not found at " + csvPath);
-      }
-
-      // 🔥 Clear existing inventory
+      // 🔥 CRITICAL FIX — clear dependent tables FIRST
+      await db.delete(orderItems);
+      await db.delete(orders);
       await db.delete(medicines);
-      console.log("🧨 Medicines table cleared");
+
+      console.log("🧨 order_items cleared");
+      console.log("🧨 orders cleared");
+      console.log("🧨 medicines cleared");
 
       const rows: any[] = [];
 
@@ -33,7 +38,7 @@ export function registerAdminRoutes(app: Express) {
         fs.createReadStream(csvPath)
           .pipe(csv())
           .on("data", (row) => rows.push(row))
-          .on("end", () => resolve())
+          .on("end", resolve)
           .on("error", reject);
       });
 
@@ -41,16 +46,13 @@ export function registerAdminRoutes(app: Express) {
 
       for (const row of rows) {
         await db.insert(medicines).values({
-          name: row["Medicine Name"],
+          name: row["Medicine Name"]?.trim(),
           price: row["Price"],
-          mrp: row["Price"],
+          requiresPrescription:
+            row["Is Prescription Required?"]?.toLowerCase() === "true",
           stock: Number(row["Quantity"]) || 0,
           manufacturer: row["Manufacturer"] || null,
           imageUrl: row["Image URL"] || null,
-          isScheduleH:
-            String(row["Is Prescription Required?"]).toLowerCase() === "true",
-          requiresPrescription:
-            String(row["Is Prescription Required?"]).toLowerCase() === "true",
         });
 
         inserted++;
@@ -60,10 +62,14 @@ export function registerAdminRoutes(app: Express) {
       }
 
       console.log(`✅ IMPORT COMPLETE: ${inserted} medicines`);
-      res.json({ success: true, inserted });
-    } catch (err: any) {
+
+      res.json({
+        success: true,
+        count: inserted,
+      });
+    } catch (err) {
       console.error("❌ IMPORT FAILED:", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Inventory import failed" });
     }
   });
 }
