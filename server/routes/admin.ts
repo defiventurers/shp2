@@ -1,88 +1,69 @@
-import { Router } from "express";
+import type { Express, Request, Response } from "express";
 import path from "path";
 import fs from "fs";
 import csv from "csv-parser";
 import { db } from "../db";
 import { medicines } from "@shared/schema";
 
-const router = Router();
+export function registerAdminRoutes(app: Express) {
+  console.log("🛠️ ADMIN ROUTES REGISTERED");
 
-/**
- * ADMIN INVENTORY IMPORT
- * CSV schema (exact):
- * 1) name
- * 2) price
- * 3) requiresPrescription
- * 4) quantity
- * 5) manufacturer
- * 6) imageUrl
- */
+  app.post("/api/admin/import-inventory", async (_req: Request, res: Response) => {
+    try {
+      console.log("🚨 ADMIN INVENTORY IMPORT TRIGGERED");
 
-router.post("/import-inventory", async (_req, res) => {
-  console.log("🚨 ADMIN INVENTORY IMPORT TRIGGERED");
+      const csvPath = path.join(
+        process.cwd(),
+        "server/data/easyload_inventory.csv"
+      );
 
-  const csvPath = path.join(
-    process.cwd(),
-    "server",
-    "data",
-    "easyload_inventory.csv"
-  );
+      console.log("📥 Using CSV:", csvPath);
 
-  if (!fs.existsSync(csvPath)) {
-    console.error("❌ CSV NOT FOUND:", csvPath);
-    return res.status(500).json({ error: "CSV not found" });
-  }
+      if (!fs.existsSync(csvPath)) {
+        throw new Error("CSV file not found at " + csvPath);
+      }
 
-  console.log("📥 Using CSV:", csvPath);
+      // 🔥 Clear existing inventory
+      await db.delete(medicines);
+      console.log("🧨 Medicines table cleared");
 
-  try {
-    // 🔥 HARD RESET (delete old inventory)
-    await db.delete(medicines);
-    console.log("🧨 Medicines table cleared");
+      const rows: any[] = [];
 
-    const rows: any[] = [];
-
-    await new Promise<void>((resolve, reject) => {
-      fs.createReadStream(csvPath)
-        .pipe(csv())
-        .on("data", (row) => rows.push(row))
-        .on("end", resolve)
-        .on("error", reject);
-    });
-
-    let inserted = 0;
-
-    for (const row of rows) {
-      await db.insert(medicines).values({
-        name: row["Medicine Name"],
-        price: row["Price"],
-        mrp: row["Price"],
-        stock: Number(row["Quantity"] || 0),
-        manufacturer: row["Manufacturer"] || null,
-        imageUrl: row["Image URL"] || null,
-        requiresPrescription:
-          String(row["Is Prescription Required?"]).toLowerCase() === "true",
-        isScheduleH:
-          String(row["Is Prescription Required?"]).toLowerCase() === "true",
+      await new Promise<void>((resolve, reject) => {
+        fs.createReadStream(csvPath)
+          .pipe(csv())
+          .on("data", (row) => rows.push(row))
+          .on("end", () => resolve())
+          .on("error", reject);
       });
 
-      inserted++;
+      let inserted = 0;
 
-      if (inserted % 500 === 0) {
-        console.log(`➕ Inserted ${inserted} medicines`);
+      for (const row of rows) {
+        await db.insert(medicines).values({
+          name: row["Medicine Name"],
+          price: row["Price"],
+          mrp: row["Price"],
+          stock: Number(row["Quantity"]) || 0,
+          manufacturer: row["Manufacturer"] || null,
+          imageUrl: row["Image URL"] || null,
+          isScheduleH:
+            String(row["Is Prescription Required?"]).toLowerCase() === "true",
+          requiresPrescription:
+            String(row["Is Prescription Required?"]).toLowerCase() === "true",
+        });
+
+        inserted++;
+        if (inserted % 500 === 0) {
+          console.log(`➕ Inserted ${inserted} medicines`);
+        }
       }
+
+      console.log(`✅ IMPORT COMPLETE: ${inserted} medicines`);
+      res.json({ success: true, inserted });
+    } catch (err: any) {
+      console.error("❌ IMPORT FAILED:", err);
+      res.status(500).json({ error: err.message });
     }
-
-    console.log(`✅ IMPORT COMPLETE: ${inserted} medicines`);
-
-    res.json({
-      success: true,
-      inserted,
-    });
-  } catch (err) {
-    console.error("❌ IMPORT FAILED:", err);
-    res.status(500).json({ error: "Import failed" });
-  }
-});
-
-export default router;
+  });
+}
