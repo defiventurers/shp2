@@ -9,23 +9,18 @@ interface Props {
 export function MedicineCard({ medicine }: Props) {
   const [showDetails, setShowDetails] = useState(false);
 
+  // ✅ Correct image source (array from backend)
   const imageUrl =
-    medicine.imageUrls && medicine.imageUrls.length > 0
+    Array.isArray(medicine.imageUrls) && medicine.imageUrls.length > 0
       ? medicine.imageUrls[0]
       : null;
 
   return (
     <div className="rounded-xl border bg-white p-4 shadow-sm">
       {/* =======================
-          TOP ROW
+          MAIN CARD (NO IMAGE HERE)
       ======================== */}
-      <div className="flex items-start gap-4">
-        {/* Image placeholder (fixed size, always reserved) */}
-        <div className="h-16 w-16 flex-shrink-0 rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
-          {imageUrl ? "Image" : "Image not available"}
-        </div>
-
-        {/* Main info */}
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <h3 className="text-sm font-semibold leading-snug">
             {medicine.name}
@@ -42,8 +37,7 @@ export function MedicineCard({ medicine }: Props) {
           )}
         </div>
 
-        {/* Add button */}
-        <Button className="ml-auto h-9 px-4">+ Add</Button>
+        <Button className="h-9 px-4 shrink-0">+ Add</Button>
       </div>
 
       {/* =======================
@@ -69,9 +63,9 @@ export function MedicineCard({ medicine }: Props) {
             </p>
           )}
 
-          {/* Image container — THIS IS THE KEY FIX */}
-          <div className="w-full flex justify-center">
-            <div className="h-40 w-40 overflow-hidden rounded-md bg-white border flex items-center justify-center">
+          {/* ✅ SINGLE, CONSTRAINED IMAGE TILE */}
+          <div className="flex justify-center">
+            <div className="h-40 w-40 rounded-md border bg-white flex items-center justify-center overflow-hidden">
               {imageUrl ? (
                 <img
                   src={imageUrl}
