@@ -5,7 +5,10 @@ import { db } from "../db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+const JWT_SECRET = process.env.JWT_SECRET!;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not set");
+}
 
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID
@@ -23,14 +26,16 @@ function setAuthCookie(res: Response, token: string) {
 export function registerAuthRoutes(app: Express) {
   console.log("✅ AUTH ROUTES REGISTERED");
 
-  /* ---------------------------
-     GOOGLE LOGIN
-  ---------------------------- */
+  /* =====================================================
+     GOOGLE SIGN-IN (POST ONLY — NO REDIRECT FLOW)
+     Frontend sends Google ID token as `credential`
+  ====================================================== */
   app.post("/api/auth/google", async (req: Request, res: Response) => {
     try {
       const { credential } = req.body;
+
       if (!credential) {
-        return res.status(400).json({ error: "Missing credential" });
+        return res.status(400).json({ error: "Missing Google credential" });
       }
 
       const ticket = await googleClient.verifyIdToken({
@@ -39,60 +44,66 @@ export function registerAuthRoutes(app: Express) {
       });
 
       const payload = ticket.getPayload();
-      if (!payload || !payload.email) {
+
+      if (!payload?.email) {
         return res.status(401).json({ error: "Invalid Google token" });
       }
 
-      /* ---------------------------------
-         UPSERT USER (CRITICAL FIX)
-      ---------------------------------- */
+      /* -------- UPSERT USER -------- */
       const [existing] = await db
         .select()
         .from(users)
         .where(eq(users.email, payload.email));
 
-      let userRow;
+      let user;
 
       if (!existing) {
         const [created] = await db
           .insert(users)
           .values({
             email: payload.email,
-            firstName: payload.name,
+            firstName: payload.name ?? "",
             profileImageUrl: payload.picture,
           })
           .returning();
 
-        userRow = created;
+        user = created;
       } else {
-        userRow = existing;
+        user = existing;
       }
 
-      const jwtUser = {
-        id: userRow.id,           // ✅ DB UUID
-        email: userRow.email,
-        name: userRow.firstName,
+      /* -------- ISSUE JWT -------- */
+      const jwtPayload = {
+        id: user.id,
+        email: user.email,
+        name: user.firstName,
       };
 
-      const token = jwt.sign(jwtUser, JWT_SECRET, { expiresIn: "7d" });
+      const token = jwt.sign(jwtPayload, JWT_SECRET, {
+        expiresIn: "7d",
+      });
+
       setAuthCookie(res, token);
 
-      res.json({ success: true, user: jwtUser });
+      return res.json({
+        success: true,
+        user: jwtPayload,
+      });
     } catch (err) {
       console.error("❌ GOOGLE AUTH ERROR:", err);
-      res.status(401).json({ error: "Google authentication failed" });
+      return res.status(401).json({ error: "Google authentication failed" });
     }
   });
 
-  /* ---------------------------
+  /* =====================================================
      CURRENT USER
-  ---------------------------- */
+  ====================================================== */
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     const token = req.cookies?.auth_token;
     if (!token) return res.json(null);
 
     try {
-      const decoded: any = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
 
       const [user] = await db
         .select()
@@ -101,7 +112,7 @@ export function registerAuthRoutes(app: Express) {
 
       if (!user) return res.json(null);
 
-      res.json({
+      return res.json({
         id: user.id,
         email: user.email,
         name: user.firstName,
@@ -114,13 +125,13 @@ export function registerAuthRoutes(app: Express) {
         secure: true,
         sameSite: "none",
       });
-      res.json(null);
+      return res.json(null);
     }
   });
 
-  /* ---------------------------
+  /* =====================================================
      LOGOUT
-  ---------------------------- */
+  ====================================================== */
   app.post("/api/auth/logout", (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
