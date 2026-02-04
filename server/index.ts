@@ -51,7 +51,7 @@ async function startServer() {
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
-  registerAdminRoutes(app); // ✅ ONLY PLACE FOR IMPORT ROUTE
+  registerAdminRoutes(app);
 
   app.use(
     (err: any, _req: Request, res: Response, _next: NextFunction) => {
