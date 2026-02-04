@@ -15,7 +15,7 @@ import { z } from "zod";
 import { relations } from "drizzle-orm";
 
 /* =========================
-   Sessions (legacy / auth)
+   Sessions
 ========================= */
 export const sessions = pgTable(
   "sessions",
@@ -44,57 +44,39 @@ export const users = pgTable("users", {
 });
 
 /* =========================
-   Categories
-========================= */
-export const categories = pgTable("categories", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name").notNull().unique(),
-  icon: varchar("icon"),
-});
-
-/* =========================
-   Medicines
+   Medicines (FINAL)
 ========================= */
 export const medicines = pgTable("medicines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
   name: varchar("name").notNull(),
-  genericName: varchar("generic_name"),
-  manufacturer: varchar("manufacturer"),
-  categoryId: varchar("category_id").references(() => categories.id),
-  dosage: varchar("dosage"),
-  form: varchar("form"),
+  manufacturer: varchar("manufacturer").notNull(),
+
   packSize: varchar("pack_size"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   mrp: decimal("mrp", { precision: 10, scale: 2 }).notNull(),
-  stock: integer("stock").notNull().default(0),
+
   requiresPrescription: boolean("requires_prescription").default(false),
   isScheduleH: boolean("is_schedule_h").default(false),
-  description: text("description"),
+
   imageUrl: varchar("image_url"),
+  sourceFile: varchar("source_file").notNull(),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 /* =========================
-   Prescriptions (MULTI-PAGE)
+   Prescriptions
 ========================= */
 export const prescriptions = pgTable("prescriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id),
-
-  // ✅ Supports 1–5 images
+  userId: varchar("user_id").notNull().references(() => users.id),
   imageUrls: jsonb("image_urls").$type<string[]>().notNull(),
-
   ocrText: text("ocr_text"),
   extractedMedicines: jsonb("extracted_medicines"),
   status: varchar("status").default("pending"),
-
   createdAt: timestamp("created_at").defaultNow(),
-
-  // ❌ DO NOT ADD updatedAt — DB does not have it
 });
 
 /* =========================
@@ -104,15 +86,12 @@ export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   orderNumber: varchar("order_number").notNull().unique(),
 
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  prescriptionId: varchar("prescription_id").references(() => prescriptions.id),
 
   customerName: varchar("customer_name").notNull(),
   customerPhone: varchar("customer_phone").notNull(),
   customerEmail: varchar("customer_email"),
-
-  prescriptionId: varchar("prescription_id").references(() => prescriptions.id),
 
   deliveryType: varchar("delivery_type").notNull(),
   deliveryAddress: text("delivery_address"),
@@ -134,12 +113,8 @@ export const orders = pgTable("orders", {
 ========================= */
 export const orderItems = pgTable("order_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: varchar("order_id")
-    .notNull()
-    .references(() => orders.id),
-  medicineId: varchar("medicine_id")
-    .notNull()
-    .references(() => medicines.id),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  medicineId: varchar("medicine_id").notNull().references(() => medicines.id),
   medicineName: varchar("medicine_name").notNull(),
   quantity: integer("quantity").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
@@ -154,22 +129,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   prescriptions: many(prescriptions),
 }));
 
-export const categoriesRelations = relations(categories, ({ many }) => ({
-  medicines: many(medicines),
-}));
-
-export const medicinesRelations = relations(medicines, ({ one }) => ({
-  category: one(categories, {
-    fields: [medicines.categoryId],
-    references: [categories.id],
-  }),
-}));
-
 export const ordersRelations = relations(orders, ({ one, many }) => ({
-  user: one(users, {
-    fields: [orders.userId],
-    references: [users.id],
-  }),
+  user: one(users, { fields: [orders.userId], references: [users.id] }),
   prescription: one(prescriptions, {
     fields: [orders.prescriptionId],
     references: [prescriptions.id],
@@ -204,10 +165,6 @@ export const insertUserSchema = createInsertSchema(users).omit({
   updatedAt: true,
 });
 
-export const insertCategorySchema = createInsertSchema(categories).omit({
-  id: true,
-});
-
 export const insertMedicineSchema = createInsertSchema(medicines).omit({
   id: true,
   createdAt: true,
@@ -233,19 +190,7 @@ export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
    Types
 ========================= */
 export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
-
-export type Category = typeof categories.$inferSelect;
-export type InsertCategory = z.infer<typeof insertCategorySchema>;
-
 export type Medicine = typeof medicines.$inferSelect;
-export type InsertMedicine = z.infer<typeof insertMedicineSchema>;
-
-export type Prescription = typeof prescriptions.$inferSelect;
-export type InsertPrescription = z.infer<typeof insertPrescriptionSchema>;
-
 export type Order = typeof orders.$inferSelect;
-export type InsertOrder = z.infer<typeof insertOrderSchema>;
-
 export type OrderItem = typeof orderItems.$inferSelect;
-export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type Prescription = typeof prescriptions.$inferSelect;
