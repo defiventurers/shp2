@@ -31,14 +31,19 @@ export async function importBangaloreInventory() {
       .pipe(
         csv({
           mapHeaders: ({ header }) =>
-            header.replace(/^\uFEFF/, "").trim().toLowerCase(),
+            header
+              .replace(/^\uFEFF/, "")   // remove BOM
+              .replace(/\s+/g, " ")     // normalize spaces
+              .trim()
+              .toLowerCase(),
         })
       )
       .on("data", async (row) => {
         try {
+          // 🔑 NORMALIZED KEYS (NOW RELIABLE)
           const name = row["medicine name"];
           const price = row["price"];
-          const packSize = row["quantity(pack size)"];
+          const packSize = row["quantity"];
 
           if (!name || !price || !packSize) {
             skipped++;
@@ -50,18 +55,27 @@ export async function importBangaloreInventory() {
             price: String(price),
             mrp: String(price),
             packSize: Number(packSize),
-            manufacturer: row["manufacturer"]?.trim() || null,
+
+            manufacturer: row["manufacturer"]
+              ? String(row["manufacturer"]).trim()
+              : null,
+
             imageUrl:
-              row["image url"] && row["image url"].trim() !== ""
-                ? row["image url"].trim()
+              row["image url"] && String(row["image url"]).trim() !== ""
+                ? String(row["image url"]).trim()
                 : null,
-            stock: null,
+
             requiresPrescription:
               String(row["is prescription required?"])
+                .trim()
                 .toLowerCase() === "yes",
+
             isScheduleH:
               String(row["is prescription required?"])
+                .trim()
                 .toLowerCase() === "yes",
+
+            stock: null,
             categoryId: null,
             genericName: null,
           });
@@ -71,8 +85,9 @@ export async function importBangaloreInventory() {
           if (inserted % 1000 === 0) {
             console.log(`➕ Inserted ${inserted} medicines`);
           }
-        } catch {
+        } catch (err) {
           skipped++;
+          console.error("❌ INSERT ERROR:", err);
         }
       })
       .on("end", () => {
