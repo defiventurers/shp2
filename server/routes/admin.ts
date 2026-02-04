@@ -5,6 +5,22 @@ import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
 
+/** ✅ Utility: clean currency like "₹1,234.00" → 1234 */
+function parsePrice(value: string | undefined): number {
+  if (!value) return 0;
+  return Number(
+    value
+      .replace(/₹/g, "")
+      .replace(/,/g, "")
+      .trim()
+  ) || 0;
+}
+
+/** ✅ Utility: normalize booleans */
+function parseBoolean(value: string | undefined): boolean {
+  return value?.toLowerCase().trim() === "true";
+}
+
 export function registerAdminRoutes(app: Express) {
   console.log("🛠️ ADMIN ROUTES REGISTERED");
 
@@ -23,7 +39,7 @@ export function registerAdminRoutes(app: Express) {
     }
 
     try {
-      // 🔥 CRITICAL FIX — clear dependent tables FIRST
+      /** 🔥 Clear dependent tables FIRST */
       await db.delete(orderItems);
       await db.delete(orders);
       await db.delete(medicines);
@@ -47,9 +63,10 @@ export function registerAdminRoutes(app: Express) {
       for (const row of rows) {
         await db.insert(medicines).values({
           name: row["Medicine Name"]?.trim(),
-          price: row["Price"],
-          requiresPrescription:
-            row["Is Prescription Required?"]?.toLowerCase() === "true",
+          price: parsePrice(row["Price"]),
+          requiresPrescription: parseBoolean(
+            row["Is Prescription Required?"]
+          ),
           stock: Number(row["Quantity"]) || 0,
           manufacturer: row["Manufacturer"] || null,
           imageUrl: row["Image URL"] || null,
