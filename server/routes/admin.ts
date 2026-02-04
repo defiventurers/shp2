@@ -1,40 +1,96 @@
-import type { Express, Request, Response } from "express";
-import { importBangaloreInventory } from "../scripts/importBangaloreInventory";
+import type { Express, Response } from "express";
+import fs from "fs";
+import path from "path";
+import csv from "csv-parser";
+import { db } from "../db";
+import { medicines } from "@shared/schema";
 
 /**
  * ADMIN ROUTES
- * These routes are meant to be triggered MANUALLY (one-time)
- * from the browser — no CLI, no env vars.
+ * Manual inventory import only
  */
 export function registerAdminRoutes(app: Express) {
   console.log("🛠️ ADMIN ROUTES REGISTERED");
 
   /**
-   * 🔥 ONE-TIME INVENTORY IMPORT
-   *
-   * Visit in browser:
-   * https://your-backend-url/api/admin/import
-   *
-   * DO NOT refresh.
-   * DO NOT call twice.
+   * POST /api/admin/import-inventory
+   * Manually triggered inventory replacement
    */
-  app.get("/api/admin/import", async (_req: Request, res: Response) => {
+  app.post("/api/admin/import-inventory", async (_req, res: Response) => {
     try {
       console.log("🚨 ADMIN IMPORT TRIGGERED");
 
-      // Start import (blocking)
-      await importBangaloreInventory();
+      const csvPath = path.join(
+        process.cwd(),
+        "server/data/easyload_inventory.csv"
+      );
 
-      console.log("✅ ADMIN IMPORT COMPLETED");
+      if (!fs.existsSync(csvPath)) {
+        return res.status(404).json({
+          success: false,
+          error: "CSV file not found",
+        });
+      }
 
-      res.json({
+      console.log(`📥 Using CSV: ${csvPath}`);
+
+      /* ----------------------------------
+         STEP 1: DELETE OLD INVENTORY
+      ---------------------------------- */
+      await db.delete(medicines);
+      console.log("🧨 Old inventory deleted");
+
+      /* ----------------------------------
+         STEP 2: READ + INSERT NEW INVENTORY
+      ---------------------------------- */
+      const rows: any[] = [];
+
+      await new Promise<void>((resolve, reject) => {
+        fs.createReadStream(csvPath)
+          .pipe(csv())
+          .on("data", (row) => rows.push(row))
+          .on("end", resolve)
+          .on("error", reject);
+      });
+
+      let inserted = 0;
+      const BATCH_SIZE = 200;
+
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const batch = rows.slice(i, i + BATCH_SIZE);
+
+        await db.insert(medicines).values(
+          batch.map((row) => ({
+            name: row["Medicine Name"]?.trim(),
+            price: String(row["Price"]),
+            mrp: String(row["Price"]),
+            stock: Number(row["Quantity"]) || 0,
+            manufacturer: row["Manufacturer"] || null,
+            imageUrl: row["Image URL"] || null,
+            requiresPrescription:
+              String(row["Is Prescription Required?"]).toLowerCase() === "true",
+            isScheduleH:
+              String(row["Is Prescription Required?"]).toLowerCase() === "true",
+          }))
+        );
+
+        inserted += batch.length;
+
+        if (inserted % 500 === 0) {
+          console.log(`➕ Inserted ${inserted} medicines`);
+        }
+      }
+
+      console.log(`✅ IMPORT COMPLETE: ${inserted} medicines`);
+
+      return res.json({
         success: true,
-        message: "Bangalore inventory import completed successfully",
+        message: "Inventory replaced successfully",
+        total: inserted,
       });
     } catch (err) {
       console.error("❌ ADMIN IMPORT FAILED:", err);
-
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         error: "Inventory import failed",
       });
