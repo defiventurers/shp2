@@ -2,79 +2,90 @@ import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
 import { db } from "../db";
-import { medicines } from "@shared/schema";
+import { medicines, categories } from "@shared/schema";
+
+const CSV_PATH = path.join(
+  process.cwd(),
+  "server",
+  "data",
+  "easyload_inventory.csv"
+);
 
 export async function importBangaloreInventory() {
-  const csvPath = path.join(
-    process.cwd(),
-    "server",
-    "data",
-    "easyload_inventory.csv"
-  );
+  console.log("📦 Starting inventory import");
 
-  if (!fs.existsSync(csvPath)) {
-    throw new Error("CSV file not found");
+  if (!fs.existsSync(CSV_PATH)) {
+    throw new Error(`CSV not found at ${CSV_PATH}`);
   }
 
-  console.log("📥 Importing inventory from:", csvPath);
-
-  await db.delete(medicines);
+  // 🔑 Build category name → id map
+  const categoryRows = await db.select().from(categories);
+  const categoryMap = new Map(
+    categoryRows.map((c) => [c.name, c.id])
+  );
 
   let inserted = 0;
   let skipped = 0;
   const batch: any[] = [];
 
-  await new Promise<void>((resolve, reject) => {
-    fs.createReadStream(csvPath)
-      .pipe(csv())
-      .on("data", (row) => {
-        try {
-          const name = row["Medicine Name"]?.trim();
-          const priceRaw = row["Price"];
-          if (!name || !priceRaw) {
-            skipped++;
-            return;
-          }
+  await db.delete(medicines);
+  console.log("🧨 Medicines table cleared");
 
-          const price = Number(String(priceRaw).replace(/[₹,]/g, ""));
-          if (Number.isNaN(price)) {
+  return new Promise<void>((resolve, reject) => {
+    fs.createReadStream(CSV_PATH)
+      .pipe(csv())
+      .on("data", async (row) => {
+        try {
+          const name = row["Medicine Name"];
+          const price = Number(row["Price"]);
+          const rx =
+            String(row["Is Prescription Required?"]).toLowerCase() === "yes" ||
+            String(row["Is Prescription Required?"]).toLowerCase() === "true";
+
+          const packSize = Number(row["Pack-Size"]);
+          const manufacturer = row["Manufacturer"];
+          const imageUrl = row["Image URL"];
+          const categoryName = row["Category"];
+
+          const categoryId = categoryMap.get(categoryName);
+
+          if (!name || !categoryId || Number.isNaN(price)) {
             skipped++;
             return;
           }
 
           batch.push({
             name,
-            manufacturer: row["Manufacturer"] || "Not Known",
-            packSize: row["Pack-Size"] || null,
+            manufacturer,
             price,
             mrp: price,
-            requiresPrescription:
-              String(row["Is Prescription Required?"]).toLowerCase() === "yes",
-            isScheduleH:
-              String(row["Is Prescription Required?"]).toLowerCase() === "yes",
-            imageUrl: row["Image URL"] || null,
-            sourceFile: row["Source File"] || "easyload_inventory.csv",
+            packSize: packSize.toString(),
+            stock: null,
+            requiresPrescription: rx,
+            isScheduleH: rx,
+            imageUrl,
+            categoryId,
           });
 
-          inserted++;
-
           if (batch.length === 500) {
-            db.insert(medicines)
-              .values(batch.splice(0))
-              .catch(reject);
+            await db.insert(medicines).values(batch.splice(0));
+            inserted += 500;
             console.log(`➕ Inserted ${inserted}`);
           }
-        } catch (e) {
+        } catch {
           skipped++;
         }
       })
       .on("end", async () => {
         if (batch.length) {
           await db.insert(medicines).values(batch);
+          inserted += batch.length;
         }
+
         console.log("✅ IMPORT COMPLETE");
         console.log(`➕ Inserted: ${inserted}`);
         console.log(`⏭️ Skipped: ${skipped}`);
+        console.log(`🎯 Expected total: 18433`);
         resolve();
       })
       .on("error", reject);
