@@ -7,7 +7,7 @@ interface Props {
   medicine: Medicine;
 }
 
-export default function MedicineCard({ medicine }: Props) {
+export function MedicineCard({ medicine }: Props) {
   const { addItem } = useCartContext();
   const [showDetails, setShowDetails] = useState(false);
   const [imageError, setImageError] = useState(false);
