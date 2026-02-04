@@ -1,39 +1,38 @@
+// server/seed.ts
+
 import { db } from "./db";
 import { categories } from "@shared/schema";
 
+/**
+ * Canonical medicine categories
+ * Minimal, stable, CSV-aligned
+ */
 const medicineCategories = [
-  { name: "Pain Relief", icon: "pill" },
-  { name: "Antibiotics", icon: "capsule" },
-  { name: "Vitamins & Supplements", icon: "vitamin" },
-  { name: "Digestive Health", icon: "stomach" },
-  { name: "Cold & Flu", icon: "cold" },
-  { name: "Diabetes Care", icon: "diabetes" },
-  { name: "Heart Health", icon: "heart" },
-  { name: "Skin Care", icon: "skin" },
-  { name: "Eye Care", icon: "eye" },
-  { name: "First Aid", icon: "bandage" },
+  { name: "TABLETS", icon: "pill" },
+  { name: "CAPSULES", icon: "capsule" },
+  { name: "SYRUPS", icon: "syrup" },
+  { name: "INJECTIONS", icon: "syringe" },
+  { name: "TOPICALS", icon: "cream" },
+  { name: "DROPS", icon: "drop" },
+  { name: "OTHERS", icon: "box" },
 ];
 
 export async function seedDatabase() {
-  console.log("Seeding database...");
+  console.log("🌱 Seeding categories...");
 
   try {
-    // ✅ SAFE idempotent guard (DO NOT REMOVE)
+    // ✅ Idempotent guard
     const existing = await db.select().from(categories).limit(1);
     if (existing.length > 0) {
-      console.log("Database already seeded, skipping");
+      console.log("ℹ️ Categories already exist, skipping seed");
       return;
     }
 
-    // ✅ INSERT ONLY CATEGORIES
-    for (const cat of medicineCategories) {
-      await db.insert(categories).values(cat);
-    }
+    await db.insert(categories).values(medicineCategories);
 
-    console.log(`Inserted ${medicineCategories.length} categories`);
-    console.log("Database seeded successfully (categories only)");
+    console.log(`✅ Inserted ${medicineCategories.length} categories`);
   } catch (error) {
-    console.error("Error seeding database:", error);
+    console.error("❌ Category seeding failed:", error);
     throw error;
   }
 }
