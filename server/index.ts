@@ -23,12 +23,12 @@ async function startServer() {
   const app = express();
 
   /* -----------------------------
-     ✅ CORS (FINAL – SINGLE DOMAIN)
+     CORS — SINGLE DOMAIN ONLY
   ------------------------------ */
   app.use(
     cors({
-      origin: "https://shpharma.vercel.app", // ✅ ONLY allowed frontend
-      credentials: true,                     // ✅ REQUIRED for cookies
+      origin: ["https://shpharma.vercel.app"],
+      credentials: true,
     })
   );
 
@@ -40,7 +40,7 @@ async function startServer() {
   app.use(express.urlencoded({ extended: false }));
 
   /* -----------------------------
-     HEALTH CHECK
+     HEALTH
   ------------------------------ */
   app.get("/api/__probe", (_req, res) => {
     res.json({ status: "ok" });
@@ -53,7 +53,7 @@ async function startServer() {
   await migratePrescriptions();
 
   /* -----------------------------
-     SAFE SCHEMA FIXES
+     SCHEMA SAFETY FIXES
   ------------------------------ */
   try {
     console.log("🧹 Ensuring MRP is nullable");
@@ -61,10 +61,23 @@ async function startServer() {
       ALTER TABLE medicines
       ALTER COLUMN mrp DROP NOT NULL
     `);
-    console.log("✅ MRP constraint removed (or already nullable)");
-  } catch {
-    console.log("ℹ️ MRP already nullable, skipping");
-  }
+  } catch {}
+
+  try {
+    console.log("🧹 Ensuring stock is nullable");
+    await db.execute(`
+      ALTER TABLE medicines
+      ALTER COLUMN stock DROP NOT NULL
+    `);
+  } catch {}
+
+  try {
+    console.log("🧹 Ensuring pack_size column exists");
+    await db.execute(`
+      ALTER TABLE medicines
+      ADD COLUMN IF NOT EXISTS pack_size INTEGER
+    `);
+  } catch {}
 
   /* -----------------------------
      ROUTES
@@ -81,7 +94,7 @@ async function startServer() {
      ERROR HANDLER
   ------------------------------ */
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("❌ UNHANDLED ERROR:", err);
+    console.error("UNHANDLED ERROR:", err);
     res.status(500).json({ error: "Internal Server Error" });
   });
 
@@ -89,7 +102,6 @@ async function startServer() {
      START SERVER
   ------------------------------ */
   const port = Number(process.env.PORT || 10000);
-
   http.createServer(app).listen(port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${port}`);
   });
