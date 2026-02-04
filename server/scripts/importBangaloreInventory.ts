@@ -18,13 +18,17 @@ export async function importBangaloreInventory() {
     throw new Error(`CSV NOT FOUND: ${CSV_PATH}`);
   }
 
-  console.log("📥 Using CSV:", CSV_PATH);
+  console.log(`📥 Using CSV: ${CSV_PATH}`);
 
+  /* -----------------------------
+     CLEAR EXISTING INVENTORY
+  ------------------------------ */
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
 
   let inserted = 0;
   let skipped = 0;
+  const batch: any[] = [];
 
   return new Promise<void>((resolve, reject) => {
     fs.createReadStream(CSV_PATH)
@@ -32,65 +36,98 @@ export async function importBangaloreInventory() {
         csv({
           mapHeaders: ({ header }) =>
             header
-              .replace(/^\uFEFF/, "")   // remove BOM
-              .replace(/\s+/g, " ")     // normalize spaces
+              .replace(/^\uFEFF/, "") // BOM
+              .replace(/\s+/g, " ")   // normalize spaces
               .trim()
               .toLowerCase(),
         })
       )
       .on("data", async (row) => {
         try {
-          // 🔑 NORMALIZED KEYS (NOW RELIABLE)
-          const name = row["medicine name"];
-          const price = row["price"];
-          const packSize = row["quantity"];
+          /* -----------------------------
+             EXACT 6 COLUMN READ
+          ------------------------------ */
+          const nameRaw = row["medicine name"];
+          const priceRaw = row["price"];
+          const packSizeRaw = row["quantity(pack size)"];
+          const rxRaw = row["is prescription required?"];
+          const manufacturerRaw = row["manufacturer"];
+          const imageUrlRaw = row["image url"];
 
-          if (!name || !price || !packSize) {
+          /* -----------------------------
+             HARD VALIDATION
+          ------------------------------ */
+          if (!nameRaw || !priceRaw || !packSizeRaw) {
             skipped++;
             return;
           }
 
-          await db.insert(medicines).values({
-            name: String(name).trim().toUpperCase(),
-            price: String(price),
-            mrp: String(price),
-            packSize: Number(packSize),
+          const price = Number(
+            String(priceRaw).replace(/[₹,]/g, "").trim()
+          );
+          if (!Number.isFinite(price)) {
+            skipped++;
+            return;
+          }
 
-            manufacturer: row["manufacturer"]
-              ? String(row["manufacturer"]).trim()
+          const packSize = Number(packSizeRaw);
+          if (!Number.isFinite(packSize)) {
+            skipped++;
+            return;
+          }
+
+          const isRx =
+            String(rxRaw || "")
+              .trim()
+              .toLowerCase() === "yes";
+
+          /* -----------------------------
+             PREPARE ROW
+          ------------------------------ */
+          batch.push({
+            name: String(nameRaw).trim().toUpperCase(),
+
+            price,
+            mrp: price,
+
+            packSize,
+
+            manufacturer: manufacturerRaw
+              ? String(manufacturerRaw).trim()
               : null,
 
             imageUrl:
-              row["image url"] && String(row["image url"]).trim() !== ""
-                ? String(row["image url"]).trim()
+              imageUrlRaw && String(imageUrlRaw).trim() !== ""
+                ? String(imageUrlRaw).trim()
                 : null,
 
-            requiresPrescription:
-              String(row["is prescription required?"])
-                .trim()
-                .toLowerCase() === "yes",
-
-            isScheduleH:
-              String(row["is prescription required?"])
-                .trim()
-                .toLowerCase() === "yes",
+            requiresPrescription: isRx,
+            isScheduleH: isRx,
 
             stock: null,
             categoryId: null,
             genericName: null,
           });
 
-          inserted++;
-
-          if (inserted % 1000 === 0) {
+          /* -----------------------------
+             BATCH INSERT
+          ------------------------------ */
+          if (batch.length === 500) {
+            await db.insert(medicines).values(batch.splice(0));
+            inserted += 500;
             console.log(`➕ Inserted ${inserted} medicines`);
           }
         } catch (err) {
           skipped++;
-          console.error("❌ INSERT ERROR:", err);
+          console.error("❌ ROW FAILED:", err);
         }
       })
-      .on("end", () => {
+      .on("end", async () => {
+        if (batch.length) {
+          await db.insert(medicines).values(batch);
+          inserted += batch.length;
+        }
+
         console.log("✅ IMPORT COMPLETE");
         console.log(`➕ Inserted: ${inserted}`);
         console.log(`⏭️ Skipped: ${skipped}`);
