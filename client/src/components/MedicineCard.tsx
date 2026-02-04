@@ -1,169 +1,102 @@
-import { Plus, Minus, Pill, AlertTriangle, Info } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useCartContext } from "@/context/CartContext";
-import type { Medicine } from "@shared/schema";
 import { useState } from "react";
+import type { Medicine } from "@shared/schema";
+import { Button } from "@/components/ui/button";
+import { useCartContext } from "@/context/CartContext";
+import { Info } from "lucide-react";
 
-interface MedicineCardProps {
+interface Props {
   medicine: Medicine;
 }
 
-export function MedicineCard({ medicine }: MedicineCardProps) {
-  const { items, addItem, updateQuantity, removeItem } = useCartContext();
+export function MedicineCard({ medicine }: Props) {
+  const { addItem } = useCartContext();
   const [showDetails, setShowDetails] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
-  const cartItem = items.find(
-    (item) => item.medicine.id === medicine.id
-  );
-  const quantityInCart = cartItem?.quantity || 0;
+  const packSizeText =
+    medicine.packSize && medicine.packSize > 0
+      ? `Pack size: ${medicine.packSize} ${
+          medicine.packSize === 1 ? "unit" : "capsules / tablets"
+        }`
+      : "Pack size: Not specified";
 
-  // 🔒 Quantity here = strip size (NOT availability)
-  const stripQuantity =
-    medicine.quantity && medicine.quantity > 0
-      ? medicine.quantity
+  const imageUrl =
+    medicine.imageUrls && medicine.imageUrls.length > 0
+      ? medicine.imageUrls[0]
       : null;
 
-  const handleAdd = () => {
-    addItem(medicine, 1);
-  };
-
-  const handleIncrement = () => {
-    updateQuantity(medicine.id, quantityInCart + 1);
-  };
-
-  const handleDecrement = () => {
-    if (quantityInCart <= 1) {
-      removeItem(medicine.id);
-    } else {
-      updateQuantity(medicine.id, quantityInCart - 1);
-    }
-  };
-
   return (
-    <Card className="p-3 space-y-2">
-      {/* TOP ROW */}
-      <div className="flex gap-3">
-        <div className="w-14 h-14 rounded-lg bg-accent flex items-center justify-center shrink-0">
-          <Pill className="w-7 h-7 text-primary" />
+    <div className="rounded-xl border bg-white p-4 shadow-sm">
+      {/* HEADER */}
+      <div className="flex gap-4">
+        {/* IMAGE */}
+        <div className="h-16 w-16 flex-shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+          {imageUrl && !imageError ? (
+            <img
+              src={imageUrl}
+              alt={medicine.name}
+              className="h-full w-full object-contain"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <span className="text-xs text-muted-foreground text-center px-2">
+              Image not available
+            </span>
+          )}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-start gap-2">
-            <div className="min-w-0">
-              <h3 className="font-semibold text-sm leading-tight">
-                {medicine.name?.toUpperCase()}
-              </h3>
+        {/* INFO */}
+        <div className="flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="text-base font-semibold leading-snug">
+              {medicine.name}
+            </h3>
 
-              {/* RX BADGE */}
-              {medicine.isScheduleH && (
-                <Badge
-                  variant="destructive"
-                  className="mt-1 text-[10px]"
-                >
-                  PRESCRIPTION REQUIRED
-                </Badge>
-              )}
-            </div>
-
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => setShowDetails((v) => !v)}
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              aria-label="View details"
             >
-              <Info className="w-4 h-4" />
-            </Button>
+              <Info className="h-5 w-5 text-muted-foreground" />
+            </button>
           </div>
+
+          <p className="mt-1 text-lg font-bold">
+            ₹{Number(medicine.price).toFixed(2)}
+          </p>
         </div>
       </div>
 
-      {/* DETAILS (TOGGLE) */}
+      {/* DETAILS */}
       {showDetails && (
-        <div className="text-xs text-muted-foreground space-y-1 pl-1">
-          {stripQuantity ? (
-            <div>
-              <span className="font-medium text-foreground">
-                Quantity:
-              </span>{" "}
-              {stripQuantity} tabs per strip
-            </div>
-          ) : (
-            <div>
-              <span className="font-medium text-foreground">
-                Quantity:
-              </span>{" "}
-              Not specified
-            </div>
-          )}
+        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+          <div>{packSizeText}</div>
 
           {medicine.manufacturer && (
             <div>
+              Manufacturer:{" "}
               <span className="font-medium text-foreground">
-                Manufacturer:
-              </span>{" "}
-              {medicine.manufacturer}
+                {medicine.manufacturer}
+              </span>
+            </div>
+          )}
+
+          {medicine.requiresPrescription && (
+            <div className="text-red-600 font-medium">
+              Prescription required
             </div>
           )}
         </div>
       )}
 
-      {/* ACTION ROW */}
-      <div className="flex justify-between items-center pt-2">
-        {/* PRICE */}
-        <div className="text-base font-semibold">
-          ₹
-          {typeof medicine.price === "number"
-            ? medicine.price.toFixed(0)
-            : typeof medicine.price === "string"
-            ? medicine.price.replace(/[^\d.]/g, "")
-            : "—"}
-        </div>
-
-        {/* CART CONTROLS */}
-        {quantityInCart === 0 ? (
-          <Button
-            size="sm"
-            onClick={handleAdd}
-            className="h-8 px-4"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Add
-          </Button>
-        ) : (
-          <div className="flex items-center gap-2 bg-primary/10 rounded-full px-2 py-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleDecrement}
-              className="h-6 w-6"
-            >
-              <Minus className="w-3 h-3" />
-            </Button>
-
-            <span className="min-w-[20px] text-center text-sm font-medium">
-              {quantityInCart}
-            </span>
-
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleIncrement}
-              className="h-6 w-6"
-            >
-              <Plus className="w-3 h-3" />
-            </Button>
-          </div>
-        )}
+      {/* ACTION */}
+      <div className="mt-4 flex justify-end">
+        <Button
+          className="rounded-full px-6 text-base"
+          onClick={() => addItem(medicine, 1)}
+        >
+          + Add
+        </Button>
       </div>
-
-      {/* RX NOTICE */}
-      {medicine.isScheduleH && (
-        <div className="flex items-center gap-1 text-[11px] text-amber-600 pt-1">
-          <AlertTriangle className="w-3 h-3" />
-          Prescription will be required at checkout
-        </div>
-      )}
-    </Card>
+    </div>
   );
 }
