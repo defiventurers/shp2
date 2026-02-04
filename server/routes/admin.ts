@@ -10,7 +10,7 @@ export function registerAdminRoutes(app: Express) {
 
   /**
    * POST /api/admin/import-inventory
-   * Imports EASYLOAD inventory CSV
+   * Imports EASYLOAD inventory CSV (PACK SIZE AWARE)
    */
   app.post("/api/admin/import-inventory", async (_req: Request, res: Response) => {
     const csvPath = path.join(
@@ -53,27 +53,44 @@ export function registerAdminRoutes(app: Express) {
           .pipe(csv())
           .on("data", (row) => {
             try {
-              const rawPrice =
-                row["Price"]?.toString().trim() ?? "0";
+              /* -----------------------------
+                 PRICE
+              ------------------------------ */
+              const rawPrice = row["Price"]?.toString().trim();
+              if (!rawPrice) return;
 
-              const price = Number(
-                rawPrice.replace(/[₹,]/g, "")
-              );
-
+              const price = Number(rawPrice.replace(/[₹,]/g, ""));
               if (Number.isNaN(price)) return;
 
+              /* -----------------------------
+                 PRESCRIPTION
+              ------------------------------ */
               const isRx =
                 row["Is Prescription Required?"]
                   ?.toString()
-                  .toLowerCase() === "yes";
+                  .toLowerCase()
+                  .trim() === "yes";
+
+              /* -----------------------------
+                 PACK SIZE (QUANTITY)
+              ------------------------------ */
+              const rawPackSize = row["Quantity"]?.toString().trim();
+              const packSize = rawPackSize ? Number(rawPackSize) : null;
+
+              /* -----------------------------
+                 IMAGE
+              ------------------------------ */
+              const imageUrl = row["Image URL"]?.toString().trim();
+              const imageUrls = imageUrl ? [imageUrl] : [];
 
               batch.push({
-                name: row["Medicine Name"]?.trim(),
+                name: row["Medicine Name"]?.toString().trim()?.toUpperCase(),
                 price,
-                mrp: price, // ✅ ALWAYS SET
-                stock: Number(row["Quantity"] || 0),
-                manufacturer: row["Manufacturer"] || null,
-                imageUrl: row["Image URL"] || null,
+                mrp: price,                 // Always present
+                packSize,                   // ✅ CORRECT MEANING
+                stock: null,                // ✅ UNKNOWN ≠ OUT OF STOCK
+                manufacturer: row["Manufacturer"]?.toString().trim() || null,
+                imageUrls,                  // ✅ ARRAY (UI EXPECTS THIS)
                 isScheduleH: isRx,
                 requiresPrescription: isRx,
               });
