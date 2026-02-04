@@ -19,16 +19,15 @@ export async function importBangaloreInventory() {
   }
 
   console.log(`📥 Using CSV: ${CSV_PATH}`);
+  console.log("📄 CSV size:", fs.statSync(CSV_PATH).size);
 
-  /* -----------------------------
-     HARD RESET (INTENTIONAL)
-  ------------------------------ */
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
 
   let inserted = 0;
   let skipped = 0;
   const batch: any[] = [];
+  const BATCH_SIZE = 200;
 
   return new Promise<void>((resolve, reject) => {
     fs.createReadStream(CSV_PATH)
@@ -36,7 +35,7 @@ export async function importBangaloreInventory() {
         csv({
           mapHeaders: ({ header }) =>
             header
-              .replace(/^\uFEFF/, "") // BOM
+              .replace(/^\uFEFF/, "")
               .replace(/\s+/g, " ")
               .trim()
               .toLowerCase(),
@@ -44,91 +43,52 @@ export async function importBangaloreInventory() {
       )
       .on("data", async (row) => {
         try {
-          /* -----------------------------
-             READ EXACT 7 COLUMNS
-          ------------------------------ */
-          const nameRaw = row["medicine name"];
-          const priceRaw = row["price"];
-          const rxRaw = row["is prescription required?"];
-          const packSizeRaw = row["pack-size"];
-          const manufacturerRaw = row["manufacturer"];
-          const imageUrlRaw = row["image url"];
-          const sourceFileRaw = row["source file"];
+          const name = row["medicine name"]?.trim();
+          const priceRaw = row["price"]?.trim();
 
-          /* -----------------------------
-             VALIDATION (STRICT BUT FAIR)
-          ------------------------------ */
-          if (!nameRaw || !priceRaw) {
+          if (!name || !priceRaw) {
             skipped++;
             return;
           }
 
-          const price = Number(
-            String(priceRaw).replace(/[₹,]/g, "").trim()
-          );
-          if (!Number.isFinite(price)) {
+          const price = Number(priceRaw.replace(/[₹,]/g, ""));
+          if (Number.isNaN(price)) {
             skipped++;
             return;
           }
 
-          // Pack-Size logic:
-          // "000" or non-numeric → null
-          let packSize: number | null = null;
-          if (
-            packSizeRaw &&
-            String(packSizeRaw).trim() !== "" &&
-            String(packSizeRaw) !== "000"
-          ) {
-            const parsed = Number(packSizeRaw);
-            packSize = Number.isFinite(parsed) ? parsed : null;
-          }
+          const packSizeRaw = row["pack-size"]?.trim();
+          const packSize =
+            packSizeRaw && packSizeRaw !== "000"
+              ? Number(packSizeRaw)
+              : null;
 
           const isRx =
-            String(rxRaw || "")
-              .trim()
-              .toLowerCase() === "yes";
+            row["is prescription required?"]?.toLowerCase() === "yes";
 
-          /* -----------------------------
-             PREPARE INSERT
-          ------------------------------ */
+          const imageUrl = row["image url"]?.trim();
+          const sourceFile = row["source file"]?.trim() || null;
+
           batch.push({
-            name: String(nameRaw).trim().toUpperCase(),
-
-            price,
-            mrp: price,
-
+            name,
+            manufacturer: row["manufacturer"] || "Not Known",
+            price: price.toFixed(2),
+            mrp: price.toFixed(2),
             packSize,
-
-            manufacturer: manufacturerRaw
-              ? String(manufacturerRaw).trim()
-              : null,
-
-            imageUrl:
-              imageUrlRaw && String(imageUrlRaw).trim() !== ""
-                ? String(imageUrlRaw).trim()
-                : null,
-
-            sourceFile:
-              sourceFileRaw && String(sourceFileRaw).trim() !== ""
-                ? String(sourceFileRaw).trim()
-                : null,
-
+            stock: null,
             requiresPrescription: isRx,
             isScheduleH: isRx,
-
-            stock: null,
-            categoryId: null,
-            genericName: null,
+            imageUrl: imageUrl || null,
+            sourceFile,
           });
 
-          if (batch.length === 200) {
+          if (batch.length >= BATCH_SIZE) {
             await db.insert(medicines).values(batch.splice(0));
-            inserted += 200;
-            console.log(`➕ Inserted ${inserted} medicines`);
+            inserted += BATCH_SIZE;
+            console.log(`➕ Inserted ${inserted}`);
           }
         } catch (err) {
           skipped++;
-          console.error("❌ ROW FAILED:", err);
         }
       })
       .on("end", async () => {
@@ -141,6 +101,7 @@ export async function importBangaloreInventory() {
         console.log(`➕ Inserted: ${inserted}`);
         console.log(`⏭️ Skipped: ${skipped}`);
         console.log("🎯 Expected total: 18433");
+
         resolve();
       })
       .on("error", reject);
