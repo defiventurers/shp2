@@ -1,31 +1,39 @@
 import { db } from "./db";
 import { categories } from "@shared/schema";
 
-const medicineCategories = [
-  { name: "TABLETS", icon: "pill" },
-  { name: "CAPSULES", icon: "capsule" },
-  { name: "SYRUPS", icon: "syrup" },
-  { name: "INJECTIONS", icon: "syringe" },
-  { name: "TOPICALS", icon: "cream" },
-  { name: "DROPS", icon: "drop" },
-  { name: "POWDERS", icon: "powder" },
-  { name: "MOUTHWASH", icon: "mouth" },
-  { name: "INHALERS", icon: "inhaler" },
-  { name: "DEVICES", icon: "device" },
-  { name: "SCRUBS", icon: "scrub" },
-  { name: "SOLUTIONS", icon: "solution" },
-  { name: "NO CATEGORY", icon: "box" },
+const CATEGORY_LIST = [
+  "TABLETS",
+  "CAPSULES",
+  "SYRUPS",
+  "INJECTIONS",
+  "TOPICALS",
+  "DROPS",
+  "Powders",
+  "Mouthwash",
+  "Inhalers",
+  "Devices",
+  "Scrubs",
+  "Solutions",
+  "No category",
 ];
 
 export async function seedDatabase() {
   console.log("🌱 Seeding categories...");
 
-  const existing = await db.select().from(categories).limit(1);
-  if (existing.length > 0) {
-    console.log("ℹ️ Categories already exist, skipping");
-    return;
-  }
+  try {
+    const existing = await db.select().from(categories).limit(1);
+    if (existing.length > 0) {
+      console.log("✅ Categories already exist, skipping seed");
+      return;
+    }
 
-  await db.insert(categories).values(medicineCategories);
-  console.log(`✅ Inserted ${medicineCategories.length} categories`);
+    for (const name of CATEGORY_LIST) {
+      await db.insert(categories).values({ name });
+    }
+
+    console.log(`✅ Inserted ${CATEGORY_LIST.length} categories`);
+  } catch (error) {
+    console.error("❌ Category seeding failed:", error);
+    throw error;
+  }
 }
