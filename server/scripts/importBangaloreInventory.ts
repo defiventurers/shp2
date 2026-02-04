@@ -13,24 +13,24 @@ const CSV_PATH = path.join(
 
 export async function importBangaloreInventory() {
   console.log("📦 Starting inventory import");
+  console.log("📍 CSV PATH:", CSV_PATH);
 
   if (!fs.existsSync(CSV_PATH)) {
-    throw new Error(`CSV not found: ${CSV_PATH}`);
+    throw new Error("CSV file not found");
   }
 
-  // 🔁 Load categories → map name → id
-  const categoryRows = await db.select().from(categories);
-  const categoryMap = new Map(
-    categoryRows.map((c) => [c.name.toUpperCase(), c.id])
-  );
-
-  // 🔥 Hard reset medicines
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
 
+  const categoryMap = new Map<string, string>();
+  const allCategories = await db.select().from(categories);
+
+  for (const c of allCategories) {
+    categoryMap.set(c.name.toUpperCase(), c.id);
+  }
+
   let inserted = 0;
   let skipped = 0;
-
   const batch: any[] = [];
 
   await new Promise<void>((resolve, reject) => {
@@ -39,53 +39,44 @@ export async function importBangaloreInventory() {
       .on("data", (row) => {
         try {
           const name = row["Medicine Name"]?.trim();
-          if (!name) {
-            skipped++;
-            return;
-          }
+          if (!name) return skipped++;
 
-          const price = Number(row["Price"]);
-          if (!Number.isFinite(price)) {
-            skipped++;
-            return;
-          }
+          const priceRaw = row["Price"]?.toString();
+          const price = Number(priceRaw?.replace(/[₹,]/g, ""));
+          if (!price || Number.isNaN(price)) return skipped++;
 
-          const packSize = Number(row["Pack-Size"]);
-          if (!Number.isFinite(packSize)) {
-            skipped++;
-            return;
-          }
+          const rxRaw = row["Is Prescription Required?"];
+          const requiresPrescription =
+            rxRaw === 1 ||
+            rxRaw === "1" ||
+            String(rxRaw).toLowerCase() === "yes" ||
+            String(rxRaw).toLowerCase() === "true";
 
-          const rxRaw = row["Is Prescription Required?"]
-            ?.toString()
-            .toLowerCase();
+          const packSize = Number(row["Pack-Size"]) || 0;
+          const manufacturer = row["Manufacturer"] || "Not Known";
+          const imageUrl = row["Image URL"] || null;
 
-          const requiresRx =
-            rxRaw === "yes" || rxRaw === "true" || rxRaw === "1";
-
-          const categoryName = row["Category"]?.toUpperCase();
+          const categoryName = row["Category"]?.toUpperCase() || "NO CATEGORY";
           const categoryId = categoryMap.get(categoryName) || null;
 
           batch.push({
             name,
-            manufacturer: row["Manufacturer"] || "Not Known",
-            packSize,
+            manufacturer,
             price,
             mrp: price,
-            requiresPrescription: requiresRx,
-            isScheduleH: requiresRx,
-            imageUrl: row["Image URL"] || null,
+            packSize: String(packSize),
+            requiresPrescription,
+            isScheduleH: requiresPrescription,
+            imageUrl,
             categoryId,
+            stock: 0,
             sourceFile: "easyload_inventory.csv",
           });
 
           inserted++;
 
           if (batch.length === 500) {
-            db.insert(medicines)
-              .values(batch.splice(0))
-              .catch(reject);
-            console.log(`➕ Inserted ${inserted}`);
+            db.insert(medicines).values(batch.splice(0));
           }
         } catch {
           skipped++;
@@ -97,9 +88,9 @@ export async function importBangaloreInventory() {
         }
 
         console.log("✅ IMPORT COMPLETE");
-        console.log(`➕ Inserted: ${inserted}`);
-        console.log(`⏭️ Skipped: ${skipped}`);
-        console.log(`🎯 Expected total: 18433`);
+        console.log("➕ Inserted:", inserted);
+        console.log("⏭️ Skipped:", skipped);
+        console.log("🎯 Expected total: 18433");
         resolve();
       })
       .on("error", reject);
