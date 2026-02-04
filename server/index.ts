@@ -3,12 +3,21 @@ import http from "http";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
-// startup tasks
+/* -----------------------------
+   STARTUP TASKS
+------------------------------ */
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
 import { db } from "./db";
 
-// routes
+/* -----------------------------
+   INVENTORY IMPORT
+------------------------------ */
+import { importBangaloreInventory } from "./scripts/importBangaloreInventory";
+
+/* -----------------------------
+   ROUTES
+------------------------------ */
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerMedicineRoutes } from "./routes/medicines";
@@ -80,6 +89,32 @@ async function startServer() {
   } catch {}
 
   /* -----------------------------
+     🔥 ADMIN INVENTORY IMPORT
+     POST /api/admin/import-inventory
+  ------------------------------ */
+  app.post(
+    "/api/admin/import-inventory",
+    async (_req: Request, res: Response) => {
+      try {
+        console.log("⚙️ Admin triggered inventory import");
+
+        await importBangaloreInventory();
+
+        res.json({
+          success: true,
+          message: "Inventory import completed successfully",
+        });
+      } catch (err) {
+        console.error("❌ Inventory import failed:", err);
+        res.status(500).json({
+          success: false,
+          error: "Inventory import failed",
+        });
+      }
+    }
+  );
+
+  /* -----------------------------
      ROUTES
   ------------------------------ */
   registerAuthRoutes(app);
@@ -93,10 +128,12 @@ async function startServer() {
   /* -----------------------------
      ERROR HANDLER
   ------------------------------ */
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("UNHANDLED ERROR:", err);
-    res.status(500).json({ error: "Internal Server Error" });
-  });
+  app.use(
+    (err: any, _req: Request, res: Response, _next: NextFunction) => {
+      console.error("UNHANDLED ERROR:", err);
+      res.status(500). recognizes.json({ error: "Internal Server Error" });
+    }
+  );
 
   /* -----------------------------
      START SERVER
