@@ -15,7 +15,22 @@ export function registerMedicineRoutes(app: Express) {
       const search = req.query.search?.toString();
       const sourceFile = req.query.sourceFile?.toString();
 
-      const rows = await db
+      const conditions = [];
+
+      if (search) {
+        conditions.push(
+          or(
+            ilike(medicines.name, `%${search}%`),
+            ilike(medicines.manufacturer, `%${search}%`)
+          )
+        );
+      }
+
+      if (sourceFile) {
+        conditions.push(ilike(medicines.sourceFile, `%${sourceFile}%`));
+      }
+
+      const query = db
         .select({
           id: medicines.id,
           name: medicines.name,
@@ -31,21 +46,14 @@ export function registerMedicineRoutes(app: Express) {
           updatedAt: medicines.updatedAt,
         })
         .from(medicines)
-        .where(
-          or(
-            search
-              ? or(
-                  ilike(medicines.name, `%${search}%`),
-                  ilike(medicines.manufacturer, `%${search}%`)
-                )
-              : undefined,
-            sourceFile
-              ? ilike(medicines.sourceFile, `%${sourceFile}%`)
-              : undefined
-          )
-        )
         .orderBy(asc(medicines.name))
-        .limit(100); // pagination safety
+        .limit(100);
+
+      if (conditions.length > 0) {
+        query.where(or(...conditions));
+      }
+
+      const rows = await query;
 
       res.json({
         success: true,
