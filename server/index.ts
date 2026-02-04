@@ -11,11 +11,6 @@ import { migratePrescriptions } from "./db";
 import { db } from "./db";
 
 /* -----------------------------
-   INVENTORY IMPORT
------------------------------- */
-import { importBangaloreInventory } from "./scripts/importBangaloreInventory";
-
-/* -----------------------------
    ROUTES
 ------------------------------ */
 import { registerAuthRoutes } from "./routes/auth";
@@ -89,32 +84,6 @@ async function startServer() {
   } catch {}
 
   /* -----------------------------
-     🔥 ADMIN INVENTORY IMPORT
-     POST /api/admin/import-inventory
-  ------------------------------ */
-  app.post(
-    "/api/admin/import-inventory",
-    async (_req: Request, res: Response) => {
-      try {
-        console.log("⚙️ Admin triggered inventory import");
-
-        await importBangaloreInventory();
-
-        res.json({
-          success: true,
-          message: "Inventory import completed successfully",
-        });
-      } catch (err) {
-        console.error("❌ Inventory import failed:", err);
-        res.status(500).json({
-          success: false,
-          error: "Inventory import failed",
-        });
-      }
-    }
-  );
-
-  /* -----------------------------
      ROUTES
   ------------------------------ */
   registerAuthRoutes(app);
@@ -123,7 +92,7 @@ async function startServer() {
   registerCategoryRoutes(app);
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
-  registerAdminRoutes(app);
+  registerAdminRoutes(app); // 🔥 ONLY place inventory import lives
 
   /* -----------------------------
      ERROR HANDLER
@@ -131,7 +100,7 @@ async function startServer() {
   app.use(
     (err: any, _req: Request, res: Response, _next: NextFunction) => {
       console.error("UNHANDLED ERROR:", err);
-      res.status(500). recognizes.json({ error: "Internal Server Error" });
+      res.status(500).json({ error: "Internal Server Error" });
     }
   );
 
