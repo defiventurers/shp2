@@ -1,42 +1,59 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { db } from "../db";
 import { medicines } from "@shared/schema";
-import { desc, sql } from "drizzle-orm";
+import { asc, ilike, or } from "drizzle-orm";
 
 export function registerMedicineRoutes(app: Express) {
-  app.get("/api/medicines", async (req, res) => {
+  console.log("💊 MEDICINE ROUTES REGISTERED");
+
+  /**
+   * GET /api/medicines
+   * Clean response + sourceFile included
+   */
+  app.get("/api/medicines", async (req: Request, res: Response) => {
     try {
-      const page = Math.max(Number(req.query.page) || 1, 1);
-      const limit = Math.min(Number(req.query.limit) || 50, 100);
-      const offset = (page - 1) * limit;
+      const search = req.query.search?.toString();
+      const sourceFile = req.query.sourceFile?.toString();
 
-      const [rows, countResult] = await Promise.all([
-        db
-          .select()
-          .from(medicines)
-          .orderBy(desc(medicines.createdAt))
-          .limit(limit)
-          .offset(offset),
-
-        db
-          .select({ count: sql<number>`count(*)` })
-          .from(medicines),
-      ]);
-
-      const total = Number(countResult[0].count);
-      const hasMore = offset + rows.length < total;
+      const rows = await db
+        .select({
+          id: medicines.id,
+          name: medicines.name,
+          manufacturer: medicines.manufacturer,
+          price: medicines.price,
+          mrp: medicines.mrp,
+          packSize: medicines.packSize,
+          requiresPrescription: medicines.requiresPrescription,
+          isScheduleH: medicines.isScheduleH,
+          imageUrl: medicines.imageUrl,
+          sourceFile: medicines.sourceFile,
+          createdAt: medicines.createdAt,
+          updatedAt: medicines.updatedAt,
+        })
+        .from(medicines)
+        .where(
+          or(
+            search
+              ? or(
+                  ilike(medicines.name, `%${search}%`),
+                  ilike(medicines.manufacturer, `%${search}%`)
+                )
+              : undefined,
+            sourceFile
+              ? ilike(medicines.sourceFile, `%${sourceFile}%`)
+              : undefined
+          )
+        )
+        .orderBy(asc(medicines.name))
+        .limit(100); // pagination safety
 
       res.json({
         success: true,
         medicines: rows,
-        page,
-        limit,
-        total,
-        hasMore,
       });
     } catch (err) {
-      console.error("MEDICINES FETCH ERROR:", err);
-      res.status(500).json({ error: "Failed to fetch medicines" });
+      console.error("❌ Failed to fetch medicines:", err);
+      res.status(500).json({ success: false });
     }
   });
 }
