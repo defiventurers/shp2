@@ -94,4 +94,4 @@ const MedicineCard: React.FC<Props> = ({ medicine, onAddToCart }) => {
   );
 };
 
-export default MedicineCard;
+export { MedicineCard };
