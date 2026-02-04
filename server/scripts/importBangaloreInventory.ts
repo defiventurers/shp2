@@ -8,7 +8,7 @@ const CSV_PATH = path.join(
   process.cwd(),
   "server",
   "data",
-  "final_tablets_plus_capsules-2.csv"
+  "easyload_inventory.csv"
 );
 
 export async function importBangaloreInventory() {
