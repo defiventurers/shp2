@@ -12,7 +12,7 @@ const CSV_PATH = path.join(
 );
 
 export async function importBangaloreInventory() {
-  console.log("📦 Starting Bangalore inventory import");
+  console.log("📦 Starting Bangalore inventory import (FINAL VERIFIED CSV)");
 
   if (!fs.existsSync(CSV_PATH)) {
     throw new Error(`CSV NOT FOUND: ${CSV_PATH}`);
@@ -21,7 +21,7 @@ export async function importBangaloreInventory() {
   console.log(`📥 Using CSV: ${CSV_PATH}`);
 
   /* -----------------------------
-     CLEAR EXISTING INVENTORY
+     HARD RESET (INTENTIONAL)
   ------------------------------ */
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
@@ -37,7 +37,7 @@ export async function importBangaloreInventory() {
           mapHeaders: ({ header }) =>
             header
               .replace(/^\uFEFF/, "") // BOM
-              .replace(/\s+/g, " ")   // normalize spaces
+              .replace(/\s+/g, " ")
               .trim()
               .toLowerCase(),
         })
@@ -45,19 +45,20 @@ export async function importBangaloreInventory() {
       .on("data", async (row) => {
         try {
           /* -----------------------------
-             EXACT 6 COLUMN READ
+             READ EXACT 7 COLUMNS
           ------------------------------ */
           const nameRaw = row["medicine name"];
           const priceRaw = row["price"];
-          const packSizeRaw = row["quantity(pack size)"];
           const rxRaw = row["is prescription required?"];
+          const packSizeRaw = row["pack-size"];
           const manufacturerRaw = row["manufacturer"];
           const imageUrlRaw = row["image url"];
+          const sourceFileRaw = row["source file"];
 
           /* -----------------------------
-             HARD VALIDATION
+             VALIDATION (STRICT BUT FAIR)
           ------------------------------ */
-          if (!nameRaw || !priceRaw || !packSizeRaw) {
+          if (!nameRaw || !priceRaw) {
             skipped++;
             return;
           }
@@ -70,10 +71,16 @@ export async function importBangaloreInventory() {
             return;
           }
 
-          const packSize = Number(packSizeRaw);
-          if (!Number.isFinite(packSize)) {
-            skipped++;
-            return;
+          // Pack-Size logic:
+          // "000" or non-numeric → null
+          let packSize: number | null = null;
+          if (
+            packSizeRaw &&
+            String(packSizeRaw).trim() !== "" &&
+            String(packSizeRaw) !== "000"
+          ) {
+            const parsed = Number(packSizeRaw);
+            packSize = Number.isFinite(parsed) ? parsed : null;
           }
 
           const isRx =
@@ -82,7 +89,7 @@ export async function importBangaloreInventory() {
               .toLowerCase() === "yes";
 
           /* -----------------------------
-             PREPARE ROW
+             PREPARE INSERT
           ------------------------------ */
           batch.push({
             name: String(nameRaw).trim().toUpperCase(),
@@ -101,6 +108,11 @@ export async function importBangaloreInventory() {
                 ? String(imageUrlRaw).trim()
                 : null,
 
+            sourceFile:
+              sourceFileRaw && String(sourceFileRaw).trim() !== ""
+                ? String(sourceFileRaw).trim()
+                : null,
+
             requiresPrescription: isRx,
             isScheduleH: isRx,
 
@@ -109,12 +121,9 @@ export async function importBangaloreInventory() {
             genericName: null,
           });
 
-          /* -----------------------------
-             BATCH INSERT
-          ------------------------------ */
-          if (batch.length === 500) {
+          if (batch.length === 200) {
             await db.insert(medicines).values(batch.splice(0));
-            inserted += 500;
+            inserted += 200;
             console.log(`➕ Inserted ${inserted} medicines`);
           }
         } catch (err) {
@@ -131,6 +140,7 @@ export async function importBangaloreInventory() {
         console.log("✅ IMPORT COMPLETE");
         console.log(`➕ Inserted: ${inserted}`);
         console.log(`⏭️ Skipped: ${skipped}`);
+        console.log("🎯 Expected total: 18433");
         resolve();
       })
       .on("error", reject);
