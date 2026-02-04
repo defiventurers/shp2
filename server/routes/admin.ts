@@ -5,19 +5,14 @@ import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
 
-/** ✅ Utility: clean currency like "₹1,234.00" → 1234 */
-function parsePrice(value: string | undefined): number {
+function parsePrice(value?: string): number {
   if (!value) return 0;
   return Number(
-    value
-      .replace(/₹/g, "")
-      .replace(/,/g, "")
-      .trim()
+    value.replace(/₹/g, "").replace(/,/g, "").trim()
   ) || 0;
 }
 
-/** ✅ Utility: normalize booleans */
-function parseBoolean(value: string | undefined): boolean {
+function parseBoolean(value?: string): boolean {
   return value?.toLowerCase().trim() === "true";
 }
 
@@ -39,7 +34,7 @@ export function registerAdminRoutes(app: Express) {
     }
 
     try {
-      /** 🔥 Clear dependent tables FIRST */
+      // 🔥 Clear dependent tables in correct order
       await db.delete(orderItems);
       await db.delete(orders);
       await db.delete(medicines);
