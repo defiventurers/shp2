@@ -10,7 +10,6 @@ export function registerAdminRoutes(app: Express) {
 
   /**
    * POST /api/admin/import-inventory
-   * Imports EASYLOAD inventory CSV (PACK SIZE AWARE)
    */
   app.post("/api/admin/import-inventory", async (_req: Request, res: Response) => {
     const csvPath = path.join(
@@ -53,44 +52,37 @@ export function registerAdminRoutes(app: Express) {
           .pipe(csv())
           .on("data", (row) => {
             try {
-              /* -----------------------------
-                 PRICE
-              ------------------------------ */
               const rawPrice = row["Price"]?.toString().trim();
               if (!rawPrice) return;
 
               const price = Number(rawPrice.replace(/[₹,]/g, ""));
               if (Number.isNaN(price)) return;
 
-              /* -----------------------------
-                 PRESCRIPTION
-              ------------------------------ */
               const isRx =
                 row["Is Prescription Required?"]
                   ?.toString()
-                  .toLowerCase()
-                  .trim() === "yes";
+                  .toLowerCase() === "yes";
 
-              /* -----------------------------
-                 PACK SIZE (QUANTITY)
-              ------------------------------ */
-              const rawPackSize = row["Quantity"]?.toString().trim();
-              const packSize = rawPackSize ? Number(rawPackSize) : null;
-
-              /* -----------------------------
-                 IMAGE
-              ------------------------------ */
-              const imageUrl = row["Image URL"]?.toString().trim();
-              const imageUrls = imageUrl ? [imageUrl] : [];
-
+              const packSize = Number(row["Quantity"]);
+              
               batch.push({
-                name: row["Medicine Name"]?.toString().trim()?.toUpperCase(),
+                name: row["Medicine Name"]?.trim()?.toUpperCase(),
+                manufacturer: row["Manufacturer"] || null,
+
+                // 💰 Pricing
                 price,
-                mrp: price,                 // Always present
-                packSize,                   // ✅ CORRECT MEANING
-                stock: null,                // ✅ UNKNOWN ≠ OUT OF STOCK
-                manufacturer: row["Manufacturer"]?.toString().trim() || null,
-                imageUrls,                  // ✅ ARRAY (UI EXPECTS THIS)
+                mrp: price,
+
+                // 📦 Correct semantics
+                packSize: Number.isFinite(packSize) ? packSize : null,
+                stock: null, // ✅ intentionally unknown
+
+                // 🖼 Images
+                imageUrls: row["Image URL"]
+                  ? [row["Image URL"]]
+                  : null,
+
+                // ⚕️ Flags
                 isScheduleH: isRx,
                 requiresPrescription: isRx,
               });
