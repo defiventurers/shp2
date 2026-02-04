@@ -15,61 +15,76 @@ export async function importBangaloreInventory() {
   console.log("📦 Starting inventory import");
 
   if (!fs.existsSync(CSV_PATH)) {
-    throw new Error(`CSV not found at ${CSV_PATH}`);
+    throw new Error(`CSV not found: ${CSV_PATH}`);
   }
 
-  // 🔑 Build category name → id map
+  // 🔁 Load categories → map name → id
   const categoryRows = await db.select().from(categories);
   const categoryMap = new Map(
-    categoryRows.map((c) => [c.name, c.id])
+    categoryRows.map((c) => [c.name.toUpperCase(), c.id])
   );
 
-  let inserted = 0;
-  let skipped = 0;
-  const batch: any[] = [];
-
+  // 🔥 Hard reset medicines
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
 
-  return new Promise<void>((resolve, reject) => {
+  let inserted = 0;
+  let skipped = 0;
+
+  const batch: any[] = [];
+
+  await new Promise<void>((resolve, reject) => {
     fs.createReadStream(CSV_PATH)
       .pipe(csv())
-      .on("data", async (row) => {
+      .on("data", (row) => {
         try {
-          const name = row["Medicine Name"];
-          const price = Number(row["Price"]);
-          const rx =
-            String(row["Is Prescription Required?"]).toLowerCase() === "yes" ||
-            String(row["Is Prescription Required?"]).toLowerCase() === "true";
-
-          const packSize = Number(row["Pack-Size"]);
-          const manufacturer = row["Manufacturer"];
-          const imageUrl = row["Image URL"];
-          const categoryName = row["Category"];
-
-          const categoryId = categoryMap.get(categoryName);
-
-          if (!name || !categoryId || Number.isNaN(price)) {
+          const name = row["Medicine Name"]?.trim();
+          if (!name) {
             skipped++;
             return;
           }
 
+          const price = Number(row["Price"]);
+          if (!Number.isFinite(price)) {
+            skipped++;
+            return;
+          }
+
+          const packSize = Number(row["Pack-Size"]);
+          if (!Number.isFinite(packSize)) {
+            skipped++;
+            return;
+          }
+
+          const rxRaw = row["Is Prescription Required?"]
+            ?.toString()
+            .toLowerCase();
+
+          const requiresRx =
+            rxRaw === "yes" || rxRaw === "true" || rxRaw === "1";
+
+          const categoryName = row["Category"]?.toUpperCase();
+          const categoryId = categoryMap.get(categoryName) || null;
+
           batch.push({
             name,
-            manufacturer,
+            manufacturer: row["Manufacturer"] || "Not Known",
+            packSize,
             price,
             mrp: price,
-            packSize: packSize.toString(),
-            stock: null,
-            requiresPrescription: rx,
-            isScheduleH: rx,
-            imageUrl,
+            requiresPrescription: requiresRx,
+            isScheduleH: requiresRx,
+            imageUrl: row["Image URL"] || null,
             categoryId,
+            sourceFile: "easyload_inventory.csv",
           });
 
+          inserted++;
+
           if (batch.length === 500) {
-            await db.insert(medicines).values(batch.splice(0));
-            inserted += 500;
+            db.insert(medicines)
+              .values(batch.splice(0))
+              .catch(reject);
             console.log(`➕ Inserted ${inserted}`);
           }
         } catch {
@@ -79,7 +94,6 @@ export async function importBangaloreInventory() {
       .on("end", async () => {
         if (batch.length) {
           await db.insert(medicines).values(batch);
-          inserted += batch.length;
         }
 
         console.log("✅ IMPORT COMPLETE");
