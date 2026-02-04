@@ -20,7 +20,6 @@ export async function importBangaloreInventory() {
 
   console.log("📥 Using CSV:", CSV_PATH);
 
-  // 🔥 Replace inventory completely
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
 
@@ -29,12 +28,17 @@ export async function importBangaloreInventory() {
 
   return new Promise<void>((resolve, reject) => {
     fs.createReadStream(CSV_PATH)
-      .pipe(csv())
+      .pipe(
+        csv({
+          mapHeaders: ({ header }) =>
+            header.replace(/^\uFEFF/, "").trim().toLowerCase(),
+        })
+      )
       .on("data", async (row) => {
         try {
-          const name = row["Medicine Name"];
-          const price = row["Price"];
-          const packSize = row["Quantity(Pack Size)"];
+          const name = row["medicine name"];
+          const price = row["price"];
+          const packSize = row["quantity(pack size)"];
 
           if (!name || !price || !packSize) {
             skipped++;
@@ -42,36 +46,29 @@ export async function importBangaloreInventory() {
           }
 
           await db.insert(medicines).values({
-            // ✅ ALL CAPS
             name: String(name).trim().toUpperCase(),
-
             price: String(price),
             mrp: String(price),
-
-            // ✅ Quantity = pack size (e.g. 10 tabs per strip)
             packSize: Number(packSize),
-
-            manufacturer: row["Manufacturer"]?.trim() || null,
-
+            manufacturer: row["manufacturer"]?.trim() || null,
             imageUrl:
-              row["Image URL"] && row["Image URL"].trim() !== ""
-                ? row["Image URL"].trim()
+              row["image url"] && row["image url"].trim() !== ""
+                ? row["image url"].trim()
                 : null,
-
             stock: null,
             requiresPrescription:
-              String(row["Is Prescription Required?"]).toLowerCase() === "yes",
-
+              String(row["is prescription required?"])
+                .toLowerCase() === "yes",
             isScheduleH:
-              String(row["Is Prescription Required?"]).toLowerCase() === "yes",
-
+              String(row["is prescription required?"])
+                .toLowerCase() === "yes",
             categoryId: null,
             genericName: null,
           });
 
           inserted++;
 
-          if (inserted % 500 === 0) {
+          if (inserted % 1000 === 0) {
             console.log(`➕ Inserted ${inserted} medicines`);
           }
         } catch {
