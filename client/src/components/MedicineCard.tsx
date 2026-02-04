@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import { useCartContext } from "@/context/CartContext";
 import type { Medicine } from "@shared/schema";
 
@@ -8,117 +7,86 @@ interface Props {
   medicine: Medicine;
 }
 
-export function MedicineCard({ medicine }: Props) {
-  const { addItem, updateQuantity, items } = useCartContext();
-  const [open, setOpen] = useState(false);
+export default function MedicineCard({ medicine }: Props) {
+  const { addItem } = useCartContext();
+  const [showDetails, setShowDetails] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
-  const cartItem = items.find(
-    (i) => i.medicine.id === medicine.id
-  );
+  const packSizeText = medicine.packSize
+    ? `Pack size: ${medicine.packSize} capsules / tablets`
+    : "Pack size: Not specified";
 
-  const quantity = cartItem?.quantity ?? 0;
+  const imageUrl =
+    medicine.imageUrls && medicine.imageUrls.length > 0
+      ? medicine.imageUrls[0]
+      : null;
 
   return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm">
+    <div className="rounded-xl border bg-white p-4 shadow-sm space-y-3">
       {/* TOP ROW */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <h3 className="text-base font-semibold leading-tight">
-            {medicine.name}
-          </h3>
-
-          <div className="mt-1 text-lg font-bold text-black">
-            ₹{medicine.price}
-          </div>
-
-          {/* ✅ PACK SIZE — ALWAYS VISIBLE */}
-          {medicine.packSize && (
-            <div className="mt-1 text-sm text-muted-foreground">
-              Pack size: {medicine.packSize} tablets / capsules
-            </div>
+      <div className="flex justify-between items-start gap-3">
+        {/* IMAGE PLACEHOLDER (FIXED SIZE) */}
+        <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center text-xs text-muted-foreground shrink-0">
+          {imageUrl && !imageError ? (
+            <img
+              src={imageUrl}
+              alt={medicine.name}
+              className="w-full h-full object-contain rounded-lg"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <span className="text-center leading-tight">
+              Image<br />not<br />available
+            </span>
           )}
         </div>
 
-        {/* INFO ICON */}
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="text-muted-foreground"
+        {/* MAIN INFO */}
+        <div className="flex-1">
+          <h3 className="font-semibold text-base leading-tight">
+            {medicine.name}
+          </h3>
+
+          <p className="text-lg font-bold mt-1">
+            ₹{Number(medicine.price).toFixed(2)}
+          </p>
+
+          {/* PACK SIZE — ALWAYS VISIBLE */}
+          <p className="text-sm text-muted-foreground mt-1">
+            {packSizeText}
+          </p>
+        </div>
+
+        {/* ADD BUTTON */}
+        <Button
+          onClick={() => addItem(medicine, 1)}
+          className="rounded-full px-5 h-10 text-base"
         >
-          <Info size={18} />
-        </button>
+          + Add
+        </Button>
       </div>
 
-      {/* ADD / QUANTITY CONTROL */}
-      <div className="mt-4 flex justify-end">
-        {quantity === 0 ? (
-          <Button
-            onClick={() => addItem(medicine, 1)}
-            className="rounded-full px-6"
-          >
-            + Add
-          </Button>
-        ) : (
-          <div className="flex items-center gap-3 rounded-full border px-3 py-1">
-            <button
-              onClick={() =>
-                updateQuantity(medicine.id, quantity - 1)
-              }
-              className="text-lg font-bold"
-            >
-              −
-            </button>
+      {/* TOGGLE TEXT (REPLACES ICON) */}
+      <button
+        onClick={() => setShowDetails((v) => !v)}
+        className="text-sm text-muted-foreground flex items-center gap-1"
+      >
+        {showDetails ? "▲ Hide details" : "▼ View details"}
+      </button>
 
-            <span className="min-w-[16px] text-center text-sm font-semibold">
-              {quantity}
-            </span>
-
-            <button
-              onClick={() =>
-                updateQuantity(medicine.id, quantity + 1)
-              }
-              className="text-lg font-bold"
-            >
-              +
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 🔽 OPTIONAL DETAILS */}
-      {open && (
-        <div className="mt-4 space-y-3 border-t pt-4 text-sm">
-          {/* IMAGE */}
-          <div className="flex justify-center">
-            {medicine.imageUrls?.[0] ? (
-              <img
-                src={medicine.imageUrls[0]}
-                alt={medicine.name}
-                className="h-24 rounded object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    "/placeholder-medicine.png";
-                }}
-              />
-            ) : (
-              <div className="rounded bg-muted px-4 py-2 text-xs text-muted-foreground">
-                Image not available
-              </div>
-            )}
-          </div>
-
-          {/* MANUFACTURER */}
+      {/* OPTIONAL DETAILS */}
+      {showDetails && (
+        <div className="pt-2 space-y-2 text-sm text-muted-foreground">
           {medicine.manufacturer && (
-            <div>
-              <span className="font-medium">Manufacturer:</span>{" "}
-              {medicine.manufacturer}
-            </div>
+            <p>
+              <strong>Manufacturer:</strong> {medicine.manufacturer}
+            </p>
           )}
 
-          {/* RX WARNING */}
           {medicine.requiresPrescription && (
-            <div className="text-red-600">
+            <p className="text-red-600 font-medium">
               Prescription required
-            </div>
+            </p>
           )}
         </div>
       )}
