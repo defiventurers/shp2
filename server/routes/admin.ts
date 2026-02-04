@@ -10,7 +10,7 @@ export function registerAdminRoutes(app: Express) {
       await importBangaloreInventory();
       res.json({ success: true });
     } catch (err) {
-      console.error("❌ Import failed", err);
+      console.error("❌ Import failed:", err);
       res.status(500).json({ success: false });
     }
   });
