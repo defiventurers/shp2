@@ -12,7 +12,7 @@ const CSV_PATH = path.join(
 );
 
 export async function importBangaloreInventory() {
-  console.log("📦 Starting FINAL Bangalore inventory import");
+  console.log("📦 Starting Bangalore inventory import");
 
   if (!fs.existsSync(CSV_PATH)) {
     throw new Error(`CSV NOT FOUND: ${CSV_PATH}`);
@@ -20,6 +20,7 @@ export async function importBangaloreInventory() {
 
   console.log("📥 Using CSV:", CSV_PATH);
 
+  // 🔥 Replace inventory completely
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
 
@@ -31,40 +32,41 @@ export async function importBangaloreInventory() {
       .pipe(csv())
       .on("data", async (row) => {
         try {
-          // 🔑 NORMALIZE FIELDS
-          const name =
-            row.medicine_name ||
-            row.product_name ||
-            row.name ||
-            row.drug_name;
+          const name = row["Medicine Name"];
+          const price = row["Price"];
+          const packSize = row["Quantity(Pack Size)"];
 
-          const price =
-            row.price ||
-            row.mrp ||
-            row.selling_price;
-
-          if (!name || !price) {
+          if (!name || !price || !packSize) {
             skipped++;
             return;
           }
 
           await db.insert(medicines).values({
-            name: String(name).trim(),
-            manufacturer: row.manufacturer?.trim() || null,
-            genericName: row.composition || null,
-
-            imageUrl:
-              row.image_url && String(row.image_url).trim() !== ""
-                ? String(row.image_url).trim()
-                : null,
+            // ✅ ALL CAPS
+            name: String(name).trim().toUpperCase(),
 
             price: String(price),
             mrp: String(price),
-            packSize: row.pack_size ? String(row.pack_size) : "1",
-            stock: 100,
-            requiresPrescription: row.rx_flag === "true",
-            isScheduleH: row.rx_flag === "true",
+
+            // ✅ Quantity = pack size (e.g. 10 tabs per strip)
+            packSize: Number(packSize),
+
+            manufacturer: row["Manufacturer"]?.trim() || null,
+
+            imageUrl:
+              row["Image URL"] && row["Image URL"].trim() !== ""
+                ? row["Image URL"].trim()
+                : null,
+
+            stock: null,
+            requiresPrescription:
+              String(row["Is Prescription Required?"]).toLowerCase() === "yes",
+
+            isScheduleH:
+              String(row["Is Prescription Required?"]).toLowerCase() === "yes",
+
             categoryId: null,
+            genericName: null,
           });
 
           inserted++;
@@ -72,12 +74,12 @@ export async function importBangaloreInventory() {
           if (inserted % 500 === 0) {
             console.log(`➕ Inserted ${inserted} medicines`);
           }
-        } catch (err) {
+        } catch {
           skipped++;
         }
       })
       .on("end", () => {
-        console.log(`✅ IMPORT COMPLETE`);
+        console.log("✅ IMPORT COMPLETE");
         console.log(`➕ Inserted: ${inserted}`);
         console.log(`⏭️ Skipped: ${skipped}`);
         resolve();
