@@ -37,6 +37,13 @@ export async function importBangaloreInventory() {
             name: row.medicine_name.trim(),
             manufacturer: row.manufacturer?.trim() || null,
             genericName: row.composition || null,
+
+            // ✅ FIX: correctly import image URL
+            imageUrl:
+              row.image_url && row.image_url.trim() !== ""
+                ? row.image_url.trim()
+                : null,
+
             price: row.price.toString(),
             mrp: row.price.toString(),
             packSize: row.pack_size?.toString() || "1",
