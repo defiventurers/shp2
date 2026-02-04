@@ -33,17 +33,11 @@ export function registerAdminRoutes(app: Express) {
          HARD RESET (SAFE ORDER)
       ------------------------------ */
       await db.delete(orderItems);
-      console.log("🧨 order_items cleared");
-
       await db.delete(orders);
-      console.log("🧨 orders cleared");
-
       await db.delete(medicines);
-      console.log("🧨 medicines cleared");
 
-      /* -----------------------------
-         CSV STREAM IMPORT
-      ------------------------------ */
+      console.log("🧨 Existing inventory cleared");
+
       let count = 0;
       const batch: any[] = [];
 
@@ -52,6 +46,9 @@ export function registerAdminRoutes(app: Express) {
           .pipe(csv())
           .on("data", (row) => {
             try {
+              const nameRaw = row["Medicine Name"]?.toString().trim();
+              if (!nameRaw) return; // ❗ skip invalid rows
+
               const rawPrice = row["Price"]?.toString().trim();
               if (!rawPrice) return;
 
@@ -64,23 +61,23 @@ export function registerAdminRoutes(app: Express) {
                   .toLowerCase() === "yes";
 
               const packSize = Number(row["Quantity"]);
-              
+              const imageUrl = row["Image URL"]?.toString().trim();
+
               batch.push({
-                name: row["Medicine Name"]?.trim()?.toUpperCase(),
+                // 🧾 Identity
+                name: nameRaw.toUpperCase(),
                 manufacturer: row["Manufacturer"] || null,
 
                 // 💰 Pricing
                 price,
                 mrp: price,
 
-                // 📦 Correct semantics
+                // 📦 Pack semantics (NOT stock)
                 packSize: Number.isFinite(packSize) ? packSize : null,
-                stock: null, // ✅ intentionally unknown
+                stock: null, // intentionally unknown
 
-                // 🖼 Images
-                imageUrls: row["Image URL"]
-                  ? [row["Image URL"]]
-                  : null,
+                // 🖼 Images (ALWAYS ARRAY)
+                imageUrls: imageUrl ? [imageUrl] : [],
 
                 // ⚕️ Flags
                 isScheduleH: isRx,
@@ -92,9 +89,9 @@ export function registerAdminRoutes(app: Express) {
               if (batch.length === 500) {
                 db.insert(medicines)
                   .values(batch.splice(0))
-                  .then(() => {
-                    console.log(`➕ Inserted ${count} medicines`);
-                  })
+                  .then(() =>
+                    console.log(`➕ Inserted ${count} medicines`)
+                  )
                   .catch(reject);
               }
             } catch (err) {
@@ -104,7 +101,6 @@ export function registerAdminRoutes(app: Express) {
           .on("end", async () => {
             if (batch.length) {
               await db.insert(medicines).values(batch);
-              console.log(`➕ Inserted ${count} medicines`);
             }
 
             console.log(`✅ IMPORT COMPLETE: ${count} medicines`);
@@ -115,7 +111,7 @@ export function registerAdminRoutes(app: Express) {
 
       res.json({
         success: true,
-        message: `Inventory import completed successfully (${count} items)`,
+        message: `Inventory import completed (${count} medicines)`,
       });
     } catch (err) {
       console.error("❌ IMPORT FAILED:", err);
