@@ -1,8 +1,13 @@
 import type { Express, Request, Response } from "express";
 import { db } from "../db";
 import { categories } from "@shared/schema";
+import { inArray } from "drizzle-orm";
 
-const INVENTORY_CATEGORIES = [
+/**
+ * ONLY categories allowed for inventory filtering
+ * Must match CSV + seeded categories (ALL CAPS)
+ */
+const INVENTORY_CATEGORY_NAMES = [
   "TABLETS",
   "CAPSULES",
   "SYRUPS",
@@ -20,14 +25,17 @@ const INVENTORY_CATEGORIES = [
 
 export function registerCategoryRoutes(app: Express) {
   app.get("/api/categories", async (_req: Request, res: Response) => {
-    const rows = await db.select().from(categories);
+    try {
+      const rows = await db
+        .select()
+        .from(categories)
+        .where(inArray(categories.name, INVENTORY_CATEGORY_NAMES))
+        .orderBy(categories.name);
 
-    const filtered = rows.filter((c) =>
-      INVENTORY_CATEGORIES.includes(c.name.toUpperCase())
-    );
-
-    res.json({
-      categories: filtered,
-    });
+      res.json({ categories: rows });
+    } catch (err) {
+      console.error("❌ CATEGORY FETCH FAILED", err);
+      res.status(500).json({ error: "Failed to load categories" });
+    }
   });
 }
