@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
 import { db } from "../db";
-import { medicines } from "@shared/schema";
+import { medicines, categories } from "@shared/schema";
 
 export async function importBangaloreInventory() {
   console.log("📦 Starting inventory import");
@@ -14,42 +14,78 @@ export async function importBangaloreInventory() {
     "easyload_inventory.csv"
   );
 
-  console.log("📍 CSV PATH:", csvPath);
-
   if (!fs.existsSync(csvPath)) {
-    throw new Error("CSV FILE NOT FOUND");
+    throw new Error("CSV not found");
   }
+
+  // 🔑 Build category lookup
+  const categoryRows = await db.select().from(categories);
+  const categoryMap = new Map(
+    categoryRows.map((c) => [c.name.toUpperCase(), c.id])
+  );
 
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
 
-  let rowCount = 0;
+  let inserted = 0;
+  let skipped = 0;
+  const batch: any[] = [];
 
   await new Promise<void>((resolve, reject) => {
     fs.createReadStream(csvPath)
-      .pipe(
-        csv({
-          separator: ",",   // we will change this after confirmation
-          skipLines: 0,
-        })
-      )
+      .pipe(csv())
       .on("data", (row) => {
-        rowCount++;
+        try {
+          const name = row["Medicine Name"]?.trim();
+          const price = Number(row["Price"]);
+          const packSize = Number(row["Pack-Size"]);
+          const manufacturer = row["Manufacturer"]?.trim() || "Not Known";
+          const imageUrl = row["Image URL"]?.trim();
+          const categoryName = row["Category"]?.trim().toUpperCase();
+          const isRx =
+            row["Is Prescription Required?"]?.toLowerCase() === "yes";
 
-        // 🔴 PRINT ONLY FIRST ROW
-        if (rowCount === 1) {
-          console.log("🚨 FIRST ROW RAW OBJECT:");
-          console.log(row);
-          console.log("🚨 FIRST ROW KEYS:");
-          console.log(Object.keys(row));
+          if (!name || Number.isNaN(price)) {
+            skipped++;
+            return;
+          }
+
+          const categoryId = categoryMap.get(categoryName) ?? null;
+
+          batch.push({
+            name,
+            price,
+            mrp: price,
+            packSize: packSize || 0,
+            manufacturer,
+            imageUrl,
+            requiresPrescription: isRx,
+            isScheduleH: isRx,
+            categoryId,
+            sourceFile: "easyload_inventory.csv",
+          });
+
+          inserted++;
+
+          if (batch.length === 500) {
+            db.insert(medicines).values(batch.splice(0)).catch(reject);
+          }
+        } catch {
+          skipped++;
         }
       })
-      .on("end", () => {
-        console.log("📊 Total rows read:", rowCount);
+      .on("end", async () => {
+        if (batch.length) {
+          await db.insert(medicines).values(batch);
+        }
+
+        console.log("✅ IMPORT COMPLETE");
+        console.log(`➕ Inserted: ${inserted}`);
+        console.log(`⏭️ Skipped: ${skipped}`);
+        console.log(`🎯 Expected total: 18433`);
+
         resolve();
       })
       .on("error", reject);
   });
-
-  console.log("🛑 STOPPING AFTER DIAGNOSTIC RUN");
 }
