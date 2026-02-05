@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { useCartContext } from "@/context/CartContext";
 
 type Medicine = {
   id: string;
@@ -17,11 +17,18 @@ export default function MedicineCard({
 }: {
   medicine: Medicine;
 }) {
-  const [showDetails, setShowDetails] = useState(false);
-  const [qty, setQty] = useState(0);
+  const {
+    items,
+    addItem,
+    updateQuantity,
+    removeItem,
+  } = useCartContext();
 
-  const increment = () => setQty((q) => q + 1);
-  const decrement = () => setQty((q) => Math.max(0, q - 1));
+  const existingItem = items.find(
+    (i) => i.medicine.id === medicine.id
+  );
+
+  const qty = existingItem?.quantity ?? 0;
 
   const packLabel = (() => {
     const size = Number(medicine.packSize || 0);
@@ -56,47 +63,37 @@ export default function MedicineCard({
         ₹{medicine.price}
       </div>
 
-      {/* VIEW DETAILS */}
-      <button
-        onClick={() => setShowDetails((v) => !v)}
-        className="text-blue-600 text-sm mt-2"
-      >
-        {showDetails ? "Hide Details" : "View Details"}
-      </button>
-
-      {/* DETAILS SECTION */}
-      {showDetails && (
-        <div className="mt-4 space-y-3">
-          {medicine.imageUrl && (
-            <div className="w-full h-40 bg-gray-50 flex items-center justify-center rounded">
-              <img
-                src={medicine.imageUrl}
-                alt={medicine.name}
-                className="max-h-full object-contain"
-              />
-            </div>
-          )}
-
-          {packLabel && (
-            <div className="text-sm text-gray-700">
-              {packLabel}
-            </div>
-          )}
-
-          <div className="text-sm text-gray-500">
-            Manufactured by{" "}
-            <span className="font-medium">
-              {medicine.manufacturer}
-            </span>
+      {/* DETAILS */}
+      <div className="mt-3 space-y-2">
+        {medicine.imageUrl && (
+          <div className="w-full h-40 bg-gray-50 flex items-center justify-center rounded">
+            <img
+              src={medicine.imageUrl}
+              alt={medicine.name}
+              className="max-h-full object-contain"
+            />
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 🛒 ADD TO CART – FIXED BOTTOM RIGHT */}
+        {packLabel && (
+          <div className="text-sm text-gray-700">
+            {packLabel}
+          </div>
+        )}
+
+        <div className="text-sm text-gray-500">
+          Manufactured by{" "}
+          <span className="font-medium">
+            {medicine.manufacturer}
+          </span>
+        </div>
+      </div>
+
+      {/* 🛒 ADD TO CART – CONNECTED TO CART */}
       <div className="absolute bottom-4 right-4">
         {qty === 0 ? (
           <button
-            onClick={increment}
+            onClick={() => addItem(medicine, 1)}
             className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow"
           >
             <span className="text-lg leading-none">+</span>
@@ -105,16 +102,18 @@ export default function MedicineCard({
         ) : (
           <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
             <button
-              onClick={decrement}
+              onClick={() => updateQuantity(medicine.id, qty - 1)}
               className="px-3 py-2 text-lg"
             >
               −
             </button>
+
             <span className="px-3 text-sm font-medium">
               {qty}
             </span>
+
             <button
-              onClick={increment}
+              onClick={() => updateQuantity(medicine.id, qty + 1)}
               className="px-3 py-2 text-lg"
             >
               +
