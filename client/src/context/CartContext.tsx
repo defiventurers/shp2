@@ -2,12 +2,25 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useCart } from "@/hooks/useCart";
 import type { Prescription } from "@shared/schema";
 
-interface CartContextType {
+export interface CartContextType {
   // CART
-  items: any[];
-  addItem: any;
-  removeItem: any;
-  updateQuantity: any;
+  items: {
+    id: string;
+    name: string;
+    price: number;
+    qty: number;
+    requiresPrescription?: boolean;
+  }[];
+
+  addItem: (item: {
+    id: string;
+    name: string;
+    price: number;
+    requiresPrescription?: boolean;
+  }) => void;
+
+  removeItem: (id: string) => void;
+  updateQuantity: (id: string, qty: number) => void;
   clearCart: () => void;
 
   itemCount: number;
@@ -26,13 +39,18 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  /**
+   * 🔑 CART LOGIC (LOCAL + PERSISTED)
+   */
   const cart = useCart();
 
+  /**
+   * 🩺 PRESCRIPTIONS
+   */
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
 
-  // 🔑 SOURCE OF TRUTH — BACKEND
   async function refreshPrescriptions() {
     try {
       const res = await fetch(
@@ -45,16 +63,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const data: Prescription[] = await res.json();
       setPrescriptions(data);
 
-      // ✅ Auto-select latest if nothing selected
       if (!selectedPrescriptionId && data.length > 0) {
         setSelectedPrescriptionId(data[0].id);
       }
     } catch {
-      // ignore
+      // silent fail
     }
   }
 
-  // Load prescriptions once on app start
   useEffect(() => {
     refreshPrescriptions();
   }, []);
@@ -62,10 +78,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   return (
     <CartContext.Provider
       value={{
-        // CART
-        ...cart,
+        // 🛒 CART
+        items: cart.items,
+        addItem: cart.addItem,
+        removeItem: cart.removeItem,
+        updateQuantity: cart.updateQuantity,
+        clearCart: cart.clearCart,
 
-        // PRESCRIPTIONS
+        itemCount: cart.itemCount,
+        subtotal: cart.subtotal,
+        hasScheduleHDrugs: cart.hasScheduleHDrugs,
+        requiresPrescription: cart.requiresPrescription,
+        isLoaded: cart.isLoaded,
+
+        // 🩺 PRESCRIPTIONS
         prescriptions,
         selectedPrescriptionId,
         setSelectedPrescriptionId,
