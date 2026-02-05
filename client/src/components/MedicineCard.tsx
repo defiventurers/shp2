@@ -23,7 +23,6 @@ export default function MedicineCard({
   const increment = () => setQty((q) => q + 1);
   const decrement = () => setQty((q) => Math.max(0, q - 1));
 
-  /* Pack text based on category */
   const packLabel = (() => {
     const size = Number(medicine.packSize || 0);
     if (!size) return "";
@@ -38,7 +37,7 @@ export default function MedicineCard({
   })();
 
   return (
-    <div className="border rounded-xl p-4 shadow-sm bg-white">
+    <div className="relative border rounded-xl p-4 bg-white shadow-sm">
       {/* HEADER */}
       <div className="flex justify-between items-start">
         <h2 className="font-bold text-lg tracking-wide">
@@ -57,7 +56,7 @@ export default function MedicineCard({
         ₹{medicine.price}
       </div>
 
-      {/* TOGGLE DETAILS */}
+      {/* VIEW DETAILS */}
       <button
         onClick={() => setShowDetails((v) => !v)}
         className="text-blue-600 text-sm mt-2"
@@ -65,10 +64,9 @@ export default function MedicineCard({
         {showDetails ? "Hide Details" : "View Details"}
       </button>
 
-      {/* DETAILS */}
+      {/* DETAILS SECTION */}
       {showDetails && (
         <div className="mt-4 space-y-3">
-          {/* IMAGE */}
           {medicine.imageUrl && (
             <div className="w-full h-40 bg-gray-50 flex items-center justify-center rounded">
               <img
@@ -79,44 +77,51 @@ export default function MedicineCard({
             </div>
           )}
 
-          {/* PACK SIZE */}
           {packLabel && (
             <div className="text-sm text-gray-700">
               {packLabel}
             </div>
           )}
 
-          {/* MANUFACTURER */}
           <div className="text-sm text-gray-500">
             Manufactured by{" "}
             <span className="font-medium">
               {medicine.manufacturer}
             </span>
           </div>
+        </div>
+      )}
 
-          {/* 🛒 ADD TO CART */}
-          <div className="flex justify-end items-center gap-2 pt-2">
+      {/* 🛒 ADD TO CART – FIXED BOTTOM RIGHT */}
+      <div className="absolute bottom-4 right-4">
+        {qty === 0 ? (
+          <button
+            onClick={increment}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow"
+          >
+            <span className="text-lg leading-none">+</span>
+            Add
+          </button>
+        ) : (
+          <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
             <button
               onClick={decrement}
-              disabled={qty === 0}
-              className="w-7 h-7 rounded border flex items-center justify-center disabled:opacity-40"
+              className="px-3 py-2 text-lg"
             >
               −
             </button>
-
-            <span className="min-w-[20px] text-center text-sm">
+            <span className="px-3 text-sm font-medium">
               {qty}
             </span>
-
             <button
               onClick={increment}
-              className="w-7 h-7 rounded border flex items-center justify-center"
+              className="px-3 py-2 text-lg"
             >
               +
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
