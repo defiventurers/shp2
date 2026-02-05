@@ -17,70 +17,60 @@ export default function MedicineCard({
 }: {
   medicine: Medicine;
 }) {
-  const [open, setOpen] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [qty, setQty] = useState(0);
 
+  const increment = () => setQty((q) => q + 1);
+  const decrement = () => setQty((q) => Math.max(0, q - 1));
+
+  /* Pack text based on category */
   const packLabel = (() => {
-    const size = medicine.packSize || "0";
-    switch (medicine.category?.toUpperCase()) {
-      case "TABLETS":
-        return `Pack of ${size} tablets`;
-      case "CAPSULES":
-        return `Pack of ${size} capsules`;
-      case "SYRUPS":
-        return `Bottle of ${size} ml`;
-      case "INJECTIONS":
-        return `Pack of ${size} injection(s)`;
-      default:
-        return `Pack of ${size}`;
-    }
+    const size = Number(medicine.packSize || 0);
+    if (!size) return "";
+
+    const cat = medicine.category?.toLowerCase();
+    if (cat === "tablets") return `Strip of ${size} tablets`;
+    if (cat === "capsules") return `Strip of ${size} capsules`;
+    if (cat === "syrups") return `Bottle`;
+    if (cat === "drops") return `Bottle`;
+    if (cat === "injections") return `Vial`;
+    return `Pack of ${size}`;
   })();
 
-  function handleAddToCart() {
-    console.log("🛒 Add to cart:", medicine.name);
-    // Cart logic will plug in here later
-  }
-
   return (
-    <div className="border rounded-xl p-4 bg-white shadow-sm">
+    <div className="border rounded-xl p-4 shadow-sm bg-white">
       {/* HEADER */}
       <div className="flex justify-between items-start">
-        <h2 className="font-bold text-lg">
-          {medicine.name.toUpperCase()}
+        <h2 className="font-bold text-lg tracking-wide">
+          {medicine.name}
         </h2>
 
-        <button
-          onClick={() => setOpen(!open)}
-          className="text-blue-600 text-sm underline"
-        >
-          {open ? "Hide Details" : "View Details"}
-        </button>
+        {medicine.requiresPrescription && (
+          <Badge variant="destructive" className="text-xs">
+            Rx
+          </Badge>
+        )}
       </div>
 
       {/* PRICE */}
-      <div className="mt-2 text-green-700 font-semibold text-lg">
+      <div className="text-green-600 font-semibold mt-2">
         ₹{medicine.price}
       </div>
 
-      {/* RX BADGE */}
-      {medicine.requiresPrescription && (
-        <Badge className="mt-2 bg-red-600">
-          Prescription Required
-        </Badge>
-      )}
-
-      {/* ADD TO CART */}
+      {/* TOGGLE DETAILS */}
       <button
-        onClick={handleAddToCart}
-        className="mt-4 w-full bg-green-600 text-white py-2 rounded-md font-semibold hover:bg-green-700 transition"
+        onClick={() => setShowDetails((v) => !v)}
+        className="text-blue-600 text-sm mt-2"
       >
-        🛒 Add to Cart
+        {showDetails ? "Hide Details" : "View Details"}
       </button>
 
       {/* DETAILS */}
-      {open && (
-        <div className="mt-4 border-t pt-4 space-y-3">
+      {showDetails && (
+        <div className="mt-4 space-y-3">
+          {/* IMAGE */}
           {medicine.imageUrl && (
-            <div className="w-full h-40 flex items-center justify-center bg-gray-50 rounded">
+            <div className="w-full h-40 bg-gray-50 flex items-center justify-center rounded">
               <img
                 src={medicine.imageUrl}
                 alt={medicine.name}
@@ -89,15 +79,41 @@ export default function MedicineCard({
             </div>
           )}
 
-          <div className="text-sm text-gray-700">
-            {packLabel}
-          </div>
+          {/* PACK SIZE */}
+          {packLabel && (
+            <div className="text-sm text-gray-700">
+              {packLabel}
+            </div>
+          )}
 
-          <div className="text-sm text-gray-600">
+          {/* MANUFACTURER */}
+          <div className="text-sm text-gray-500">
             Manufactured by{" "}
             <span className="font-medium">
               {medicine.manufacturer}
             </span>
+          </div>
+
+          {/* 🛒 ADD TO CART */}
+          <div className="flex justify-end items-center gap-2 pt-2">
+            <button
+              onClick={decrement}
+              disabled={qty === 0}
+              className="w-7 h-7 rounded border flex items-center justify-center disabled:opacity-40"
+            >
+              −
+            </button>
+
+            <span className="min-w-[20px] text-center text-sm">
+              {qty}
+            </span>
+
+            <button
+              onClick={increment}
+              className="w-7 h-7 rounded border flex items-center justify-center"
+            >
+              +
+            </button>
           </div>
         </div>
       )}
