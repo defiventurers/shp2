@@ -21,7 +21,7 @@ export async function seedDatabase() {
   console.log("🌱 Seeding categories...");
 
   const existing = await db.select().from(categories).limit(1);
-  if (existing.length) {
+  if (existing.length > 0) {
     console.log("✅ Categories already exist, skipping seed");
     return;
   }
