@@ -26,9 +26,8 @@ const PAGE_SIZE = 24;
 export default function Inventory() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    null
-  );
+  const [selectedCategoryId, setSelectedCategoryId] =
+    useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -39,20 +38,31 @@ export default function Inventory() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [medRes, catRes] = await Promise.all([
-          fetch(`${API_BASE}/api/medicines`),
-          fetch(`${API_BASE}/api/categories`),
-        ]);
+        const medRes = await fetch(`${API_BASE}/api/medicines`);
+        if (!medRes.ok) throw new Error("Medicines API failed");
 
-        if (!medRes.ok || !catRes.ok) {
-          throw new Error("API failed");
+        const medJson = await medRes.json();
+        setMedicines(medJson.medicines || []);
+
+        // Categories are OPTIONAL – never block medicines
+        try {
+          const catRes = await fetch(`${API_BASE}/api/categories`);
+          if (catRes.ok) {
+            const catJson = await catRes.json();
+
+            // 🔒 DEFENSIVE PARSE
+            if (Array.isArray(catJson)) {
+              setCategories(catJson);
+            } else if (Array.isArray(catJson.categories)) {
+              setCategories(catJson.categories);
+            } else {
+              setCategories([]);
+            }
+          }
+        } catch {
+          setCategories([]);
         }
 
-        const medData = await medRes.json();
-        const catData = await catRes.json();
-
-        setMedicines(medData.medicines || []);
-        setCategories(catData || []);
         setPage(1);
       } catch (err) {
         console.error("❌ Inventory load failed:", err);
@@ -103,7 +113,9 @@ export default function Inventory() {
 
   if (error) {
     return (
-      <div className="p-6 text-center text-red-600">{error}</div>
+      <div className="p-6 text-center text-red-600">
+        {error}
+      </div>
     );
   }
 
@@ -122,32 +134,34 @@ export default function Inventory() {
       />
 
       {/* 🧩 CATEGORY FILTER */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-6">
-        <button
-          onClick={() => setSelectedCategoryId(null)}
-          className={`px-3 py-1 rounded-full text-sm border whitespace-nowrap ${
-            selectedCategoryId === null
-              ? "bg-primary text-white"
-              : "bg-white"
-          }`}
-        >
-          ALL
-        </button>
-
-        {categories.map((cat) => (
+      {categories.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-6">
           <button
-            key={cat.id}
-            onClick={() => setSelectedCategoryId(cat.id)}
+            onClick={() => setSelectedCategoryId(null)}
             className={`px-3 py-1 rounded-full text-sm border whitespace-nowrap ${
-              selectedCategoryId === cat.id
+              selectedCategoryId === null
                 ? "bg-primary text-white"
                 : "bg-white"
             }`}
           >
-            {cat.name}
+            ALL
           </button>
-        ))}
-      </div>
+
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategoryId(cat.id)}
+              className={`px-3 py-1 rounded-full text-sm border whitespace-nowrap ${
+                selectedCategoryId === cat.id
+                  ? "bg-primary text-white"
+                  : "bg-white"
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* MEDICINE GRID */}
       {paginatedMedicines.length === 0 ? (
