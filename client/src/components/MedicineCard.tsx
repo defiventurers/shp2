@@ -1,84 +1,104 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import type { Medicine } from "@shared/schema";
 
-interface Props {
-  medicine: Medicine;
+type Medicine = {
+  id: string;
+  name: string;
+  price: string;
+  requiresPrescription: boolean;
+  packSize: string;
+  manufacturer: string;
+  imageUrl: string | null;
+  category: string;
+};
+
+function packText(category: string, packSize: string) {
+  const qty = Number(packSize || 0);
+
+  switch (category) {
+    case "TABLETS":
+      return `Strip of ${qty} tablets`;
+    case "CAPSULES":
+      return `Strip of ${qty} capsules`;
+    case "SYRUPS":
+      return `Bottle (${qty} ml)`;
+    case "INJECTIONS":
+      return `${qty} injection vial(s)`;
+    case "TOPICALS":
+      return `${qty} g topical`;
+    case "DROPS":
+      return `Bottle (${qty} ml)`;
+    case "Powders":
+      return `${qty} g powder`;
+    case "Mouthwash":
+      return `Bottle (${qty} ml)`;
+    case "Inhalers":
+      return `${qty} inhaler unit(s)`;
+    case "Devices":
+      return `Medical device`;
+    case "Scrubs":
+      return `${qty} ml scrub`;
+    case "Solutions":
+      return `${qty} ml solution`;
+    default:
+      return `Pack of ${qty}`;
+  }
 }
 
-export function MedicineCard({ medicine }: Props) {
-  const [showDetails, setShowDetails] = useState(false);
-
-  // ✅ Correct image source (array from backend)
-  const imageUrl =
-    Array.isArray(medicine.imageUrls) && medicine.imageUrls.length > 0
-      ? medicine.imageUrls[0]
-      : null;
+export default function MedicineCard({ medicine }: { medicine: Medicine }) {
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-xl border bg-white p-4 shadow-sm">
-      {/* =======================
-          MAIN CARD (NO IMAGE HERE)
-      ======================== */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold leading-snug">
+    <div className="rounded-xl border p-4 shadow-sm bg-white">
+      {/* MAIN TILE */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="font-bold text-lg tracking-wide">
             {medicine.name}
-          </h3>
+          </h2>
 
-          <p className="mt-1 text-lg font-bold">
-            ₹{Number(medicine.price).toFixed(2)}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-green-700 font-semibold">
+              ₹{medicine.price}
+            </span>
 
-          {medicine.packSize && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              Pack size: {medicine.packSize} capsules / tablets
-            </p>
-          )}
+            {medicine.requiresPrescription && (
+              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                Rx Required
+              </span>
+            )}
+          </div>
         </div>
 
-        <Button className="h-9 px-4 shrink-0">+ Add</Button>
+        <button
+          onClick={() => setOpen(!open)}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          {open ? "Hide Details" : "View Details"}
+        </button>
       </div>
 
-      {/* =======================
-          VIEW DETAILS TOGGLE
-      ======================== */}
-      <button
-        onClick={() => setShowDetails((v) => !v)}
-        className="mt-3 text-sm text-muted-foreground"
-      >
-        {showDetails ? "▲ View details" : "▼ View details"}
-      </button>
-
-      {/* =======================
-          DETAILS SECTION
-      ======================== */}
-      {showDetails && (
-        <div className="mt-3 rounded-lg bg-muted/40 p-3">
-          {/* Manufacturer */}
-          {medicine.manufacturer && (
-            <p className="mb-3 text-sm">
-              <span className="font-medium">Manufacturer:</span>{" "}
-              {medicine.manufacturer}
-            </p>
+      {/* DROPDOWN DETAILS */}
+      {open && (
+        <div className="mt-4 border-t pt-4 space-y-3">
+          {/* IMAGE */}
+          {medicine.imageUrl && (
+            <div className="w-full h-52 flex justify-center items-center bg-gray-50 rounded">
+              <img
+                src={medicine.imageUrl}
+                alt={medicine.name}
+                className="max-h-full object-contain"
+              />
+            </div>
           )}
 
-          {/* ✅ SINGLE, CONSTRAINED IMAGE TILE */}
-          <div className="flex justify-center">
-            <div className="h-40 w-40 rounded-md border bg-white flex items-center justify-center overflow-hidden">
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={medicine.name}
-                  className="h-full w-full object-contain"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  No image available
-                </span>
-              )}
-            </div>
+          {/* PACK SIZE */}
+          <div className="text-sm text-gray-700">
+            {packText(medicine.category, medicine.packSize)}
+          </div>
+
+          {/* MANUFACTURER */}
+          <div className="text-sm text-gray-500">
+            Manufactured by <span className="font-medium">{medicine.manufacturer}</span>
           </div>
         </div>
       )}
