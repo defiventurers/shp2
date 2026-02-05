@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MedicineCard from "@/components/MedicineCard";
 
 type Medicine = {
@@ -16,10 +16,13 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   "https://sacredheartpharma-backend.onrender.com";
 
+const PAGE_SIZE = 24;
+
 export default function Inventory() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     async function loadMedicines() {
@@ -32,6 +35,7 @@ export default function Inventory() {
 
         const data = await res.json();
         setMedicines(data.medicines || []);
+        setPage(1); // reset pagination on reload
       } catch (err) {
         console.error("❌ Inventory fetch failed:", err);
         setError("Failed to load medicines");
@@ -42,6 +46,14 @@ export default function Inventory() {
 
     loadMedicines();
   }, []);
+
+  const totalPages = Math.ceil(medicines.length / PAGE_SIZE);
+
+  const paginatedMedicines = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    return medicines.slice(start, end);
+  }, [medicines, page]);
 
   if (loading) {
     return (
@@ -68,14 +80,40 @@ export default function Inventory() {
           No medicines found
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {medicines.map((medicine) => (
-            <MedicineCard
-              key={medicine.id}
-              medicine={medicine}
-            />
-          ))}
-        </div>
+        <>
+          {/* MEDICINE GRID */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginatedMedicines.map((medicine) => (
+              <MedicineCard
+                key={medicine.id}
+                medicine={medicine}
+              />
+            ))}
+          </div>
+
+          {/* PAGINATION CONTROLS */}
+          <div className="flex items-center justify-center gap-4 mt-8">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="px-4 py-2 rounded border disabled:opacity-50"
+            >
+              Previous
+            </button>
+
+            <span className="text-sm text-gray-600">
+              Page {page} of {totalPages}
+            </span>
+
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-4 py-2 rounded border disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
