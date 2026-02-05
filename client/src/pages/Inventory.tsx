@@ -1,197 +1,78 @@
-import { useState, useEffect } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Search, Filter, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { MedicineCard } from "@/components/MedicineCard";
-import { InventorySkeleton } from "@/components/LoadingSpinner";
-import type { Medicine, Category } from "@shared/schema";
+import { useEffect, useState } from "react";
+import MedicineCard from "@/components/MedicineCard";
 
-/* =========================
-   CONFIG (CRITICAL)
-========================= */
-const API_BASE =
-  "https://sacredheartpharma-backend.onrender.com";
-
-/* =========================
-   Debounce hook
-========================= */
-function useDebounce<T>(value: T, delay = 400) {
-  const [debounced, setDebounced] = useState(value);
-
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(id);
-  }, [value, delay]);
-
-  return debounced;
-}
-
-type MedicinesResponse = {
-  success: boolean;
-  medicines: Medicine[];
-  page: number;
-  hasMore: boolean;
+type Medicine = {
+  id: string;
+  name: string;
+  price: string;
+  requiresPrescription: boolean;
+  packSize: string;
+  manufacturer: string;
+  imageUrl: string | null;
+  category: string;
 };
 
 export default function Inventory() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [showOnlyInStock, setShowOnlyInStock] = useState(false);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const debouncedSearch = useDebounce(searchQuery);
-
-  /* =========================
-     MEDICINES (INFINITE)
-  ========================= */
-  const {
-    data,
-    isLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery<MedicinesResponse>({
-    queryKey: [
-      "medicines",
-      debouncedSearch,
-      selectedCategory,
-      showOnlyInStock,
-    ],
-    queryFn: async ({ pageParam = 1 }) => {
-      const params = new URLSearchParams();
-      params.set("page", String(pageParam));
-      params.set("limit", "50");
-
-      if (debouncedSearch.trim())
-        params.set("search", debouncedSearch.trim());
-      if (selectedCategory)
-        params.set("categoryId", selectedCategory);
-      if (showOnlyInStock)
-        params.set("inStock", "true");
-
-      const res = await fetch(
-        `${API_BASE}/api/medicines?${params.toString()}`
-      );
-
-      if (!res.ok) throw new Error("Failed to fetch medicines");
-
-      return res.json();
-    },
-    getNextPageParam: (lastPage) =>
-      lastPage.hasMore ? lastPage.page + 1 : undefined,
-  });
-
-  const medicines = data?.pages.flatMap((p) => p.medicines) ?? [];
-
-  /* =========================
-     CATEGORIES (NORMAL QUERY)
-  ========================= */
-  const { data: categories = [] } = useQuery<Category[]>({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/categories`);
-      const json = await res.json();
-      return json.categories ?? [];
-    },
-  });
-
-  /* =========================
-     Infinite scroll
-  ========================= */
   useEffect(() => {
-    const onScroll = () => {
-      if (
-        window.innerHeight + window.scrollY >=
-          document.body.offsetHeight - 300 &&
-        hasNextPage &&
-        !isFetchingNextPage
-      ) {
-        fetchNextPage();
+    async function loadMedicines() {
+      try {
+        const res = await fetch("/api/medicines");
+
+        if (!res.ok) {
+          throw new Error("Failed to fetch medicines");
+        }
+
+        const data = await res.json();
+        setMedicines(data.medicines || []);
+      } catch (err: any) {
+        console.error("Inventory fetch failed:", err);
+        setError("Unable to load medicines");
+      } finally {
+        setLoading(false);
       }
-    };
+    }
 
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+    loadMedicines();
+  }, []);
 
-  /* =========================
-     UI
-  ========================= */
-  return (
-    <div className="min-h-screen bg-background pb-20">
-      {/* Search + Filters */}
-      <div className="sticky top-14 z-30 bg-background border-b">
-        <div className="px-4 py-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" />
-            <Input
-              placeholder="Search medicines, brands..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-9"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <ScrollArea className="mt-3">
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={showOnlyInStock ? "default" : "outline"}
-                onClick={() => setShowOnlyInStock(!showOnlyInStock)}
-              >
-                <Filter className="w-3 h-3 mr-1" />
-                In Stock
-              </Button>
-
-              {categories.map((c) => (
-                <Badge
-                  key={c.id}
-                  variant={
-                    selectedCategory === c.id ? "default" : "secondary"
-                  }
-                  onClick={() =>
-                    setSelectedCategory(
-                      selectedCategory === c.id ? null : c.id
-                    )
-                  }
-                  className="cursor-pointer"
-                >
-                  {c.name}
-                </Badge>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
+  if (loading) {
+    return (
+      <div className="p-6 text-center text-gray-500">
+        Loading medicines…
       </div>
+    );
+  }
 
-      {/* Inventory */}
-      <div className="px-4 py-4">
-        {isLoading && <InventorySkeleton />}
+  if (error) {
+    return (
+      <div className="p-6 text-center text-red-600">
+        {error}
+      </div>
+    );
+  }
 
-        <div className="grid gap-3">
-          {medicines.map((m) => (
-            <MedicineCard key={m.id} medicine={m} />
+  return (
+    <div className="max-w-6xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-6">Medicines</h1>
+
+      {medicines.length === 0 ? (
+        <div className="text-gray-500 text-center">
+          No medicines available
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {medicines.map((medicine) => (
+            <MedicineCard
+              key={medicine.id}
+              medicine={medicine}
+            />
           ))}
         </div>
-
-        {isFetchingNextPage && <InventorySkeleton />}
-
-        {!hasNextPage && medicines.length > 0 && (
-          <p className="text-center text-xs text-muted-foreground mt-6">
-            End of inventory
-          </p>
-        )}
-      </div>
+      )}
     </div>
   );
 }
