@@ -22,6 +22,8 @@ export default function Inventory() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function Inventory() {
 
         const data = await res.json();
         setMedicines(data.medicines || []);
-        setPage(1); // reset pagination on reload
+        setPage(1);
       } catch (err) {
         console.error("❌ Inventory fetch failed:", err);
         setError("Failed to load medicines");
@@ -47,13 +49,33 @@ export default function Inventory() {
     loadMedicines();
   }, []);
 
-  const totalPages = Math.ceil(medicines.length / PAGE_SIZE);
+  /* -----------------------------
+     SEARCH FILTER
+  ------------------------------ */
+  const filteredMedicines = useMemo(() => {
+    if (!search.trim()) return medicines;
+
+    const q = search.toLowerCase();
+    return medicines.filter((m) =>
+      m.name.toLowerCase().includes(q)
+    );
+  }, [medicines, search]);
+
+  /* -----------------------------
+     PAGINATION
+  ------------------------------ */
+  const totalPages = Math.ceil(filteredMedicines.length / PAGE_SIZE);
 
   const paginatedMedicines = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     const end = start + PAGE_SIZE;
-    return medicines.slice(start, end);
-  }, [medicines, page]);
+    return filteredMedicines.slice(start, end);
+  }, [filteredMedicines, page]);
+
+  /* Reset page when search changes */
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   if (loading) {
     return (
@@ -73,9 +95,18 @@ export default function Inventory() {
 
   return (
     <div className="max-w-6xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Medicines</h1>
+      <h1 className="text-2xl font-bold mb-4">Medicines</h1>
 
-      {medicines.length === 0 ? (
+      {/* 🔍 SEARCH */}
+      <input
+        type="text"
+        placeholder="Search medicine name..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full mb-6 px-4 py-2 border rounded-md focus:outline-none focus:ring"
+      />
+
+      {filteredMedicines.length === 0 ? (
         <div className="text-gray-500 text-center">
           No medicines found
         </div>
@@ -91,7 +122,7 @@ export default function Inventory() {
             ))}
           </div>
 
-          {/* PAGINATION CONTROLS */}
+          {/* PAGINATION */}
           <div className="flex items-center justify-center gap-4 mt-8">
             <button
               disabled={page === 1}
