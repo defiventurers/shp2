@@ -4,7 +4,6 @@ import path from "path";
 import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
-import { eq } from "drizzle-orm";
 
 export function registerAdminRoutes(app: Express) {
   console.log("🛠️ ADMIN ROUTES REGISTERED");
@@ -25,102 +24,94 @@ export function registerAdminRoutes(app: Express) {
       return res.status(404).json({ error: "CSV file not found" });
     }
 
-    let inserted = 0;
-    let skipped = 0;
-
     console.log("📦 Starting inventory import");
 
     await db.delete(medicines);
     console.log("🧨 Medicines table cleared");
 
-    const categoryCache = new Map<string, string>();
-
+    const categoryMap = new Map<string, string>();
     const allCategories = await db.select().from(categories);
     for (const c of allCategories) {
-      categoryCache.set(c.name.toUpperCase(), c.id);
+      categoryMap.set(c.name.toUpperCase(), c.id);
     }
 
+    let inserted = 0;
+    let skipped = 0;
     const batch: any[] = [];
+    const BATCH_SIZE = 250;
 
-    await new Promise<void>((resolve, reject) => {
-      fs.createReadStream(csvPath)
-        .pipe(csv())
-        .on("data", (row) => {
-          try {
-            const name = String(row["Medicine Name"] || "").trim();
-            if (!name) {
-              skipped++;
-              return;
-            }
+    const stream = fs.createReadStream(csvPath).pipe(csv());
 
-            const priceRaw = row["Price"];
-            const price =
-              typeof priceRaw === "number"
-                ? priceRaw
-                : Number(String(priceRaw).replace(/[₹,]/g, ""));
+    for await (const row of stream) {
+      try {
+        const name = String(row["Medicine Name"] || "").trim();
+        if (!name) {
+          skipped++;
+          continue;
+        }
 
-            if (!Number.isFinite(price)) {
-              skipped++;
-              return;
-            }
+        const priceRaw = row["Price"];
+        const price =
+          typeof priceRaw === "number"
+            ? priceRaw
+            : Number(String(priceRaw).replace(/[₹,]/g, ""));
 
-            const packSizeRaw = row["Pack-Size"];
-            const packSize =
-              typeof packSizeRaw === "number"
-                ? packSizeRaw
-                : Number(packSizeRaw);
+        if (!Number.isFinite(price)) {
+          skipped++;
+          continue;
+        }
 
-            const rxValue = String(row["Is Prescription Required?"]).toLowerCase();
-            const isRx = rxValue === "yes" || rxValue === "true";
+        const packSize =
+          typeof row["Pack-Size"] === "number"
+            ? row["Pack-Size"]
+            : Number(row["Pack-Size"]);
 
-            const manufacturer =
-              String(row["Manufacturer"] || "Not Known").trim();
+        const rxValue = String(row["Is Prescription Required?"]).toLowerCase();
+        const isRx = rxValue === "yes" || rxValue === "true";
 
-            const imageUrl = String(row["Image URL"] || "").trim();
+        const manufacturer = String(row["Manufacturer"] || "Not Known").trim();
+        const imageUrl = String(row["Image URL"] || "").trim();
+        const categoryName = String(row["Category"] || "No category")
+          .trim()
+          .toUpperCase();
 
-            const categoryName = String(row["Category"] || "No category")
-              .trim()
-              .toUpperCase();
+        batch.push({
+          name,
+          price,
+          mrp: price,
+          packSize: Number.isFinite(packSize) ? packSize : 0,
+          manufacturer,
+          requiresPrescription: isRx,
+          isScheduleH: isRx,
+          imageUrl: imageUrl || null,
+          categoryId: categoryMap.get(categoryName) || null,
+          stock: null,
+          sourceFile: "easyload_inventory.csv",
+        });
 
-            const categoryId = categoryCache.get(categoryName) || null;
+        if (batch.length >= BATCH_SIZE) {
+          await db.insert(medicines).values(batch);
+          inserted += batch.length;
+          batch.length = 0;
 
-            batch.push({
-              name,
-              price,
-              mrp: price,
-              packSize: Number.isFinite(packSize) ? packSize : 0,
-              manufacturer,
-              requiresPrescription: isRx,
-              isScheduleH: isRx,
-              imageUrl: imageUrl || null,
-              categoryId,
-              stock: null,
-              sourceFile: "easyload_inventory.csv",
-            });
-
-            inserted++;
-
-            if (batch.length === 500) {
-              db.insert(medicines).values(batch.splice(0)).catch(reject);
-            }
-          } catch (err) {
-            skipped++;
+          if (inserted % 2000 === 0) {
+            console.log(`➕ Inserted ${inserted}`);
           }
-        })
-        .on("end", async () => {
-          if (batch.length) {
-            await db.insert(medicines).values(batch);
-          }
+        }
+      } catch {
+        skipped++;
+      }
+    }
 
-          console.log("✅ IMPORT COMPLETE");
-          console.log(`➕ Inserted: ${inserted}`);
-          console.log(`⏭️ Skipped: ${skipped}`);
-          console.log(`🎯 Expected total: 18433`);
+    if (batch.length > 0) {
+      await db.insert(medicines).values(batch);
+      inserted += batch.length;
+    }
 
-          resolve();
-        })
-        .on("error", reject);
-    });
+    console.log("✅ IMPORT COMPLETE");
+    console.log(`➕ Inserted: ${inserted}`);
+    console.log(`⏭️ Skipped: ${skipped}`);
+    console.log(`🎯 Expected total: 18433`);
 
     res.json({
       success: true,
