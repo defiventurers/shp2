@@ -2,120 +2,139 @@ import type { Express, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
+
 import { db } from "../db";
-import { medicines, categories, orders, orderItems } from "@shared/schema";
+import { medicines, categories } from "@shared/schema";
 
-const CSV_PATH = path.join(
-  process.cwd(),
-  "server",
-  "data",
-  "easyload_inventory.csv"
-);
-
+/**
+ * ADMIN ROUTES
+ */
 export function registerAdminRoutes(app: Express) {
   console.log("🛠️ ADMIN ROUTES REGISTERED");
 
-  app.post("/api/admin/import-inventory", async (_req: Request, res: Response) => {
-    console.log("🚨 ADMIN IMPORT ROUTE HIT");
-    console.log("📍 CSV PATH:", CSV_PATH);
+  /**
+   * POST /api/admin/import-inventory
+   * Imports medicines from server/data/easyload_inventory.csv
+   */
+  app.post(
+    "/api/admin/import-inventory",
+    async (_req: Request, res: Response) => {
+      console.log("🚨 ADMIN IMPORT ROUTE HIT");
 
-    if (!fs.existsSync(CSV_PATH)) {
-      return res.status(404).json({ success: false, error: "CSV not found" });
-    }
+      const csvPath = path.join(
+        process.cwd(),
+        "server",
+        "data",
+        "easyload_inventory.csv"
+      );
 
-    try {
-      await db.delete(orderItems);
-      await db.delete(orders);
-      await db.delete(medicines);
+      console.log("📍 CSV PATH:", csvPath);
 
-      console.log("🧨 Medicines table cleared");
-
-      const categoryMap = new Map<string, string>();
-      const cats = await db.select().from(categories);
-      for (const c of cats) {
-        categoryMap.set(c.name.toUpperCase(), c.id);
+      if (!fs.existsSync(csvPath)) {
+        console.error("❌ CSV FILE NOT FOUND");
+        return res.status(404).json({
+          success: false,
+          error: "CSV file not found",
+        });
       }
 
-      let inserted = 0;
-      let skipped = 0;
-      const batch: any[] = [];
+      try {
+        console.log("📦 Starting inventory import");
 
-      await new Promise<void>((resolve, reject) => {
-        fs.createReadStream(CSV_PATH)
-          .pipe(csv())
-          .on("data", (row) => {
-            try {
-              const name = row["Medicine Name"]?.trim();
-              if (!name) {
+        /* -----------------------------
+           Build CATEGORY NAME → ID map
+        ------------------------------ */
+        const categoryRows = await db.select().from(categories);
+        const categoryMap = new Map(
+          categoryRows.map((c) => [c.name.toUpperCase(), c.id])
+        );
+
+        /* -----------------------------
+           HARD RESET
+        ------------------------------ */
+        await db.delete(medicines);
+        console.log("🧨 Medicines table cleared");
+
+        let inserted = 0;
+        let skipped = 0;
+        const batch: any[] = [];
+
+        await new Promise<void>((resolve, reject) => {
+          fs.createReadStream(csvPath)
+            .pipe(csv())
+            .on("data", (row) => {
+              try {
+                const name = row["Medicine Name"]?.trim();
+                const price = Number(row["Price"]);
+                const packSize = Number(row["Pack-Size"]);
+                const manufacturer =
+                  row["Manufacturer"]?.trim() || "Not Known";
+                const imageUrl = row["Image URL"]?.trim();
+                const categoryName = row["Category"]?.trim().toUpperCase();
+                const isRx =
+                  row["Is Prescription Required?"]
+                    ?.toString()
+                    .toLowerCase() === "yes";
+
+                // ❌ Guard — skip invalid rows
+                if (!name || Number.isNaN(price)) {
+                  skipped++;
+                  return;
+                }
+
+                const categoryId = categoryMap.get(categoryName) ?? null;
+
+                batch.push({
+                  name,
+                  price,
+                  mrp: price,
+                  packSize: Number.isFinite(packSize) ? packSize : 0,
+                  manufacturer,
+                  imageUrl,
+                  requiresPrescription: isRx,
+                  isScheduleH: isRx,
+                  categoryId,
+                  sourceFile: "easyload_inventory.csv",
+                });
+
+                inserted++;
+
+                if (batch.length === 500) {
+                  db.insert(medicines)
+                    .values(batch.splice(0))
+                    .catch(reject);
+                }
+              } catch (err) {
                 skipped++;
-                return;
+              }
+            })
+            .on("end", async () => {
+              if (batch.length) {
+                await db.insert(medicines).values(batch);
               }
 
-              const price = Number(row["Price"]);
-              if (!Number.isFinite(price)) {
-                skipped++;
-                return;
-              }
+              console.log("✅ IMPORT COMPLETE");
+              console.log(`➕ Inserted: ${inserted}`);
+              console.log(`⏭️ Skipped: ${skipped}`);
+              console.log(`🎯 Expected total: 18433`);
 
-              const categoryRaw = row["Category"]?.trim().toUpperCase();
-              const categoryId = categoryMap.get(categoryRaw) ?? null;
+              resolve();
+            })
+            .on("error", reject);
+        });
 
-              const packSize = Number(row["Pack-Size"]);
-              const isRx =
-                row["Is Prescription Required?"]
-                  ?.toString()
-                  .toLowerCase() === "yes";
-
-              batch.push({
-                name,
-                manufacturer: row["Manufacturer"] || "Not Known",
-                categoryId,
-                packSize: Number.isFinite(packSize)
-                  ? packSize.toString()
-                  : "0",
-                price,
-                mrp: price,
-                stock: 0,
-                requiresPrescription: isRx,
-                isScheduleH: isRx,
-                imageUrl: row["Image URL"] || null,
-                sourceFile: "easyload_inventory.csv",
-              });
-
-              if (batch.length === 500) {
-                db.insert(medicines)
-                  .values(batch.splice(0))
-                  .then(() => {
-                    inserted += 500;
-                    console.log(`➕ Inserted ${inserted}`);
-                  })
-                  .catch((e) => {
-                    console.error("❌ Batch insert failed", e);
-                  });
-              }
-            } catch {
-              skipped++;
-            }
-          })
-          .on("end", async () => {
-            if (batch.length) {
-              await db.insert(medicines).values(batch);
-              inserted += batch.length;
-            }
-
-            console.log("✅ IMPORT COMPLETE");
-            console.log(`➕ Inserted: ${inserted}`);
-            console.log(`⏭️ Skipped: ${skipped}`);
-            console.log(`🎯 Expected total: 18433`);
-            resolve();
-          })
-          .on("error", reject);
-      });
-
-      res.json({ success: true, inserted, skipped });
-    } catch (err) {
-      console.error("❌ IMPORT FAILED:", err);
-      res.status(500).json({ success: false });
+        return res.json({
+          success: true,
+          inserted,
+          skipped,
+        });
+      } catch (err) {
+        console.error("❌ IMPORT FAILED:", err);
+        return res.status(500).json({
+          success: false,
+          error: "Inventory import failed",
+        });
+      }
     }
-  });
+  );
 }
