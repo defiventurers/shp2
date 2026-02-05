@@ -18,19 +18,39 @@ const API_BASE =
 
 const PAGE_SIZE = 24;
 
+/* ✅ EXACT CATEGORY SET */
+const CATEGORIES = [
+  "TABLETS",
+  "CAPSULES",
+  "SYRUPS",
+  "INJECTIONS",
+  "TOPICALS",
+  "DROPS",
+  "POWDERS",
+  "MOUTHWASH",
+  "INHALERS",
+  "DEVICES",
+  "SCRUBS",
+  "SOLUTIONS",
+  "NO CATEGORY",
+];
+
 export default function Inventory() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] =
+    useState<string | null>(null);
+
   const [page, setPage] = useState(1);
 
+  /* ---------------- FETCH ---------------- */
   useEffect(() => {
     async function loadMedicines() {
       try {
         const res = await fetch(`${API_BASE}/api/medicines`);
-
         if (!res.ok) {
           throw new Error(`API failed: ${res.status}`);
         }
@@ -49,22 +69,30 @@ export default function Inventory() {
     loadMedicines();
   }, []);
 
-  /* -----------------------------
-     SEARCH FILTER
-  ------------------------------ */
+  /* ---------------- FILTERING ---------------- */
   const filteredMedicines = useMemo(() => {
-    if (!search.trim()) return medicines;
+    const q = search.trim().toLowerCase();
 
-    const q = search.toLowerCase();
-    return medicines.filter((m) =>
-      m.name.toLowerCase().includes(q)
-    );
-  }, [medicines, search]);
+    return medicines.filter((m) => {
+      const matchesSearch =
+        !q ||
+        m.name.toLowerCase().includes(q) ||
+        m.manufacturer.toLowerCase().includes(q);
 
-  /* -----------------------------
-     PAGINATION
-  ------------------------------ */
-  const totalPages = Math.ceil(filteredMedicines.length / PAGE_SIZE);
+      const matchesCategory =
+        !selectedCategory ||
+        (selectedCategory === "NO CATEGORY"
+          ? !m.category
+          : m.category?.toUpperCase() === selectedCategory);
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [medicines, search, selectedCategory]);
+
+  /* ---------------- PAGINATION ---------------- */
+  const totalPages = Math.ceil(
+    filteredMedicines.length / PAGE_SIZE
+  );
 
   const paginatedMedicines = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
@@ -72,11 +100,12 @@ export default function Inventory() {
     return filteredMedicines.slice(start, end);
   }, [filteredMedicines, page]);
 
-  /* Reset page when search changes */
+  /* Reset page on filter change */
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, selectedCategory]);
 
+  /* ---------------- UI STATES ---------------- */
   if (loading) {
     return (
       <div className="p-6 text-center text-gray-500">
@@ -94,20 +123,49 @@ export default function Inventory() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Medicines</h1>
+    <div className="max-w-6xl mx-auto p-4 space-y-4">
+      <h1 className="text-2xl font-bold">Medicines</h1>
 
       {/* 🔍 SEARCH */}
       <input
         type="text"
-        placeholder="Search medicine name..."
+        placeholder="Search medicine or manufacturer…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full mb-6 px-4 py-2 border rounded-md focus:outline-none focus:ring"
+        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring"
       />
 
+      {/* 🧩 CATEGORY FILTER */}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        <button
+          onClick={() => setSelectedCategory(null)}
+          className={`px-3 py-1.5 rounded border text-sm whitespace-nowrap ${
+            !selectedCategory
+              ? "bg-black text-white"
+              : "bg-white"
+          }`}
+        >
+          All
+        </button>
+
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-3 py-1.5 rounded border text-sm whitespace-nowrap ${
+              selectedCategory === cat
+                ? "bg-black text-white"
+                : "bg-white"
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* 🧪 EMPTY STATE */}
       {filteredMedicines.length === 0 ? (
-        <div className="text-gray-500 text-center">
+        <div className="text-gray-500 text-center py-10">
           No medicines found
         </div>
       ) : (
@@ -123,27 +181,29 @@ export default function Inventory() {
           </div>
 
           {/* PAGINATION */}
-          <div className="flex items-center justify-center gap-4 mt-8">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="px-4 py-2 rounded border disabled:opacity-50"
-            >
-              Previous
-            </button>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-8">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="px-4 py-2 rounded border disabled:opacity-50"
+              >
+                Previous
+              </button>
 
-            <span className="text-sm text-gray-600">
-              Page {page} of {totalPages}
-            </span>
+              <span className="text-sm text-gray-600">
+                Page {page} of {totalPages}
+              </span>
 
-            <button
-              disabled={page === totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="px-4 py-2 rounded border disabled:opacity-50"
-            >
-              Next
-            </button>
-          </div>
+              <button
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="px-4 py-2 rounded border disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
