@@ -4,83 +4,92 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
-const CSV_PATH = path.join(
-  process.cwd(),
-  "server",
-  "data",
-  "easyload_inventory.csv"
-);
-
+/**
+ * Normalizes CSV headers safely
+ */
 function normalizeKey(key: string) {
-  return key.replace(/\ufeff/g, "").trim().toLowerCase();
+  return key
+    .replace(/\uFEFF/g, "")      // remove BOM
+    .replace(/\u00A0/g, " ")     // non-breaking space
+    .trim()
+    .toLowerCase();
 }
 
 export async function importBangaloreInventory() {
   console.log("📦 Starting inventory import");
-  console.log("📍 CSV PATH:", CSV_PATH);
 
-  if (!fs.existsSync(CSV_PATH)) {
-    throw new Error("CSV file not found");
+  const csvPath = path.join(
+    process.cwd(),
+    "server",
+    "data",
+    "easyload_inventory.csv"
+  );
+
+  if (!fs.existsSync(csvPath)) {
+    throw new Error(`CSV not found at ${csvPath}`);
   }
 
-  await db.delete(medicines);
-  console.log("🧨 Medicines table cleared");
-
+  // Load categories once
   const categoryRows = await db.select().from(categories);
   const categoryMap = new Map(
-    categoryRows.map((c) => [c.name.toUpperCase(), c.id])
+    categoryRows.map(c => [c.name.toUpperCase(), c.id])
   );
 
   let inserted = 0;
   let skipped = 0;
+
+  await db.delete(medicines);
+  console.log("🧨 Medicines table cleared");
+
   const batch: any[] = [];
 
   await new Promise<void>((resolve, reject) => {
-    fs.createReadStream(CSV_PATH)
-      .pipe(
-        csv({
-          mapHeaders: ({ header }) => normalizeKey(header),
-        })
-      )
-      .on("headers", (headers) => {
-        console.log("🧠 Detected CSV headers:", headers);
-      })
-      .on("data", (row) => {
+    fs.createReadStream(csvPath)
+      .pipe(csv())
+      .on("data", (rawRow) => {
         try {
+          // 🔑 Normalize row keys
+          const row: Record<string, string> = {};
+          for (const key of Object.keys(rawRow)) {
+            row[normalizeKey(key)] = rawRow[key];
+          }
+
           const name = row["medicine name"];
-          if (!name) return skipped++;
-
-          const price = Number(
-            String(row["price"]).replace(/[₹,]/g, "")
-          );
-          if (!price || Number.isNaN(price)) return skipped++;
-
+          const priceRaw = row["price"];
+          const packSizeRaw = row["pack-size"];
+          const manufacturer = row["manufacturer"];
+          const imageUrl = row["image url"];
           const rxRaw = row["is prescription required?"];
+          const categoryName = row["category"];
+
+          if (!name || !priceRaw || !categoryName) {
+            skipped++;
+            return;
+          }
+
+          const price = Number(priceRaw);
+          if (Number.isNaN(price)) {
+            skipped++;
+            return;
+          }
+
+          const packSize = Number(packSizeRaw ?? 0);
           const requiresPrescription =
-            rxRaw === 1 ||
-            rxRaw === "1" ||
-            String(rxRaw).toLowerCase() === "yes" ||
-            String(rxRaw).toLowerCase() === "true";
+            rxRaw?.toLowerCase() === "yes" ||
+            rxRaw?.toLowerCase() === "true";
 
-          const packSize = Number(row["pack-size"]) || 0;
-          const manufacturer = row["manufacturer"] || "Not Known";
-          const imageUrl = row["image url"] || null;
-
-          const categoryName =
-            row["category"]?.toUpperCase() || "NO CATEGORY";
-          const categoryId = categoryMap.get(categoryName) || null;
+          const categoryId = categoryMap.get(categoryName.toUpperCase()) ?? null;
 
           batch.push({
-            name,
-            manufacturer,
+            name: name.trim(),
             price,
             mrp: price,
-            packSize: String(packSize),
+            packSize,
+            manufacturer: manufacturer || "Not Known",
+            imageUrl: imageUrl || null,
             requiresPrescription,
             isScheduleH: requiresPrescription,
-            imageUrl,
             categoryId,
-            stock: 0,
             sourceFile: "easyload_inventory.csv",
           });
 
@@ -88,8 +97,11 @@ export async function importBangaloreInventory() {
 
           if (batch.length === 500) {
             db.insert(medicines).values(batch.splice(0));
+            if (inserted % 1000 === 0) {
+              console.log(`➕ Inserted ${inserted}`);
+            }
           }
-        } catch {
+        } catch (err) {
           skipped++;
         }
       })
@@ -99,9 +111,9 @@ export async function importBangaloreInventory() {
         }
 
         console.log("✅ IMPORT COMPLETE");
-        console.log("➕ Inserted:", inserted);
-        console.log("⏭️ Skipped:", skipped);
-        console.log("🎯 Expected total: 18433");
+        console.log(`➕ Inserted: ${inserted}`);
+        console.log(`⏭️ Skipped: ${skipped}`);
+        console.log(`🎯 Expected total: 18433`);
         resolve();
       })
       .on("error", reject);
