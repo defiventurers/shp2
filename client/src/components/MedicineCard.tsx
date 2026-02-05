@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useCartContext } from "@/context/CartContext";
 
@@ -17,19 +18,23 @@ export default function MedicineCard({
 }: {
   medicine: Medicine;
 }) {
+  /* ---------------- VIEW DETAILS STATE ---------------- */
+  const [showDetails, setShowDetails] = useState(false);
+
+  /* ---------------- CART STATE (SOURCE OF TRUTH) ---------------- */
   const {
     items,
     addItem,
     updateQuantity,
-    removeItem,
   } = useCartContext();
 
   const existingItem = items.find(
-    (i) => i.medicine.id === medicine.id
+    (item) => item.medicine.id === medicine.id
   );
 
   const qty = existingItem?.quantity ?? 0;
 
+  /* ---------------- PACK SIZE LABEL ---------------- */
   const packLabel = (() => {
     const size = Number(medicine.packSize || 0);
     if (!size) return "";
@@ -45,7 +50,7 @@ export default function MedicineCard({
 
   return (
     <div className="relative border rounded-xl p-4 bg-white shadow-sm">
-      {/* HEADER */}
+      {/* ---------------- HEADER ---------------- */}
       <div className="flex justify-between items-start">
         <h2 className="font-bold text-lg tracking-wide">
           {medicine.name}
@@ -58,38 +63,48 @@ export default function MedicineCard({
         )}
       </div>
 
-      {/* PRICE */}
+      {/* ---------------- PRICE ---------------- */}
       <div className="text-green-600 font-semibold mt-2">
         ₹{medicine.price}
       </div>
 
-      {/* DETAILS */}
-      <div className="mt-3 space-y-2">
-        {medicine.imageUrl && (
-          <div className="w-full h-40 bg-gray-50 flex items-center justify-center rounded">
-            <img
-              src={medicine.imageUrl}
-              alt={medicine.name}
-              className="max-h-full object-contain"
-            />
-          </div>
-        )}
+      {/* ---------------- VIEW DETAILS TOGGLE ---------------- */}
+      <button
+        onClick={() => setShowDetails((v) => !v)}
+        className="text-blue-600 text-sm mt-2"
+      >
+        {showDetails ? "Hide Details" : "View Details"}
+      </button>
 
-        {packLabel && (
-          <div className="text-sm text-gray-700">
-            {packLabel}
-          </div>
-        )}
+      {/* ---------------- DETAILS SECTION ---------------- */}
+      {showDetails && (
+        <div className="mt-4 space-y-3">
+          {medicine.imageUrl && (
+            <div className="w-full h-40 bg-gray-50 flex items-center justify-center rounded">
+              <img
+                src={medicine.imageUrl}
+                alt={medicine.name}
+                className="max-h-full object-contain"
+              />
+            </div>
+          )}
 
-        <div className="text-sm text-gray-500">
-          Manufactured by{" "}
-          <span className="font-medium">
-            {medicine.manufacturer}
-          </span>
+          {packLabel && (
+            <div className="text-sm text-gray-700">
+              {packLabel}
+            </div>
+          )}
+
+          <div className="text-sm text-gray-500">
+            Manufactured by{" "}
+            <span className="font-medium">
+              {medicine.manufacturer}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* 🛒 ADD TO CART – CONNECTED TO CART */}
+      {/* ---------------- 🛒 ADD TO CART (BOTTOM RIGHT) ---------------- */}
       <div className="absolute bottom-4 right-4">
         {qty === 0 ? (
           <button
@@ -102,7 +117,9 @@ export default function MedicineCard({
         ) : (
           <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
             <button
-              onClick={() => updateQuantity(medicine.id, qty - 1)}
+              onClick={() =>
+                updateQuantity(medicine.id, qty - 1)
+              }
               className="px-3 py-2 text-lg"
             >
               −
@@ -113,7 +130,9 @@ export default function MedicineCard({
             </span>
 
             <button
-              onClick={() => updateQuantity(medicine.id, qty + 1)}
+              onClick={() =>
+                updateQuantity(medicine.id, qty + 1)
+              }
               className="px-3 py-2 text-lg"
             >
               +
