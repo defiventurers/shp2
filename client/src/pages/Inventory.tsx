@@ -12,6 +12,10 @@ type Medicine = {
   category: string;
 };
 
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://sacredheartpharma-backend.onrender.com";
+
 export default function Inventory() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,17 +24,17 @@ export default function Inventory() {
   useEffect(() => {
     async function loadMedicines() {
       try {
-        const res = await fetch("/api/medicines");
+        const res = await fetch(`${API_BASE}/api/medicines`);
 
         if (!res.ok) {
-          throw new Error("Failed to fetch medicines");
+          throw new Error(`API failed: ${res.status}`);
         }
 
         const data = await res.json();
         setMedicines(data.medicines || []);
-      } catch (err: any) {
-        console.error("Inventory fetch failed:", err);
-        setError("Unable to load medicines");
+      } catch (err) {
+        console.error("❌ Inventory fetch failed:", err);
+        setError("Failed to load medicines");
       } finally {
         setLoading(false);
       }
@@ -61,7 +65,7 @@ export default function Inventory() {
 
       {medicines.length === 0 ? (
         <div className="text-gray-500 text-center">
-          No medicines available
+          No medicines found
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
