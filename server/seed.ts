@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { categories } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 const CATEGORY_NAMES = [
   "TABLETS",
@@ -18,17 +19,22 @@ const CATEGORY_NAMES = [
 ];
 
 export async function seedDatabase() {
-  console.log("🌱 Seeding categories...");
-
-  const existing = await db.select().from(categories).limit(1);
-  if (existing.length > 0) {
-    console.log("✅ Categories already exist, skipping seed");
-    return;
-  }
+  console.log("🌱 Seeding categories (ALL CAPS, canonical)…");
 
   for (const name of CATEGORY_NAMES) {
-    await db.insert(categories).values({ name });
+    const existing = await db
+      .select()
+      .from(categories)
+      .where(eq(categories.name, name))
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(categories).values({ name });
+      console.log(`➕ Inserted category: ${name}`);
+    } else {
+      console.log(`⏭️ Category exists: ${name}`);
+    }
   }
 
-  console.log(`✅ Seeded ${CATEGORY_NAMES.length} categories`);
+  console.log("✅ Category seeding complete");
 }
