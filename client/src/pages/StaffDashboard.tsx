@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
-  Package,
   Shield,
   ChevronDown,
   ChevronUp,
@@ -46,7 +45,7 @@ const STATUS_FLOW = [
 ];
 
 /* =========================
-   PHONE NORMALIZATION (IN)
+   PHONE NORMALIZATION
 ========================= */
 function normalizeIndianPhone(input: string): string {
   if (!input) return "";
@@ -60,48 +59,43 @@ function normalizeIndianPhone(input: string): string {
 }
 
 /* =========================
-   WHATSAPP MESSAGE BY STATUS
+   WHATSAPP MESSAGE
 ========================= */
 function getWhatsAppMessage(order: Order, status: string) {
   switch (status) {
     case "confirmed":
       return `Hello ${order.customerName},
 
-Your order ${order.orderNumber} from Sacred Heart Pharmacy has been *confirmed* ✅.
-We will notify you once it is ready.
+Your order ${order.orderNumber} has been confirmed ✅.
 
-Thank you 💚`;
+Sacred Heart Pharmacy`;
 
     case "processing":
       return `Hello ${order.customerName},
 
-Your order ${order.orderNumber} is currently being *processed* 🧑‍⚕️💊.
-We’ll update you shortly.
+Your order ${order.orderNumber} is being processed 🧑‍⚕️💊.
 
 Sacred Heart Pharmacy`;
 
     case "ready":
-      if (order.deliveryType === "pickup") {
-        return `Hello ${order.customerName},
+      return order.deliveryType === "pickup"
+        ? `Hello ${order.customerName},
 
-Your order ${order.orderNumber} is *ready for pickup* 🏪.
-Please visit Sacred Heart Pharmacy at your convenience.
+Your order ${order.orderNumber} is ready for pickup 🏪.
 
-Thank you 💚`;
-      }
+Sacred Heart Pharmacy`
+        : `Hello ${order.customerName},
 
-      return `Hello ${order.customerName},
-
-Your order ${order.orderNumber} is *ready* 🚚 and will be delivered shortly.
+Your order ${order.orderNumber} is ready and will be delivered 🚚.
 
 Sacred Heart Pharmacy`;
 
     case "delivered":
       return `Hello ${order.customerName},
 
-Your order ${order.orderNumber} has been *delivered successfully* ✅📦.
+Your order ${order.orderNumber} has been delivered successfully ✅📦.
 
-Thank you for choosing Sacred Heart Pharmacy 💚`;
+Thank you 💚`;
 
     default:
       return null;
@@ -136,7 +130,7 @@ export default function StaffDashboard() {
   }, []);
 
   /* -----------------------------
-     FETCH ORDERS (AUTO REFRESH)
+     FETCH ORDERS
   ------------------------------ */
   async function fetchOrders() {
     try {
@@ -150,7 +144,8 @@ export default function StaffDashboard() {
 
       if (!res.ok) throw new Error();
 
-      const data: Order[] = await res.json();
+      const json = await res.json();
+      const data: Order[] = json.orders || [];
 
       if (data.length > prevOrderCount.current) {
         audioRef.current?.play().catch(() => {});
@@ -173,7 +168,7 @@ export default function StaffDashboard() {
   }, []);
 
   /* -----------------------------
-     UPDATE STATUS + AUTO WHATSAPP
+     UPDATE STATUS
   ------------------------------ */
   async function updateStatus(order: Order, status: string) {
     setUpdatingId(order.id);
@@ -196,17 +191,17 @@ export default function StaffDashboard() {
 
       await fetchOrders();
 
-      // 🚀 AUTO WHATSAPP (EXCEPT PENDING)
       if (status !== "pending") {
         const phone = normalizeIndianPhone(order.customerPhone);
         const message = getWhatsAppMessage(order, status);
 
         if (phone && message) {
-          const url = `https://wa.me/${phone.replace(
-            "+",
-            ""
-          )}?text=${encodeURIComponent(message)}`;
-          window.open(url, "_blank");
+          window.open(
+            `https://wa.me/${phone.replace("+", "")}?text=${encodeURIComponent(
+              message
+            )}`,
+            "_blank"
+          );
         }
       }
 
@@ -253,15 +248,7 @@ export default function StaffDashboard() {
         const phone = normalizeIndianPhone(order.customerPhone);
 
         return (
-          <Card
-            key={order.id}
-            className={`p-3 space-y-3 ${
-              order.deliveryType === "delivery"
-                ? "border-l-4 border-green-600"
-                : ""
-            }`}
-          >
-            {/* HEADER */}
+          <Card key={order.id} className="p-3 space-y-3">
             <div
               className="flex items-center justify-between cursor-pointer"
               onClick={() =>
@@ -272,13 +259,13 @@ export default function StaffDashboard() {
                 <p className="text-sm font-medium">
                   #{order.orderNumber}
                 </p>
-                <p className="text-xs text-muted-foreground capitalize">
+                <p className="text-xs capitalize text-muted-foreground">
                   {order.deliveryType}
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold">
+                <span className="font-semibold">
                   ₹{Number(order.total).toFixed(0)}
                 </span>
                 {isOpen ? <ChevronUp /> : <ChevronDown />}
@@ -286,60 +273,36 @@ export default function StaffDashboard() {
             </div>
 
             {isOpen && (
-              <div className="space-y-4">
-                {/* CUSTOMER */}
-                <div className="bg-muted/50 rounded-md p-3 text-sm space-y-1">
-                  <p>
-                    <strong>{order.customerName}</strong>
-                  </p>
+              <div className="space-y-3">
+                <div className="bg-muted/50 p-3 rounded-md text-sm">
+                  <p className="font-medium">{order.customerName}</p>
                   <p className="text-xs">📞 {phone}</p>
-
-                  <div className="flex gap-4">
-                    <a
-                      href={`tel:${phone}`}
-                      className="flex items-center gap-1 text-green-700"
-                    >
-                      <Phone size={14} />
-                      Call
-                    </a>
-
-                    <a
-                      href={`https://wa.me/${phone.replace("+", "")}`}
-                      target="_blank"
-                      className="flex items-center gap-1 text-green-700"
-                    >
-                      <MessageCircle size={14} />
-                      WhatsApp
-                    </a>
-                  </div>
 
                   {order.deliveryType === "delivery" &&
                     order.deliveryAddress && (
-                      <p className="text-xs flex items-center gap-1">
+                      <p className="text-xs flex items-center gap-1 mt-1">
                         <Truck size={12} />
                         {order.deliveryAddress}
                       </p>
                     )}
                 </div>
 
-                {/* ITEMS */}
-                <div className="border-t pt-2 space-y-1">
-                  {order.items.map((item, idx) => (
+                <div className="border-t pt-2">
+                  {order.items.map((i, idx) => (
                     <div
                       key={idx}
                       className="flex justify-between text-sm"
                     >
                       <span>
-                        {item.medicineName} × {item.quantity}
+                        {i.medicineName} × {i.quantity}
                       </span>
                       <span>
-                        ₹{Number(item.price).toFixed(0)}
+                        ₹{Number(i.price).toFixed(0)}
                       </span>
                     </div>
                   ))}
                 </div>
 
-                {/* STATUS CONTROL */}
                 <select
                   className="w-full border rounded-md p-2 text-sm"
                   value={order.status}
@@ -360,11 +323,7 @@ export default function StaffDashboard() {
         );
       })}
 
-      <Button
-        variant="destructive"
-        className="w-full"
-        onClick={logout}
-      >
+      <Button variant="destructive" onClick={logout}>
         Logout Staff
       </Button>
     </div>
