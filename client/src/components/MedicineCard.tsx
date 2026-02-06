@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useCartContext } from "@/context/CartContext";
 
@@ -88,25 +87,25 @@ export default function MedicineCard({
       </details>
 
       {/* 🛒 ADD TO CART */}
-      <div className="absolute bottom-3 right-3">
-        {/* RED OUTLINE FOR Rx */}
+      <div className="absolute bottom-3 right-3 z-10">
+        {/* 🔴 PRESCRIPTION OUTLINE */}
         <div
           className={
             medicine.requiresPrescription
-              ? "p-1 border-2 border-red-600 rounded-lg"
+              ? "p-[3px] border-[3px] border-red-600 rounded-xl bg-white"
               : ""
           }
         >
           {qty === 0 ? (
             <button
               onClick={() => addItem(medicine, 1)}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium shadow"
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow"
             >
               <span className="text-lg leading-none">+</span>
               Add
             </button>
           ) : (
-            <div className="flex items-center bg-green-600 text-white rounded-md overflow-hidden shadow">
+            <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
               <button
                 onClick={() =>
                   updateQuantity(medicine.id, qty - 1)
