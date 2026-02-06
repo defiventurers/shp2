@@ -13,7 +13,7 @@ import { useCartContext } from "@/context/CartContext";
 export default function PrescriptionPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
 
   const {
     prescriptions,
@@ -27,6 +27,18 @@ export default function PrescriptionPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
 
+  /* ---------------- AUTH GUARD ---------------- */
+
+  if (loading) {
+    return <p className="p-4">Checking login…</p>;
+  }
+
+  if (!isAuthenticated) {
+    return <p className="p-4">Please login to upload prescription</p>;
+  }
+
+  /* ---------------- DEFAULT VALUES ---------------- */
+
   const today = new Date().toLocaleDateString("en-GB");
   const defaultName = user?.name
     ? `${user.name.split(" ")[0]}-${today}`
@@ -36,6 +48,8 @@ export default function PrescriptionPage() {
     useState(defaultName);
   const [prescriptionDate, setPrescriptionDate] =
     useState(today);
+
+  /* ---------------- UPLOAD ---------------- */
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
@@ -59,16 +73,11 @@ export default function PrescriptionPage() {
       return res.json();
     },
 
-    // ✅ CRITICAL FIX
     onSuccess: async (data) => {
       const prescription = data.prescription;
 
       setSelectedFiles([]);
-
-      // refresh list from backend
       await refreshPrescriptions();
-
-      // 🔥 AUTO-SELECT newly created prescription
       setSelectedPrescriptionId(prescription.id);
 
       toast({
@@ -88,9 +97,7 @@ export default function PrescriptionPage() {
     onSettled: () => setUploading(false),
   });
 
-  if (!isAuthenticated) {
-    return <p className="p-4">Please login to upload prescription</p>;
-  }
+  /* ---------------- UI ---------------- */
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-4">
@@ -121,7 +128,7 @@ export default function PrescriptionPage() {
         )}
       </Card>
 
-      {/* PREVIEW + METADATA */}
+      {/* PREVIEW */}
       {selectedFiles.length > 0 && (
         <Card className="p-4 space-y-3">
           <Input
