@@ -1,12 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "https://sacredheartpharma-backend.onrender.com";
+/* ✅ MUST MATCH VERCEL ENV NAME */
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-/* ---------------------------------
-   Helper
----------------------------------- */
+if (!API_BASE_URL) {
+  throw new Error("VITE_API_BASE_URL is not defined");
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
@@ -14,9 +14,6 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-/* ---------------------------------
-   apiRequest (FIXED + SAFE)
----------------------------------- */
 export async function apiRequest(
   method: string,
   url: string,
@@ -24,20 +21,15 @@ export async function apiRequest(
 ) {
   const res = await fetch(`${API_BASE_URL}${url}`, {
     method,
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: "include", // ✅ REQUIRED FOR JWT COOKIE
   });
 
   await throwIfResNotOk(res);
   return res.json();
 }
 
-/* ---------------------------------
-   React Query fetcher
----------------------------------- */
 type UnauthorizedBehavior = "throw" | "returnNull";
 
 export const getQueryFn =
@@ -45,7 +37,9 @@ export const getQueryFn =
   async ({ queryKey }) => {
     const res = await fetch(
       `${API_BASE_URL}${queryKey.join("/")}`,
-      { credentials: "include" }
+      {
+        credentials: "include",
+      }
     );
 
     if (res.status === 401 && on401 === "returnNull") {
@@ -56,9 +50,6 @@ export const getQueryFn =
     return res.json();
   };
 
-/* ---------------------------------
-   Query Client
----------------------------------- */
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
