@@ -1,4 +1,5 @@
-import { useCartContext } from "@/context/CartContext";
+import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 
 type Medicine = {
   id: string;
@@ -8,7 +9,6 @@ type Medicine = {
   packSize: number;
   manufacturer: string;
   imageUrl: string | null;
-  category: string;
 };
 
 export default function MedicineCard({
@@ -16,18 +16,26 @@ export default function MedicineCard({
 }: {
   medicine: Medicine;
 }) {
-  const { addItem, updateQuantity, items } = useCartContext();
-  const existing = items.find((i) => i.medicine.id === medicine.id);
-  const qty = existing?.quantity ?? 0;
+  const [showDetails, setShowDetails] = useState(false);
+  const [qty, setQty] = useState(0);
+
+  const increment = () => setQty((q) => q + 1);
+  const decrement = () => setQty((q) => Math.max(0, q - 1));
+
+  /* ✅ PACK SIZE — CATEGORY INDEPENDENT */
+  const packLabel =
+    medicine.packSize && medicine.packSize > 0
+      ? `Pack size: ${medicine.packSize}`
+      : null;
 
   return (
-    <div className="relative border rounded-xl px-4 py-3 bg-white shadow-sm">
+    <div className="relative border rounded-xl p-4 bg-white shadow-sm">
       {/* HEADER */}
       <div className="flex items-start justify-between gap-2">
         <h2 className="font-bold text-base leading-tight">
           {medicine.name}
           {medicine.requiresPrescription && (
-            <span className="ml-2 text-sm font-bold text-red-600">
+            <span className="ml-2 text-red-600 font-semibold text-sm">
               Rx
             </span>
           )}
@@ -35,17 +43,21 @@ export default function MedicineCard({
       </div>
 
       {/* PRICE */}
-      <div className="text-green-600 font-semibold text-sm mt-1">
+      <div className="text-green-600 font-semibold mt-1">
         ₹{medicine.price}
       </div>
 
       {/* VIEW DETAILS */}
-      <details className="mt-1">
-        <summary className="text-blue-600 text-xs cursor-pointer select-none">
-          View Details
-        </summary>
+      <button
+        onClick={() => setShowDetails((v) => !v)}
+        className="text-blue-600 text-sm mt-1 flex items-center gap-1"
+      >
+        {showDetails ? "▼ Hide Details" : "▶ View Details"}
+      </button>
 
-        <div className="mt-2 space-y-2">
+      {/* DETAILS */}
+      {showDetails && (
+        <div className="mt-3 space-y-2">
           {medicine.imageUrl && (
             <div className="w-full h-32 bg-gray-50 flex items-center justify-center rounded">
               <img
@@ -56,20 +68,26 @@ export default function MedicineCard({
             </div>
           )}
 
-          <div className="text-xs text-gray-500">
+          {packLabel && (
+            <div className="text-sm text-gray-700">
+              {packLabel}
+            </div>
+          )}
+
+          <div className="text-sm text-gray-500">
             Manufactured by{" "}
             <span className="font-medium">
               {medicine.manufacturer}
             </span>
           </div>
         </div>
-      </details>
+      )}
 
-      {/* 🛒 ADD TO CART */}
-      <div className="absolute bottom-3 right-3">
+      {/* ADD TO CART */}
+      <div className="absolute bottom-4 right-4">
         {qty === 0 ? (
           <button
-            onClick={() => addItem(medicine, 1)}
+            onClick={increment}
             className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow"
           >
             <span className="text-lg leading-none">+</span>
@@ -77,23 +95,11 @@ export default function MedicineCard({
           </button>
         ) : (
           <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
-            <button
-              onClick={() =>
-                updateQuantity(medicine.id, qty - 1)
-              }
-              className="px-3 py-2 text-lg"
-            >
+            <button onClick={decrement} className="px-3 py-2 text-lg">
               −
             </button>
-            <span className="px-3 text-sm font-medium">
-              {qty}
-            </span>
-            <button
-              onClick={() =>
-                updateQuantity(medicine.id, qty + 1)
-              }
-              className="px-3 py-2 text-lg"
-            >
+            <span className="px-3 text-sm font-medium">{qty}</span>
+            <button onClick={increment} className="px-3 py-2 text-lg">
               +
             </button>
           </div>
