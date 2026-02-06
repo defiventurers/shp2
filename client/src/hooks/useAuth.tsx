@@ -28,8 +28,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { credentials: "include" }
       );
 
+      if (!res.ok) {
+        setUser(null);
+        return;
+      }
+
       const data = await res.json();
-      setUser(data);
+
+      // 🔑 IMPORTANT: only set user if real object
+      if (data && data.id) {
+        setUser(data);
+      } else {
+        setUser(null);
+      }
     } catch {
       setUser(null);
     } finally {
@@ -38,17 +49,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
-    await fetch(
-      `${import.meta.env.VITE_API_URL}/api/auth/logout`,
-      {
-        method: "POST",
-        credentials: "include",
-      }
-    );
+    await fetch(`${import.meta.env.VITE_API_URL}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+
     setUser(null);
   }
 
-  // 🔥 INITIAL HYDRATION (VERY IMPORTANT)
+  // 🔥 HYDRATE AUTH ON APP LOAD
   useEffect(() => {
     refresh();
   }, []);
@@ -57,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        isAuthenticated: Boolean(user),
         loading,
         refresh,
         logout,
