@@ -100,12 +100,14 @@ export function registerAdminRoutes(app: Express) {
 
     for await (const row of stream) {
       try {
+        /* -------- NAME -------- */
         const name = String(row["Medicine Name"] || "").trim();
         if (!name) {
           skipped++;
           continue;
         }
 
+        /* -------- PRICE -------- */
         const priceRaw = row["Price"];
         const price =
           typeof priceRaw === "number"
@@ -117,21 +119,21 @@ export function registerAdminRoutes(app: Express) {
           continue;
         }
 
-        const packSizeRaw = row["Pack-Size"];
-        const packSize = Number(packSizeRaw);
+        /* -------- PACK SIZE -------- */
+        const packSize = Number(row["Pack-Size"]);
 
-        const rxValue = String(
-          row["Is Prescription Required?"] || ""
-        ).toLowerCase();
-        const isRx = rxValue === "yes" || rxValue === "true";
+        /* 🔴 -------- RX FIX (IMPORTANT) -------- */
+        // CSV values: 1.0 = Rx, NaN = Not Rx
+        const isRx = Number(row["Is Prescription Required?"]) === 1;
 
+        /* -------- OTHER FIELDS -------- */
         const manufacturer = String(
           row["Manufacturer"] || "NOT KNOWN"
         ).trim();
 
         const imageUrl = String(row["Image URL"] || "").trim();
 
-        /* 🔑 CATEGORY FIX */
+        /* -------- CATEGORY -------- */
         const normalizedCategory = normalizeCategory(row["Category"]);
         const categoryId = categoryMap.get(normalizedCategory);
 
@@ -163,7 +165,7 @@ export function registerAdminRoutes(app: Express) {
             console.log(`➕ Inserted ${inserted}`);
           }
         }
-      } catch {
+      } catch (err) {
         skipped++;
       }
     }
