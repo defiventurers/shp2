@@ -1,16 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-/* ======================================================
-   API BASE URL (FIXED – ABSOLUTE, SAFE, FALLBACK)
-====================================================== */
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
   "https://sacredheartpharma-backend.onrender.com";
 
-/* ======================================================
+/* ---------------------------------
    Helper
-====================================================== */
+---------------------------------- */
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
@@ -18,9 +14,9 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-/* ======================================================
-   SINGLE VALID apiRequest (USED BY MUTATIONS)
-====================================================== */
+/* ---------------------------------
+   apiRequest (FIXED + SAFE)
+---------------------------------- */
 export async function apiRequest(
   method: string,
   url: string,
@@ -28,7 +24,9 @@ export async function apiRequest(
 ) {
   const res = await fetch(`${API_BASE_URL}${url}`, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -37,9 +35,9 @@ export async function apiRequest(
   return res.json();
 }
 
-/* ======================================================
-   React Query Fetcher (USED BY QUERIES)
-====================================================== */
+/* ---------------------------------
+   React Query fetcher
+---------------------------------- */
 type UnauthorizedBehavior = "throw" | "returnNull";
 
 export const getQueryFn =
@@ -47,9 +45,7 @@ export const getQueryFn =
   async ({ queryKey }) => {
     const res = await fetch(
       `${API_BASE_URL}${queryKey.join("/")}`,
-      {
-        credentials: "include",
-      }
+      { credentials: "include" }
     );
 
     if (res.status === 401 && on401 === "returnNull") {
@@ -60,9 +56,9 @@ export const getQueryFn =
     return res.json();
   };
 
-/* ======================================================
+/* ---------------------------------
    Query Client
-====================================================== */
+---------------------------------- */
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
