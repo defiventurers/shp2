@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
 import { db } from "../db";
 import { orders, orderItems, users, medicines } from "@shared/schema";
-import { AuthRequest } from "../middleware/requireAuth";
+import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 import { eq, inArray } from "drizzle-orm";
 
 /* =========================
@@ -16,134 +16,93 @@ function generateOrderNumber() {
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
-  /* =========================
-     CREATE ORDER (GUEST + USER)
-  ========================= */
-  app.post("/api/orders", async (req: AuthRequest, res: Response) => {
-    try {
-      const user = req.user ?? null;
+  app.post(
+    "/api/orders",
+    requireAuth,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const user = req.user!;
+        const {
+          items,
+          subtotal,
+          deliveryFee,
+          total,
+          deliveryType,
+          deliveryAddress,
+          customerName,
+          customerPhone,
+          customerEmail,
+          notes,
+        } = req.body;
 
-      const {
-        items,
-        subtotal,
-        deliveryFee,
-        total,
-        deliveryType,
-        deliveryAddress,
-        customerName,
-        customerPhone,
-        customerEmail,
-        prescriptionId,
-        notes,
-      } = req.body;
+        if (!items?.length) {
+          return res.status(400).json({ error: "Order items required" });
+        }
 
-      /* -------------------------
-         BASIC VALIDATION
-      -------------------------- */
-      if (!customerName || !customerPhone) {
-        return res.status(400).json({ error: "Customer details required" });
-      }
-
-      if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ error: "Order items required" });
-      }
-
-      /* -------------------------
-         VALIDATE MEDICINES
-      -------------------------- */
-      const medicineIds = items.map((i: any) => i.medicineId);
-
-      const validMedicines = await db
-        .select({
-          id: medicines.id,
-          requiresPrescription: medicines.requiresPrescription,
-        })
-        .from(medicines)
-        .where(inArray(medicines.id, medicineIds));
-
-      if (validMedicines.length !== medicineIds.length) {
-        return res.status(400).json({ error: "Invalid medicine selected" });
-      }
-
-      /* -------------------------
-         RX VALIDATION
-      -------------------------- */
-      const rxRequired = validMedicines.some(
-        (m) => m.requiresPrescription === true
-      );
-
-      if (rxRequired && !prescriptionId) {
-        return res.status(400).json({
-          error: "Prescription required for one or more items",
-        });
-      }
-
-      /* -------------------------
-         CREATE USER IF LOGGED IN
-      -------------------------- */
-      let userId: string | null = null;
-
-      if (user?.id) {
-        userId = user.id;
-
-        const existingUser = await db.query.users.findFirst({
+        /* Ensure user exists */
+        const existing = await db.query.users.findFirst({
           where: eq(users.id, user.id),
         });
 
-        if (!existingUser) {
+        if (!existing) {
           await db.insert(users).values({
             id: user.id,
-            email: user.email ?? customerEmail ?? "guest@example.com",
+            email: user.email ?? "unknown@example.com",
             firstName: customerName.split(" ")[0],
             lastName: customerName.split(" ").slice(1).join(" "),
           });
         }
+
+        /* Validate medicines */
+        const medicineIds = items.map((i: any) => i.medicineId);
+        const valid = await db
+          .select({ id: medicines.id })
+          .from(medicines)
+          .where(inArray(medicines.id, medicineIds));
+
+        if (valid.length !== medicineIds.length) {
+          return res.status(400).json({ error: "Invalid medicine in order" });
+        }
+
+        /* Create order */
+        const [order] = await db
+          .insert(orders)
+          .values({
+            orderNumber: generateOrderNumber(),
+            userId: user.id,
+            customerName,
+            customerPhone,
+            customerEmail,
+            deliveryType,
+            deliveryAddress,
+            subtotal,
+            deliveryFee,
+            total,
+            status: "pending",
+            notes,
+          })
+          .returning();
+
+        /* Insert items */
+        await db.insert(orderItems).values(
+          items.map((i: any) => ({
+            orderId: order.id,
+            medicineId: i.medicineId,
+            medicineName: i.medicineName,
+            quantity: i.quantity,
+            price: i.price,
+            total: i.price * i.quantity,
+          }))
+        );
+
+        res.json({
+          success: true,
+          orderNumber: order.orderNumber,
+        });
+      } catch (err) {
+        console.error("ORDER ERROR:", err);
+        res.status(500).json({ error: "Failed to place order" });
       }
-
-      /* -------------------------
-         CREATE ORDER
-         ⚠️ IMPORTANT FIX HERE
-      -------------------------- */
-      const [order] = await db
-        .insert(orders)
-        .values({
-          order_number: generateOrderNumber(), // ✅ FIXED
-          userId,
-          customerName,
-          customerPhone,
-          customerEmail,
-          deliveryType,
-          deliveryAddress,
-          subtotal,
-          deliveryFee,
-          total,
-          status: "pending",
-          prescriptionId: prescriptionId ?? null,
-          notes,
-        })
-        .returning();
-
-      /* -------------------------
-         INSERT ORDER ITEMS
-      -------------------------- */
-      await db.insert(orderItems).values(
-        items.map((item: any) => ({
-          orderId: order.id,
-          medicineId: item.medicineId,
-          medicineName: item.medicineName,
-          quantity: item.quantity,
-          price: Number(item.price),
-          total: Number(item.price) * item.quantity,
-        }))
-      );
-
-      res.json({
-        success: true,
-        orderNumber: order.order_number,
-      });
-    } catch (err) {
-      console.error("ORDER ERROR:", err);
-      res.status(500).json({ error: "Failed to place order" });
     }
-  });
+  );
 }
