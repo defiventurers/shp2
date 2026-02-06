@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
+import { useCartContext } from "@/context/CartContext";
 
 type Medicine = {
   id: string;
@@ -16,13 +16,36 @@ export default function MedicineCard({
 }: {
   medicine: Medicine;
 }) {
+  const { items, addItem, updateQuantity } = useCartContext();
+
+  const existingItem = items.find(
+    (i) => i.medicine.id === medicine.id
+  );
+
   const [showDetails, setShowDetails] = useState(false);
-  const [qty, setQty] = useState(0);
+  const [qty, setQty] = useState(existingItem?.quantity || 0);
 
-  const increment = () => setQty((q) => q + 1);
-  const decrement = () => setQty((q) => Math.max(0, q - 1));
+  /* 🔁 KEEP LOCAL QTY IN SYNC WITH CART */
+  useEffect(() => {
+    setQty(existingItem?.quantity || 0);
+  }, [existingItem?.quantity]);
 
-  /* ✅ PACK SIZE — CATEGORY INDEPENDENT */
+  const increment = () => {
+    if (qty === 0) {
+      addItem(medicine, 1);
+    } else {
+      updateQuantity(medicine.id, qty + 1);
+    }
+  };
+
+  const decrement = () => {
+    if (qty <= 1) {
+      updateQuantity(medicine.id, 0);
+    } else {
+      updateQuantity(medicine.id, qty - 1);
+    }
+  };
+
   const packLabel =
     medicine.packSize && medicine.packSize > 0
       ? `Pack size: ${medicine.packSize}`
@@ -83,7 +106,7 @@ export default function MedicineCard({
         </div>
       )}
 
-      {/* ADD TO CART */}
+      {/* 🛒 ADD TO CART */}
       <div className="absolute bottom-4 right-4">
         {qty === 0 ? (
           <button
@@ -95,11 +118,19 @@ export default function MedicineCard({
           </button>
         ) : (
           <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
-            <button onClick={decrement} className="px-3 py-2 text-lg">
+            <button
+              onClick={decrement}
+              className="px-3 py-2 text-lg"
+            >
               −
             </button>
-            <span className="px-3 text-sm font-medium">{qty}</span>
-            <button onClick={increment} className="px-3 py-2 text-lg">
+            <span className="px-3 text-sm font-medium">
+              {qty}
+            </span>
+            <button
+              onClick={increment}
+              className="px-3 py-2 text-lg"
+            >
               +
             </button>
           </div>
