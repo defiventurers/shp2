@@ -1,68 +1,77 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
-export type User = {
+export type AuthUser = {
   id: string;
-  name?: string;
-  email?: string;
-  picture?: string;
+  email: string;
+  name: string;
+  phone?: string;
 };
 
-export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+type AuthContextType = {
+  user: AuthUser | null;
+  isAuthenticated: boolean;
+  loading: boolean;
+  refresh: () => Promise<void>;
+  logout: () => Promise<void>;
+};
 
-  // 🔑 Load user from backend cookie
-  async function fetchMe() {
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function refresh() {
     try {
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/auth/me`,
-        {
-          credentials: "include", // 🔥 REQUIRED
-        }
+        { credentials: "include" }
       );
 
       const data = await res.json();
-      setUser(data ?? null);
+      setUser(data);
     } catch {
       setUser(null);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }
 
-  // Load on first mount
+  async function logout() {
+    await fetch(
+      `${import.meta.env.VITE_API_URL}/api/auth/logout`,
+      {
+        method: "POST",
+        credentials: "include",
+      }
+    );
+    setUser(null);
+  }
+
+  // 🔥 INITIAL HYDRATION (VERY IMPORTANT)
   useEffect(() => {
-    fetchMe();
+    refresh();
   }, []);
 
-  // 🔄 REQUIRED BY GOOGLE LOGIN BUTTON
-  async function refresh() {
-    setIsLoading(true);
-    await fetchMe();
-  }
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        loading,
+        refresh,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
 
-  // 🔓 Logout (backend + frontend)
-  async function logout() {
-    try {
-      await fetch(
-        `${import.meta.env.VITE_API_URL}/api/auth/logout`,
-        {
-          method: "POST",
-          credentials: "include",
-        }
-      );
-    } catch {
-      // ignore
-    } finally {
-      setUser(null);
-    }
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within AuthProvider");
   }
-
-  return {
-    user,
-    isAuthenticated: !!user,
-    isLoading,
-    refresh,      // ✅ THIS IS THE KEY FIX
-    logout,
-  };
+  return ctx;
 }
