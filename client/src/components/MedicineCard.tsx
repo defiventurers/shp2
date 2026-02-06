@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { useCartContext } from "@/context/CartContext";
 
 type Medicine = {
@@ -24,16 +23,15 @@ export default function MedicineCard({
   return (
     <div className="relative border rounded-xl px-4 py-3 bg-white shadow-sm">
       {/* HEADER */}
-      <div className="flex justify-between items-start gap-2">
+      <div className="flex items-start justify-between gap-2">
         <h2 className="font-bold text-base leading-tight">
           {medicine.name}
+          {medicine.requiresPrescription && (
+            <span className="ml-2 text-sm font-bold text-red-600">
+              Rx
+            </span>
+          )}
         </h2>
-
-        {medicine.requiresPrescription && (
-          <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">
-            Rx
-          </Badge>
-        )}
       </div>
 
       {/* PRICE */}
@@ -72,26 +70,13 @@ export default function MedicineCard({
         {qty === 0 ? (
           <button
             onClick={() => addItem(medicine, 1)}
-            className={[
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium shadow",
-              "bg-green-600 text-white",
-              medicine.requiresPrescription
-                ? "outline outline-[3px] outline-red-600 outline-offset-2"
-                : "",
-            ].join(" ")}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow"
           >
             <span className="text-lg leading-none">+</span>
             Add
           </button>
         ) : (
-          <div
-            className={[
-              "flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow",
-              medicine.requiresPrescription
-                ? "outline outline-[3px] outline-red-600 outline-offset-2"
-                : "",
-            ].join(" ")}
-          >
+          <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
             <button
               onClick={() =>
                 updateQuantity(medicine.id, qty - 1)
