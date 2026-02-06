@@ -7,7 +7,7 @@ type Medicine = {
   name: string;
   price: string;
   requiresPrescription: boolean;
-  packSize: string;
+  packSize: number;
   manufacturer: string;
   imageUrl: string | null;
   category: string;
@@ -18,23 +18,10 @@ export default function MedicineCard({
 }: {
   medicine: Medicine;
 }) {
-  /* ---------------- VIEW DETAILS STATE ---------------- */
-  const [showDetails, setShowDetails] = useState(false);
+  const { addItem, updateQuantity, items } = useCartContext();
+  const existing = items.find((i) => i.medicine.id === medicine.id);
+  const qty = existing?.quantity ?? 0;
 
-  /* ---------------- CART STATE (SOURCE OF TRUTH) ---------------- */
-  const {
-    items,
-    addItem,
-    updateQuantity,
-  } = useCartContext();
-
-  const existingItem = items.find(
-    (item) => item.medicine.id === medicine.id
-  );
-
-  const qty = existingItem?.quantity ?? 0;
-
-  /* ---------------- PACK SIZE LABEL ---------------- */
   const packLabel = (() => {
     const size = Number(medicine.packSize || 0);
     if (!size) return "";
@@ -49,38 +36,34 @@ export default function MedicineCard({
   })();
 
   return (
-    <div className="relative border rounded-xl p-4 bg-white shadow-sm">
-      {/* ---------------- HEADER ---------------- */}
-      <div className="flex justify-between items-start">
-        <h2 className="font-bold text-lg tracking-wide">
+    <div className="relative border rounded-xl p-3 bg-white shadow-sm">
+      {/* HEADER */}
+      <div className="flex justify-between items-start gap-2">
+        <h2 className="font-bold text-base leading-tight">
           {medicine.name}
         </h2>
 
         {medicine.requiresPrescription && (
-          <Badge variant="destructive" className="text-xs">
+          <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5">
             Rx
           </Badge>
         )}
       </div>
 
-      {/* ---------------- PRICE ---------------- */}
-      <div className="text-green-600 font-semibold mt-2">
+      {/* PRICE */}
+      <div className="text-green-600 font-semibold text-sm mt-1">
         ₹{medicine.price}
       </div>
 
-      {/* ---------------- VIEW DETAILS TOGGLE ---------------- */}
-      <button
-        onClick={() => setShowDetails((v) => !v)}
-        className="text-blue-600 text-sm mt-2"
-      >
-        {showDetails ? "Hide Details" : "View Details"}
-      </button>
+      {/* VIEW DETAILS */}
+      <details className="mt-1">
+        <summary className="text-blue-600 text-xs cursor-pointer select-none">
+          View Details
+        </summary>
 
-      {/* ---------------- DETAILS SECTION ---------------- */}
-      {showDetails && (
-        <div className="mt-4 space-y-3">
+        <div className="mt-2 space-y-2">
           {medicine.imageUrl && (
-            <div className="w-full h-40 bg-gray-50 flex items-center justify-center rounded">
+            <div className="w-full h-32 bg-gray-50 flex items-center justify-center rounded">
               <img
                 src={medicine.imageUrl}
                 alt={medicine.name}
@@ -90,55 +73,62 @@ export default function MedicineCard({
           )}
 
           {packLabel && (
-            <div className="text-sm text-gray-700">
+            <div className="text-xs text-gray-700">
               {packLabel}
             </div>
           )}
 
-          <div className="text-sm text-gray-500">
+          <div className="text-xs text-gray-500">
             Manufactured by{" "}
             <span className="font-medium">
               {medicine.manufacturer}
             </span>
           </div>
         </div>
-      )}
+      </details>
 
-      {/* ---------------- 🛒 ADD TO CART (BOTTOM RIGHT) ---------------- */}
-      <div className="absolute bottom-4 right-4">
-        {qty === 0 ? (
-          <button
-            onClick={() => addItem(medicine, 1)}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow"
-          >
-            <span className="text-lg leading-none">+</span>
-            Add
-          </button>
-        ) : (
-          <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
+      {/* 🛒 ADD TO CART */}
+      <div className="absolute bottom-3 right-3">
+        {/* RED OUTLINE FOR Rx */}
+        <div
+          className={
+            medicine.requiresPrescription
+              ? "p-1 border-2 border-red-600 rounded-lg"
+              : ""
+          }
+        >
+          {qty === 0 ? (
             <button
-              onClick={() =>
-                updateQuantity(medicine.id, qty - 1)
-              }
-              className="px-3 py-2 text-lg"
+              onClick={() => addItem(medicine, 1)}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium shadow"
             >
-              −
+              <span className="text-lg leading-none">+</span>
+              Add
             </button>
-
-            <span className="px-3 text-sm font-medium">
-              {qty}
-            </span>
-
-            <button
-              onClick={() =>
-                updateQuantity(medicine.id, qty + 1)
-              }
-              className="px-3 py-2 text-lg"
-            >
-              +
-            </button>
-          </div>
-        )}
+          ) : (
+            <div className="flex items-center bg-green-600 text-white rounded-md overflow-hidden shadow">
+              <button
+                onClick={() =>
+                  updateQuantity(medicine.id, qty - 1)
+                }
+                className="px-3 py-2 text-lg"
+              >
+                −
+              </button>
+              <span className="px-3 text-sm font-medium">
+                {qty}
+              </span>
+              <button
+                onClick={() =>
+                  updateQuantity(medicine.id, qty + 1)
+                }
+                className="px-3 py-2 text-lg"
+              >
+                +
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
