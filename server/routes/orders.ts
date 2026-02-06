@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
 import { db } from "../db";
 import { orders, orderItems, users, medicines } from "@shared/schema";
-import { requireAuth, AuthRequest } from "../middleware/requireAuth";
+import { AuthRequest } from "../middleware/requireAuth";
 import { eq, inArray } from "drizzle-orm";
 
 /* =========================
@@ -54,7 +54,10 @@ export function registerOrderRoutes(app: Express) {
       const medicineIds = items.map((i: any) => i.medicineId);
 
       const validMedicines = await db
-        .select({ id: medicines.id, requiresPrescription: medicines.requiresPrescription })
+        .select({
+          id: medicines.id,
+          requiresPrescription: medicines.requiresPrescription,
+        })
         .from(medicines)
         .where(inArray(medicines.id, medicineIds));
 
@@ -65,7 +68,9 @@ export function registerOrderRoutes(app: Express) {
       /* -------------------------
          RX VALIDATION
       -------------------------- */
-      const rxRequired = validMedicines.some(m => m.requiresPrescription);
+      const rxRequired = validMedicines.some(
+        (m) => m.requiresPrescription === true
+      );
 
       if (rxRequired && !prescriptionId) {
         return res.status(400).json({
@@ -97,11 +102,12 @@ export function registerOrderRoutes(app: Express) {
 
       /* -------------------------
          CREATE ORDER
+         ⚠️ IMPORTANT FIX HERE
       -------------------------- */
       const [order] = await db
         .insert(orders)
         .values({
-          orderNumber: generateOrderNumber(),
+          order_number: generateOrderNumber(), // ✅ FIXED
           userId,
           customerName,
           customerPhone,
@@ -133,7 +139,7 @@ export function registerOrderRoutes(app: Express) {
 
       res.json({
         success: true,
-        orderNumber: order.orderNumber,
+        orderNumber: order.order_number,
       });
     } catch (err) {
       console.error("ORDER ERROR:", err);
