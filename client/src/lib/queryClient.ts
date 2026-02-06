@@ -1,10 +1,16 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+/* ======================================================
+   API BASE URL (FIXED – ABSOLUTE, SAFE, FALLBACK)
+====================================================== */
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  "https://sacredheartpharma-backend.onrender.com";
 
-/* ---------------------------------
+/* ======================================================
    Helper
----------------------------------- */
+====================================================== */
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
@@ -12,9 +18,9 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-/* ---------------------------------
-   ✅ SINGLE VALID apiRequest SIGNATURE
----------------------------------- */
+/* ======================================================
+   SINGLE VALID apiRequest (USED BY MUTATIONS)
+====================================================== */
 export async function apiRequest(
   method: string,
   url: string,
@@ -31,17 +37,20 @@ export async function apiRequest(
   return res.json();
 }
 
-/* ---------------------------------
-   React Query fetcher
----------------------------------- */
+/* ======================================================
+   React Query Fetcher (USED BY QUERIES)
+====================================================== */
 type UnauthorizedBehavior = "throw" | "returnNull";
 
 export const getQueryFn =
   <T>({ on401 }: { on401: UnauthorizedBehavior }): QueryFunction<T> =>
   async ({ queryKey }) => {
-    const res = await fetch(`${API_BASE_URL}${queryKey.join("/")}`, {
-      credentials: "include",
-    });
+    const res = await fetch(
+      `${API_BASE_URL}${queryKey.join("/")}`,
+      {
+        credentials: "include",
+      }
+    );
 
     if (res.status === 401 && on401 === "returnNull") {
       return null as T;
@@ -51,9 +60,9 @@ export const getQueryFn =
     return res.json();
   };
 
-/* ---------------------------------
+/* ======================================================
    Query Client
----------------------------------- */
+====================================================== */
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
