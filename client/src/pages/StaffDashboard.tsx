@@ -14,6 +14,13 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 /* =========================
+   CONFIG (FIXED)
+========================= */
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://sacredheartpharma-backend.onrender.com";
+
+/* =========================
    TYPES
 ========================= */
 type OrderItem = {
@@ -58,50 +65,6 @@ function normalizeIndianPhone(input: string): string {
   return phone;
 }
 
-/* =========================
-   WHATSAPP MESSAGE
-========================= */
-function getWhatsAppMessage(order: Order, status: string) {
-  switch (status) {
-    case "confirmed":
-      return `Hello ${order.customerName},
-
-Your order ${order.orderNumber} has been confirmed ✅.
-
-Sacred Heart Pharmacy`;
-
-    case "processing":
-      return `Hello ${order.customerName},
-
-Your order ${order.orderNumber} is being processed 🧑‍⚕️💊.
-
-Sacred Heart Pharmacy`;
-
-    case "ready":
-      return order.deliveryType === "pickup"
-        ? `Hello ${order.customerName},
-
-Your order ${order.orderNumber} is ready for pickup 🏪.
-
-Sacred Heart Pharmacy`
-        : `Hello ${order.customerName},
-
-Your order ${order.orderNumber} is ready and will be delivered 🚚.
-
-Sacred Heart Pharmacy`;
-
-    case "delivered":
-      return `Hello ${order.customerName},
-
-Your order ${order.orderNumber} has been delivered successfully ✅📦.
-
-Thank you 💚`;
-
-    default:
-      return null;
-  }
-}
-
 export default function StaffDashboard() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -110,42 +73,32 @@ export default function StaffDashboard() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const prevOrderCount = useRef<number>(0);
+  const prevOrderCount = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  /* -----------------------------
-     STAFF AUTH GUARD
-  ------------------------------ */
+  /* ---------------- AUTH GUARD ---------------- */
   useEffect(() => {
     if (localStorage.getItem("staff_auth") !== "true") {
       navigate("/staff/login");
     }
   }, [navigate]);
 
-  /* -----------------------------
-     SOUND INIT
-  ------------------------------ */
+  /* ---------------- SOUND ---------------- */
   useEffect(() => {
     audioRef.current = new Audio("/ding.mp3");
   }, []);
 
-  /* -----------------------------
-     FETCH ORDERS
-  ------------------------------ */
+  /* ---------------- FETCH ORDERS ---------------- */
   async function fetchOrders() {
     try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/orders`,
-        {
-          credentials: "include",
-          headers: { "x-staff-auth": "true" },
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/orders`, {
+        credentials: "include",
+        headers: { "x-staff-auth": "true" },
+      });
 
       if (!res.ok) throw new Error();
 
-      const json = await res.json();
-      const data: Order[] = json.orders || [];
+      const data: Order[] = await res.json();
 
       if (data.length > prevOrderCount.current) {
         audioRef.current?.play().catch(() => {});
@@ -155,7 +108,7 @@ export default function StaffDashboard() {
       setOrders(data);
     } catch {
       toast({
-        title: "Failed to load orders",
+        title: "Failed to fetch orders",
         variant: "destructive",
       });
     }
@@ -167,15 +120,13 @@ export default function StaffDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  /* -----------------------------
-     UPDATE STATUS
-  ------------------------------ */
+  /* ---------------- UPDATE STATUS ---------------- */
   async function updateStatus(order: Order, status: string) {
     setUpdatingId(order.id);
 
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/orders/${order.id}/status`,
+        `${API_BASE}/api/orders/${order.id}/status`,
         {
           method: "PATCH",
           credentials: "include",
@@ -188,22 +139,7 @@ export default function StaffDashboard() {
       );
 
       if (!res.ok) throw new Error();
-
       await fetchOrders();
-
-      if (status !== "pending") {
-        const phone = normalizeIndianPhone(order.customerPhone);
-        const message = getWhatsAppMessage(order, status);
-
-        if (phone && message) {
-          window.open(
-            `https://wa.me/${phone.replace("+", "")}?text=${encodeURIComponent(
-              message
-            )}`,
-            "_blank"
-          );
-        }
-      }
 
       toast({ title: "Order updated" });
     } catch {
@@ -221,28 +157,13 @@ export default function StaffDashboard() {
     navigate("/staff/login");
   }
 
-  const pendingCount = orders.filter(
-    (o) => o.status === "pending"
-  ).length;
-
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold flex items-center gap-2">
-          <Shield className="w-5 h-5 text-green-600" />
-          Staff Dashboard
-        </h1>
+      <h1 className="text-lg font-semibold flex items-center gap-2">
+        <Shield className="w-5 h-5 text-green-600" />
+        Staff Dashboard
+      </h1>
 
-        {pendingCount > 0 && (
-          <div className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-full text-sm">
-            <Bell size={14} />
-            {pendingCount} Pending
-          </div>
-        )}
-      </div>
-
-      {/* ORDERS */}
       {orders.map((order) => {
         const isOpen = expandedId === order.id;
         const phone = normalizeIndianPhone(order.customerPhone);
@@ -250,66 +171,39 @@ export default function StaffDashboard() {
         return (
           <Card key={order.id} className="p-3 space-y-3">
             <div
-              className="flex items-center justify-between cursor-pointer"
+              className="flex justify-between cursor-pointer"
               onClick={() =>
                 setExpandedId(isOpen ? null : order.id)
               }
             >
               <div>
-                <p className="text-sm font-medium">
-                  #{order.orderNumber}
-                </p>
-                <p className="text-xs capitalize text-muted-foreground">
-                  {order.deliveryType}
-                </p>
+                <p className="font-medium">#{order.orderNumber}</p>
+                <p className="text-xs capitalize">{order.status}</p>
               </div>
-
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">
-                  ₹{Number(order.total).toFixed(0)}
-                </span>
-                {isOpen ? <ChevronUp /> : <ChevronDown />}
-              </div>
+              {isOpen ? <ChevronUp /> : <ChevronDown />}
             </div>
 
             {isOpen && (
-              <div className="space-y-3">
-                <div className="bg-muted/50 p-3 rounded-md text-sm">
-                  <p className="font-medium">{order.customerName}</p>
-                  <p className="text-xs">📞 {phone}</p>
-
-                  {order.deliveryType === "delivery" &&
-                    order.deliveryAddress && (
-                      <p className="text-xs flex items-center gap-1 mt-1">
-                        <Truck size={12} />
-                        {order.deliveryAddress}
-                      </p>
-                    )}
+              <>
+                <div className="text-sm">
+                  <strong>{order.customerName}</strong>
+                  <p>📞 {phone}</p>
                 </div>
 
-                <div className="border-t pt-2">
-                  {order.items.map((i, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between text-sm"
-                    >
-                      <span>
-                        {i.medicineName} × {i.quantity}
-                      </span>
-                      <span>
-                        ₹{Number(i.price).toFixed(0)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                {order.items.map((i, idx) => (
+                  <div key={idx} className="flex justify-between text-sm">
+                    <span>{i.medicineName} × {i.quantity}</span>
+                    <span>₹{i.price}</span>
+                  </div>
+                ))}
 
                 <select
-                  className="w-full border rounded-md p-2 text-sm"
                   value={order.status}
                   disabled={updatingId === order.id}
                   onChange={(e) =>
                     updateStatus(order, e.target.value)
                   }
+                  className="w-full border rounded p-2"
                 >
                   {STATUS_FLOW.map((s) => (
                     <option key={s} value={s}>
@@ -317,7 +211,7 @@ export default function StaffDashboard() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </>
             )}
           </Card>
         );
