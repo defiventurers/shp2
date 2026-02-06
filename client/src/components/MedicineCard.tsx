@@ -21,21 +21,8 @@ export default function MedicineCard({
   const existing = items.find((i) => i.medicine.id === medicine.id);
   const qty = existing?.quantity ?? 0;
 
-  const packLabel = (() => {
-    const size = Number(medicine.packSize || 0);
-    if (!size) return "";
-
-    const cat = medicine.category?.toLowerCase();
-    if (cat === "tablets") return `Strip of ${size} tablets`;
-    if (cat === "capsules") return `Strip of ${size} capsules`;
-    if (cat === "syrups") return `Bottle`;
-    if (cat === "drops") return `Bottle`;
-    if (cat === "injections") return `Vial`;
-    return `Pack of ${size}`;
-  })();
-
   return (
-    <div className="relative border rounded-xl p-3 bg-white shadow-sm">
+    <div className="relative border rounded-xl px-4 py-3 bg-white shadow-sm">
       {/* HEADER */}
       <div className="flex justify-between items-start gap-2">
         <h2 className="font-bold text-base leading-tight">
@@ -71,12 +58,6 @@ export default function MedicineCard({
             </div>
           )}
 
-          {packLabel && (
-            <div className="text-xs text-gray-700">
-              {packLabel}
-            </div>
-          )}
-
           <div className="text-xs text-gray-500">
             Manufactured by{" "}
             <span className="font-medium">
@@ -87,47 +68,51 @@ export default function MedicineCard({
       </details>
 
       {/* 🛒 ADD TO CART */}
-      <div className="absolute bottom-3 right-3 z-10">
-        {/* 🔴 PRESCRIPTION OUTLINE */}
-        <div
-          className={
-            medicine.requiresPrescription
-              ? "p-[3px] border-[3px] border-red-600 rounded-xl bg-white"
-              : ""
-          }
-        >
-          {qty === 0 ? (
+      <div className="absolute bottom-3 right-3">
+        {qty === 0 ? (
+          <button
+            onClick={() => addItem(medicine, 1)}
+            className={[
+              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium shadow",
+              "bg-green-600 text-white",
+              medicine.requiresPrescription
+                ? "outline outline-[3px] outline-red-600 outline-offset-2"
+                : "",
+            ].join(" ")}
+          >
+            <span className="text-lg leading-none">+</span>
+            Add
+          </button>
+        ) : (
+          <div
+            className={[
+              "flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow",
+              medicine.requiresPrescription
+                ? "outline outline-[3px] outline-red-600 outline-offset-2"
+                : "",
+            ].join(" ")}
+          >
             <button
-              onClick={() => addItem(medicine, 1)}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow"
+              onClick={() =>
+                updateQuantity(medicine.id, qty - 1)
+              }
+              className="px-3 py-2 text-lg"
             >
-              <span className="text-lg leading-none">+</span>
-              Add
+              −
             </button>
-          ) : (
-            <div className="flex items-center bg-green-600 text-white rounded-lg overflow-hidden shadow">
-              <button
-                onClick={() =>
-                  updateQuantity(medicine.id, qty - 1)
-                }
-                className="px-3 py-2 text-lg"
-              >
-                −
-              </button>
-              <span className="px-3 text-sm font-medium">
-                {qty}
-              </span>
-              <button
-                onClick={() =>
-                  updateQuantity(medicine.id, qty + 1)
-                }
-                className="px-3 py-2 text-lg"
-              >
-                +
-              </button>
-            </div>
-          )}
-        </div>
+            <span className="px-3 text-sm font-medium">
+              {qty}
+            </span>
+            <button
+              onClick={() =>
+                updateQuantity(medicine.id, qty + 1)
+              }
+              className="px-3 py-2 text-lg"
+            >
+              +
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
