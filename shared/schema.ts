@@ -79,13 +79,32 @@ export const prescriptions = pgTable("prescriptions", {
 });
 
 /* =========================
-   Orders
+   Orders  ✅ FIXED
 ========================= */
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
+  orderNumber: varchar("order_number").notNull(),
+
   userId: varchar("user_id").references(() => users.id),
+
+  customerName: varchar("customer_name").notNull(),
+  customerPhone: varchar("customer_phone").notNull(),
+  customerEmail: varchar("customer_email"),
+
+  deliveryType: varchar("delivery_type").notNull(),
+  deliveryAddress: varchar("delivery_address"),
+
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+
+  status: varchar("status").notNull().default("pending"),
+  prescriptionId: varchar("prescription_id"),
+  notes: text("notes"),
+
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 /* =========================
@@ -95,8 +114,10 @@ export const orderItems = pgTable("order_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: varchar("order_id").references(() => orders.id),
   medicineId: varchar("medicine_id").references(() => medicines.id),
+  medicineName: varchar("medicine_name").notNull(),
   quantity: integer("quantity").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
 });
 
 /* =========================
@@ -117,24 +138,9 @@ export const medicinesRelations = relations(medicines, ({ one }) => ({
   }),
 }));
 
-/* =========================
-   Insert Schemas
-========================= */
-export const insertUserSchema = createInsertSchema(users).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertCategorySchema = createInsertSchema(categories).omit({
-  id: true,
-});
-
-export const insertMedicineSchema = createInsertSchema(medicines).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const ordersRelations = relations(orders, ({ many }) => ({
+  items: many(orderItems),
+}));
 
 /* =========================
    Types
@@ -142,7 +148,4 @@ export const insertMedicineSchema = createInsertSchema(medicines).omit({
 export type User = typeof users.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Medicine = typeof medicines.$inferSelect;
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type InsertCategory = z.infer<typeof insertCategorySchema>;
-export type InsertMedicine = z.infer<typeof insertMedicineSchema>;
+export type Order = typeof orders.$inferSelect;
