@@ -2,6 +2,7 @@ import { Switch, Route, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CartProvider } from "@/context/CartContext";
+import { AuthProvider } from "@/hooks/useAuth"; // 🔥 ADD THIS
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
@@ -47,27 +48,27 @@ function Router() {
 
 export default function App() {
   const [location] = useLocation();
-
-  // 👇 detect staff routes
   const isStaffRoute = location.startsWith("/staff");
 
   return (
-    <TooltipProvider>
-      <CartProvider>
-        <div className="min-h-screen bg-background">
-          <Header />
+    <AuthProvider>
+      <TooltipProvider>
+        <CartProvider>
+          <div className="min-h-screen bg-background">
+            <Header />
 
-          <main className="pb-safe">
-            <Router />
-          </main>
+            <main className="pb-safe">
+              <Router />
+            </main>
 
-          {/* ❌ Hide customer UI on staff routes */}
-          {!isStaffRoute && <BottomNav />}
-          {!isStaffRoute && <WhatsAppButton />}
-        </div>
+            {/* ❌ Hide customer UI on staff routes */}
+            {!isStaffRoute && <BottomNav />}
+            {!isStaffRoute && <WhatsAppButton />}
+          </div>
 
-        <Toaster />
-      </CartProvider>
-    </TooltipProvider>
+          <Toaster />
+        </CartProvider>
+      </TooltipProvider>
+    </AuthProvider>
   );
 }
