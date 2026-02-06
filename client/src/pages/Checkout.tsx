@@ -34,6 +34,9 @@ export default function CheckoutPage() {
     (p) => p.id === selectedPrescriptionId
   );
 
+  /* -----------------------------
+     CALCULATIONS
+  ------------------------------ */
   const subtotal = items.reduce(
     (sum, item) => sum + Number(item.medicine.price) * item.quantity,
     0
@@ -42,20 +45,38 @@ export default function CheckoutPage() {
   const deliveryFee = deliveryType === "delivery" ? 30 : 0;
   const total = subtotal + deliveryFee;
 
+  /* -----------------------------
+     PLACE ORDER
+  ------------------------------ */
   async function placeOrder() {
-    if (!name || !phone) {
+    if (items.length === 0) {
       toast({
-        title: "Missing details",
-        description: "Please enter your name and phone number",
+        title: "Cart is empty",
         variant: "destructive",
       });
       return;
     }
 
-    if (deliveryType === "delivery" && !deliveryAddress) {
+    if (!name.trim()) {
+      toast({
+        title: "Name required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      toast({
+        title: "Invalid phone number",
+        description: "Enter a valid 10-digit mobile number",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (deliveryType === "delivery" && !deliveryAddress.trim()) {
       toast({
         title: "Address required",
-        description: "Please enter delivery address",
         variant: "destructive",
       });
       return;
@@ -64,7 +85,7 @@ export default function CheckoutPage() {
     if (requiresPrescription && !selectedPrescriptionId) {
       toast({
         title: "Prescription required",
-        description: "Please upload and select a prescription",
+        description: "Upload and select a prescription",
         variant: "destructive",
       });
       return;
@@ -78,7 +99,7 @@ export default function CheckoutPage() {
           medicineId: item.medicine.id,
           medicineName: item.medicine.name,
           quantity: item.quantity,
-          price: item.medicine.price,
+          price: Number(item.medicine.price),
         })),
         subtotal,
         deliveryFee,
@@ -86,14 +107,14 @@ export default function CheckoutPage() {
         deliveryType,
         deliveryAddress:
           deliveryType === "delivery" ? deliveryAddress : null,
-        customerName: name,
+        customerName: name.trim(),
         customerPhone: phone,
-        customerEmail: email || null,
-        prescriptionId: selectedPrescriptionId,
+        customerEmail: email?.trim() || null,
+        prescriptionId: selectedPrescriptionId || null,
       });
 
       toast({
-        title: "Order placed",
+        title: "Order placed successfully",
         description: `Order #${data.orderNumber}`,
       });
 
@@ -101,7 +122,10 @@ export default function CheckoutPage() {
     } catch (err: any) {
       toast({
         title: "Order failed",
-        description: err?.message || "Failed to place order",
+        description:
+          err?.message?.includes("Cannot POST")
+            ? "Server not reachable. Please try again."
+            : err?.message || "Failed to place order",
         variant: "destructive",
       });
     } finally {
@@ -109,6 +133,9 @@ export default function CheckoutPage() {
     }
   }
 
+  /* =============================
+     UI
+  ============================== */
   return (
     <div className="min-h-screen bg-background pb-32">
       <div className="px-4 py-4 max-w-lg mx-auto space-y-5">
@@ -118,21 +145,37 @@ export default function CheckoutPage() {
         <Card className="p-4 space-y-3">
           <div>
             <Label>Full Name *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
+
           <div>
             <Label>Phone *</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <Input
+              value={phone}
+              inputMode="numeric"
+              maxLength={10}
+              onChange={(e) =>
+                setPhone(e.target.value.replace(/\D/g, ""))
+              }
+            />
           </div>
+
           <div>
             <Label>Email</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
         </Card>
 
         {/* DELIVERY */}
         <Card className="p-4 space-y-3">
           <Label>Delivery Option</Label>
+
           <RadioGroup
             value={deliveryType}
             onValueChange={(v) =>
@@ -143,7 +186,8 @@ export default function CheckoutPage() {
               <RadioGroupItem value="pickup" />
               <div>
                 <div className="font-medium">
-                  Store Pickup <span className="text-green-600">FREE</span>
+                  Store Pickup{" "}
+                  <span className="text-green-600">FREE</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   16, Campbell Rd, Bengaluru 560047
@@ -154,7 +198,9 @@ export default function CheckoutPage() {
             <label className="flex gap-3 border p-3 rounded-lg">
               <RadioGroupItem value="delivery" />
               <div>
-                <div className="font-medium">Home Delivery ₹30</div>
+                <div className="font-medium">
+                  Home Delivery ₹30
+                </div>
                 <p className="text-sm text-muted-foreground">
                   Same day delivery
                 </p>
@@ -166,7 +212,9 @@ export default function CheckoutPage() {
             <Input
               placeholder="Delivery address"
               value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
+              onChange={(e) =>
+                setDeliveryAddress(e.target.value)
+              }
             />
           )}
         </Card>
@@ -195,7 +243,9 @@ export default function CheckoutPage() {
                     variant="outline"
                     className="mt-2"
                   >
-                    <Link href="/prescription">Change Prescription</Link>
+                    <Link href="/prescription">
+                      Change Prescription
+                    </Link>
                   </Button>
                 </div>
               </div>
@@ -212,7 +262,9 @@ export default function CheckoutPage() {
                     variant="outline"
                     className="mt-2"
                   >
-                    <Link href="/prescription">Upload Prescription</Link>
+                    <Link href="/prescription">
+                      Upload Prescription
+                    </Link>
                   </Button>
                 </div>
               </div>
@@ -221,6 +273,7 @@ export default function CheckoutPage() {
         )}
       </div>
 
+      {/* FOOTER CTA */}
       <div className="fixed bottom-16 left-0 right-0 border-t bg-background p-4">
         <Button
           className="w-full"
@@ -228,7 +281,9 @@ export default function CheckoutPage() {
           onClick={placeOrder}
           disabled={loading}
         >
-          {loading ? "Placing order..." : `Place Order • ₹${total}`}
+          {loading
+            ? "Placing order..."
+            : `Place Order • ₹${total}`}
         </Button>
       </div>
     </div>
