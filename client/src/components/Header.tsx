@@ -7,10 +7,6 @@ import { Button } from "@/components/ui/button";
 export function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth();
 
-  async function handleLogout() {
-    await logout();
-  }
-
   return (
     <header className="sticky top-0 z-40 bg-background/90 backdrop-blur border-b">
       <div className="flex items-center justify-between h-14 px-4 max-w-7xl mx-auto">
@@ -29,7 +25,7 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleLogout}
+              onClick={logout}
               title="Logout"
             >
               <LogOut className="w-4 h-4 text-red-600" />
