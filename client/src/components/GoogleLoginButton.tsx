@@ -28,7 +28,7 @@ export function GoogleLoginButton() {
           }
         );
 
-        await refresh(); // 🔥 THIS WAS NEVER RUNNING
+        await refresh();
       },
     });
 
