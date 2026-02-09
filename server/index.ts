@@ -1,12 +1,10 @@
-import express, { Request, Response, NextFunction } from "express";
+import express from "express";
 import http from "http";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
 import { seedDatabase } from "./seed";
 import { migratePrescriptions } from "./db";
-import { db } from "./db";
-
 import { registerAuthRoutes } from "./routes/auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerMedicineRoutes } from "./routes/medicines";
@@ -20,6 +18,9 @@ console.log("🔥 SERVER INDEX EXECUTED 🔥");
 async function startServer() {
   const app = express();
 
+  // 🔑 REQUIRED FOR RENDER + COOKIES
+  app.set("trust proxy", 1);
+
   app.use(
     cors({
       origin: "https://shpharma.vercel.app",
@@ -29,21 +30,9 @@ async function startServer() {
 
   app.use(cookieParser());
   app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ extended: false }));
-
-  app.get("/api/__probe", (_req, res) => {
-    res.json({ status: "ok" });
-  });
 
   await seedDatabase();
   await migratePrescriptions();
-
-  try {
-    await db.execute(`
-      ALTER TABLE medicines
-      ADD COLUMN IF NOT EXISTS source_file TEXT
-    `);
-  } catch {}
 
   registerAuthRoutes(app);
   registerUserRoutes(app);
@@ -52,13 +41,6 @@ async function startServer() {
   registerOrderRoutes(app);
   registerPrescriptionRoutes(app);
   registerAdminRoutes(app);
-
-  app.use(
-    (err: any, _req: Request, res: Response, _next: NextFunction) => {
-      console.error("UNHANDLED ERROR:", err);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  );
 
   const port = Number(process.env.PORT || 10000);
   http.createServer(app).listen(port, "0.0.0.0", () => {
