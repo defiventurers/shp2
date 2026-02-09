@@ -23,7 +23,7 @@ export default function Home() {
         className="relative text-white"
         style={{ backgroundColor: "#0A7A3D" }}
       >
-        <div className="px-4 pt-8 pb-6">
+        <div className="px-4 pt-8 pb-3">
           <div className="max-w-lg mx-auto text-center">
             {/* LOGO */}
             <div className="flex justify-center mb-4">
@@ -34,23 +34,23 @@ export default function Home() {
               />
             </div>
 
-            <h1 className="text-2xl font-bold mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">
               Sacred Heart Pharmacy
             </h1>
 
             <p className="text-white/80 text-sm mb-1">
-              Austin Town, Victoria Layout, Bengaluru
+              Austin Town, Victoria Layout, Bengaluru, Karnataka 560047
             </p>
 
-            <div className="flex items-center justify-center gap-1 text-xs text-white/70 mb-3">
+            <div className="flex items-center justify-center gap-1 text-xs text-white/70 mb-2">
               <MapPin className="w-3 h-3" />
               <span>
-                16, Campbell Rd, Opp. St. Philomena’s Hospital
+                16, Campbell Rd, opposite St. Philomena’s Hospital
               </span>
             </div>
 
-            <p className="text-white/90 text-sm max-w-xs mx-auto mb-4">
-              Order medicines online with easy prescription upload.
+            <p className="text-white/90 text-sm max-w-xs mx-auto mb-3">
+              Order medicines online with prescription upload.
             </p>
 
             {/* AUTH */}
@@ -59,21 +59,19 @@ export default function Home() {
                 <GoogleLoginButton />
               </div>
             ) : (
-              <p className="text-xs text-white/90">
-                Signed in as{" "}
-                <strong>{user?.name || user?.email}</strong>
+              <p className="text-xs text-white/80 mt-1">
+                Signed in as <strong>{user?.name}</strong>
               </p>
             )}
           </div>
         </div>
       </div>
 
-      {/* ================= MAIN ================= */}
-      <div className="px-4 mt-6 max-w-lg mx-auto space-y-4">
-        {/* ACTION CARDS */}
+      {/* ================= MAIN CONTENT ================= */}
+      <div className="px-4 mt-4 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <Link href="/prescription">
-            <Card className="p-4 cursor-pointer hover:shadow">
+            <Card className="p-4 cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
                 <Upload className="w-6 h-6 text-[#0A7A3D]" />
               </div>
@@ -81,13 +79,13 @@ export default function Home() {
                 Upload Prescription
               </h3>
               <p className="text-xs text-muted-foreground">
-                Upload & place order
+                Upload & auto-detect medicines
               </p>
             </Card>
           </Link>
 
           <Link href="/inventory">
-            <Card className="p-4 cursor-pointer hover:shadow">
+            <Card className="p-4 cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
                 <Package className="w-6 h-6 text-[#0A7A3D]" />
               </div>
@@ -95,14 +93,14 @@ export default function Home() {
                 Browse Inventory
               </h3>
               <p className="text-xs text-muted-foreground">
-                Search medicines
+                1000+ medicines available
               </p>
             </Card>
           </Link>
         </div>
 
         {/* CONTACT */}
-        <Card className="p-4">
+        <Card className="mt-4 p-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
               <Phone className="w-6 h-6 text-[#0A7A3D]" />
@@ -112,25 +110,24 @@ export default function Home() {
                 Need Help?
               </h3>
               <p className="text-xs text-muted-foreground">
-                Chat with our pharmacist
+                Chat with our pharmacist on WhatsApp
               </p>
             </div>
             <WhatsAppButton variant="inline" />
           </div>
         </Card>
 
-        {/* WHY US */}
-        <div className="pt-4">
+        {/* WHY CHOOSE US */}
+        <div className="mt-8">
           <h2 className="font-semibold text-lg mb-4">
             Why Choose Us
           </h2>
-
           <div className="grid gap-3">
             {[
               {
                 icon: Truck,
                 title: "Fast Delivery",
-                desc: "Same-day delivery in Bangalore",
+                desc: "Same day delivery in Bangalore",
               },
               {
                 icon: Shield,
@@ -148,9 +145,7 @@ export default function Home() {
                   <Icon className="w-5 h-5 text-[#0A7A3D]" />
                 </div>
                 <div>
-                  <h4 className="font-medium text-sm">
-                    {title}
-                  </h4>
+                  <h4 className="font-medium text-sm">{title}</h4>
                   <p className="text-xs text-muted-foreground">
                     {desc}
                   </p>
@@ -160,8 +155,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* STAFF */}
-        <div className="pt-8 text-center">
+        {/* STAFF LOGIN */}
+        <div className="mt-10 text-center">
           <Link href="/staff/login">
             <span className="text-xs text-muted-foreground hover:underline cursor-pointer">
               Staff Login
