@@ -3,9 +3,8 @@ import { Link } from "wouter";
 import {
   Clock,
   CheckCircle,
-  Truck,
-  XCircle,
   Package,
+  Truck,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,13 +12,13 @@ import { Button } from "@/components/ui/button";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { PageLoader } from "@/components/LoadingSpinner";
 import type { Order, OrderItem } from "@shared/schema";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 
 interface OrderWithItems extends Order {
   items: OrderItem[];
 }
 
-/* ---------------- STATUS CONFIG ---------------- */
+/* ---------------- STATUS CONFIG (BACKEND SAFE) ---------------- */
 const STATUS_MAP: Record<
   string,
   { label: string; icon: any; color: string }
@@ -34,34 +33,43 @@ const STATUS_MAP: Record<
     icon: CheckCircle,
     color: "bg-blue-100 text-blue-800",
   },
+  processing: {
+    label: "Processing",
+    icon: Package,
+    color: "bg-blue-100 text-blue-800",
+  },
   ready: {
     label: "Ready",
     icon: Package,
     color: "bg-green-100 text-green-800",
   },
-  out_for_delivery: {
-    label: "Out for Delivery",
-    icon: Truck,
-    color: "bg-blue-100 text-blue-800",
-  },
   delivered: {
     label: "Delivered",
-    icon: CheckCircle,
+    icon: Truck,
     color: "bg-green-100 text-green-800",
-  },
-  cancelled: {
-    label: "Cancelled",
-    icon: XCircle,
-    color: "bg-red-100 text-red-800",
   },
 };
 
 export default function Orders() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   const { data: orders = [], isLoading } = useQuery<OrderWithItems[]>({
     queryKey: ["/api/orders"],
     enabled: isAuthenticated,
+    queryFn: async () => {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/orders`,
+        {
+          credentials: "include", // 🔥 REQUIRED
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch orders");
+      }
+
+      return res.json();
+    },
   });
 
   /* ---------------- LOADING ---------------- */
@@ -80,7 +88,7 @@ export default function Orders() {
           Sign in to see your past and current orders
         </p>
         <Button asChild>
-          <a href="/api/auth/dev-login">Login</a>
+          <Link href="/">Go Home</Link>
         </Button>
       </div>
     );
@@ -109,7 +117,7 @@ export default function Orders() {
 
         {orders.map((order) => {
           const status =
-            STATUS_MAP[order.status || "pending"] ||
+            STATUS_MAP[order.status || "pending"] ??
             STATUS_MAP.pending;
 
           const StatusIcon = status.icon;
@@ -123,7 +131,9 @@ export default function Orders() {
                     Order #{order.orderNumber}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(order.createdAt!).toLocaleString("en-IN")}
+                    {new Date(order.createdAt!).toLocaleString(
+                      "en-IN"
+                    )}
                   </p>
                 </div>
 
