@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -23,34 +22,33 @@ export default function PrescriptionPage() {
   if (!isAuthenticated)
     return <p className="p-4">Please login to upload prescription</p>;
 
-  const uploadMutation = useMutation({
-    mutationFn: async () => {
-      const fd = new FormData();
-      files.forEach((f) => fd.append("images", f));
+  async function upload() {
+    const fd = new FormData();
+    files.forEach((f) => fd.append("images", f));
 
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/prescriptions/upload`,
-        {
-          method: "POST",
-          body: fd,
-          credentials: "include",
-        }
-      );
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/prescriptions/upload`,
+      {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      }
+    );
 
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    onSuccess: async (data) => {
-      await refreshPrescriptions();
-      setSelectedPrescriptionId(data.prescription.id);
-      toast({ title: "Prescription uploaded" });
-      navigate("/checkout");
-    },
-  });
+    if (!res.ok) {
+      toast({ title: "Upload failed", variant: "destructive" });
+      return;
+    }
+
+    const data = await res.json();
+    await refreshPrescriptions();
+    setSelectedPrescriptionId(data.prescription.id);
+    navigate("/checkout");
+  }
 
   return (
     <div className="p-4 max-w-md mx-auto">
-      <Card className="p-4 text-center border-dashed border-2">
+      <Card className="p-4 border-dashed border-2 text-center">
         <Upload className="mx-auto mb-2" />
         <Button onClick={() => fileInputRef.current?.click()}>
           Select Images
@@ -69,7 +67,7 @@ export default function PrescriptionPage() {
       <Button
         className="w-full mt-4"
         disabled={!files.length}
-        onClick={() => uploadMutation.mutate()}
+        onClick={upload}
       >
         Upload Prescription
       </Button>
