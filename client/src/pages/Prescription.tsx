@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 import { useCartContext } from "@/context/CartContext";
 
 export default function PrescriptionPage() {
@@ -23,34 +23,25 @@ export default function PrescriptionPage() {
   } = useCartContext();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
 
-  /* ---------------- AUTH GUARD ---------------- */
-
+  /* ---------- AUTH GUARD (FIXED) ---------- */
   if (loading) {
     return <p className="p-4">Checking login…</p>;
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !user) {
     return <p className="p-4">Please login to upload prescription</p>;
   }
 
-  /* ---------------- DEFAULT VALUES ---------------- */
-
-  const today = new Date().toLocaleDateString("en-GB");
-
-  const defaultName = user?.name
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultName = user.name
     ? `${user.name.split(" ")[0]}-${today}`
     : `Prescription-${today}`;
 
   const [prescriptionName, setPrescriptionName] =
     useState(defaultName);
-  const [prescriptionDate, setPrescriptionDate] =
-    useState(today);
-
-  /* ---------------- UPLOAD ---------------- */
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
@@ -66,45 +57,34 @@ export default function PrescriptionPage() {
         }
       );
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Upload failed");
-      }
-
+      if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
 
     onSuccess: async (data) => {
-      const prescription = data.prescription;
-
       setSelectedFiles([]);
       await refreshPrescriptions();
-      setSelectedPrescriptionId(prescription.id);
+      setSelectedPrescriptionId(data.prescription.id);
 
       toast({
-        title: "Prescription created",
+        title: "Prescription uploaded",
         description: "Selected for checkout",
       });
     },
 
-    onError: (err: any) => {
+    onError: () =>
       toast({
         title: "Upload failed",
-        description: err?.message || "Unable to upload prescription",
         variant: "destructive",
-      });
-    },
+      }),
 
     onSettled: () => setUploading(false),
   });
-
-  /* ---------------- UI ---------------- */
 
   return (
     <div className="min-h-screen p-4 max-w-lg mx-auto space-y-4">
       <h1 className="font-semibold text-lg">Create Prescription</h1>
 
-      {/* FILE SELECT */}
       <Card className="p-4 text-center border-dashed border-2">
         <Upload className="mx-auto mb-2" />
         <Button onClick={() => fileInputRef.current?.click()}>
@@ -122,24 +102,13 @@ export default function PrescriptionPage() {
             )
           }
         />
-        {selectedFiles.length > 0 && (
-          <p className="text-xs mt-2 text-muted-foreground">
-            {selectedFiles.length} image(s) selected
-          </p>
-        )}
       </Card>
 
-      {/* PREVIEW */}
       {selectedFiles.length > 0 && (
         <Card className="p-4 space-y-3">
           <Input
             value={prescriptionName}
             onChange={(e) => setPrescriptionName(e.target.value)}
-            placeholder="Prescription name"
-          />
-          <Input
-            value={prescriptionDate}
-            onChange={(e) => setPrescriptionDate(e.target.value)}
           />
 
           <div className="grid grid-cols-3 gap-2">
@@ -171,19 +140,20 @@ export default function PrescriptionPage() {
             }}
             className="w-full"
           >
-            {uploading ? "Creating..." : "Create Prescription"}
+            {uploading ? "Uploading…" : "Create Prescription"}
           </Button>
         </Card>
       )}
 
-      {/* EXISTING */}
       <h2 className="font-medium text-sm">Your Prescriptions</h2>
 
       {prescriptions.map((p) => (
         <Card
           key={p.id}
           className={`p-3 flex items-center gap-3 cursor-pointer ${
-            selectedPrescriptionId === p.id ? "border-green-500" : ""
+            selectedPrescriptionId === p.id
+              ? "border-green-500"
+              : ""
           }`}
           onClick={() => setSelectedPrescriptionId(p.id)}
         >
