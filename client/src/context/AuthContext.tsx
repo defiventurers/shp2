@@ -27,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         `${import.meta.env.VITE_API_URL}/api/auth/me`,
         { credentials: "include" }
       );
+
       const data = await res.json();
       setUser(data);
     } catch {
@@ -47,7 +48,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }
 
-  // 🔥 VERY IMPORTANT
   useEffect(() => {
     refresh();
   }, []);
