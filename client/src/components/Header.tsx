@@ -1,13 +1,15 @@
 import { Link } from "wouter";
 import { LogOut } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
 import { Button } from "@/components/ui/button";
 
 export function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth();
 
-  if (loading) return null; // 🔑 prevents flicker + false logout
+  async function handleLogout() {
+    await logout();
+  }
 
   return (
     <header className="sticky top-0 z-40 bg-background/90 backdrop-blur border-b">
@@ -16,18 +18,18 @@ export function Header() {
           Sacred Heart
         </Link>
 
-        {!isAuthenticated ? (
+        {loading ? null : !isAuthenticated ? (
           <GoogleLoginButton />
         ) : (
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium truncate max-w-[160px]">
-              Signed in as {user?.name}
+              {user?.name}
             </span>
 
             <Button
               variant="ghost"
               size="icon"
-              onClick={logout}
+              onClick={handleLogout}
               title="Logout"
             >
               <LogOut className="w-4 h-4 text-red-600" />
