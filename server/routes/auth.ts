@@ -6,17 +6,10 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not set");
-}
+if (!JWT_SECRET) throw new Error("JWT_SECRET missing");
 
-const googleClient = new OAuth2Client(
-  process.env.GOOGLE_CLIENT_ID
-);
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-/* =========================
-   AUTH COOKIE (FINAL)
-========================= */
 function setAuthCookie(res: Response, token: string) {
   res.cookie("auth_token", token, {
     httpOnly: true,
@@ -29,15 +22,10 @@ function setAuthCookie(res: Response, token: string) {
 export function registerAuthRoutes(app: Express) {
   console.log("✅ AUTH ROUTES REGISTERED");
 
-  /* =========================
-     GOOGLE LOGIN
-  ========================= */
-  app.post("/api/auth/google", async (req: Request, res: Response) => {
+  app.post("/api/auth/google", async (req, res) => {
     try {
       const { credential } = req.body;
-      if (!credential) {
-        return res.status(400).json({ error: "Missing credential" });
-      }
+      if (!credential) return res.status(400).json({ error: "Missing credential" });
 
       const ticket = await googleClient.verifyIdToken({
         idToken: credential,
@@ -81,15 +69,12 @@ export function registerAuthRoutes(app: Express) {
         },
       });
     } catch (err) {
-      console.error("GOOGLE AUTH ERROR:", err);
-      res.status(401).json({ error: "Authentication failed" });
+      console.error("GOOGLE AUTH ERROR", err);
+      res.status(401).json({ error: "Auth failed" });
     }
   });
 
-  /* =========================
-     CURRENT USER
-  ========================= */
-  app.get("/api/auth/me", async (req: Request, res: Response) => {
+  app.get("/api/auth/me", async (req, res) => {
     const token = req.cookies?.auth_token;
     if (!token) return res.json(null);
 
@@ -108,15 +93,16 @@ export function registerAuthRoutes(app: Express) {
         name: user.firstName,
         phone: user.phone ?? "",
       });
-    } catch (err) {
-      console.error("JWT VERIFY FAILED:", err);
+    } catch {
+      res.clearCookie("auth_token", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+      });
       res.json(null);
     }
   });
 
-  /* =========================
-     LOGOUT
-  ========================= */
   app.post("/api/auth/logout", (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
