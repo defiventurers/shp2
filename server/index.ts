@@ -20,9 +20,6 @@ console.log("🔥 SERVER INDEX EXECUTED 🔥");
 async function startServer() {
   const app = express();
 
-  /* =========================
-     CORS (FINAL & CORRECT)
-  ========================= */
   app.use(
     cors({
       origin: "https://shpharma.vercel.app",
@@ -34,16 +31,10 @@ async function startServer() {
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: false }));
 
-  /* =========================
-     HEALTH CHECK
-  ========================= */
   app.get("/api/__probe", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  /* =========================
-     STARTUP TASKS
-  ========================= */
   await seedDatabase();
   await migratePrescriptions();
 
@@ -54,9 +45,6 @@ async function startServer() {
     `);
   } catch {}
 
-  /* =========================
-     ROUTES
-  ========================= */
   registerAuthRoutes(app);
   registerUserRoutes(app);
   registerMedicineRoutes(app);
@@ -65,9 +53,6 @@ async function startServer() {
   registerPrescriptionRoutes(app);
   registerAdminRoutes(app);
 
-  /* =========================
-     ERROR HANDLER
-  ========================= */
   app.use(
     (err: any, _req: Request, res: Response, _next: NextFunction) => {
       console.error("UNHANDLED ERROR:", err);
@@ -75,9 +60,6 @@ async function startServer() {
     }
   );
 
-  /* =========================
-     SERVER START
-  ========================= */
   const port = Number(process.env.PORT || 10000);
   http.createServer(app).listen(port, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${port}`);
