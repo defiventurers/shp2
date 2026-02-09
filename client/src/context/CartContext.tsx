@@ -2,23 +2,9 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useCart } from "@/hooks/useCart";
 import type { Prescription } from "@shared/schema";
 
-export interface CartContextType {
-  // CART
-  items: {
-    id: string;
-    name: string;
-    price: number;
-    qty: number;
-    requiresPrescription?: boolean;
-  }[];
-
-  addItem: (item: {
-    id: string;
-    name: string;
-    price: number;
-    requiresPrescription?: boolean;
-  }) => void;
-
+type CartContextType = {
+  items: any[];
+  addItem: (medicine: any, qty?: number) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, qty: number) => void;
   clearCart: () => void;
@@ -29,24 +15,17 @@ export interface CartContextType {
   requiresPrescription: boolean;
   isLoaded: boolean;
 
-  // PRESCRIPTIONS
   prescriptions: Prescription[];
   selectedPrescriptionId: string | null;
   setSelectedPrescriptionId: (id: string | null) => void;
   refreshPrescriptions: () => Promise<void>;
-}
+};
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  /**
-   * 🔑 CART LOGIC (LOCAL + PERSISTED)
-   */
   const cart = useCart();
 
-  /**
-   * 🩺 PRESCRIPTIONS
-   */
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
@@ -78,20 +57,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   return (
     <CartContext.Provider
       value={{
-        // 🛒 CART
-        items: cart.items,
-        addItem: cart.addItem,
-        removeItem: cart.removeItem,
-        updateQuantity: cart.updateQuantity,
-        clearCart: cart.clearCart,
-
-        itemCount: cart.itemCount,
-        subtotal: cart.subtotal,
-        hasScheduleHDrugs: cart.hasScheduleHDrugs,
-        requiresPrescription: cart.requiresPrescription,
-        isLoaded: cart.isLoaded,
-
-        // 🩺 PRESCRIPTIONS
+        ...cart,
         prescriptions,
         selectedPrescriptionId,
         setSelectedPrescriptionId,
