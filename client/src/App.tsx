@@ -1,13 +1,14 @@
 import { Switch, Route, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+
+import { AuthProvider } from "@/context/AuthContext"; // ✅ ADD
 import { CartProvider } from "@/context/CartContext";
-import { AuthProvider } from "@/hooks/useAuth";
+
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 
-import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Inventory from "@/pages/Inventory";
 import Cart from "@/pages/Cart";
@@ -16,9 +17,9 @@ import Orders from "@/pages/Orders";
 import Prescription from "@/pages/Prescription";
 import Profile from "@/pages/Profile";
 import Admin from "@/pages/Admin";
-
 import StaffLogin from "@/pages/StaffLogin";
 import StaffDashboard from "@/pages/StaffDashboard";
+import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
@@ -30,12 +31,9 @@ function Router() {
       <Route path="/orders" component={Orders} />
       <Route path="/profile" component={Profile} />
       <Route path="/prescription" component={Prescription} />
-
       <Route path="/staff/login" component={StaffLogin} />
       <Route path="/staff" component={StaffDashboard} />
-
       <Route path="/admin" component={Admin} />
-
       <Route component={NotFound} />
     </Switch>
   );
@@ -47,11 +45,10 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <AuthProvider>
+      <AuthProvider>        {/* ✅ REQUIRED */}
         <CartProvider>
           <div className="min-h-screen bg-background">
             <Header />
-
             <main className="pb-safe">
               <Router />
             </main>
