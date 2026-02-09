@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/context/AuthContext";
 
 declare global {
   interface Window {
@@ -12,7 +12,6 @@ export function GoogleLoginButton() {
   const { isAuthenticated, user, refresh, logout } = useAuth();
 
   useEffect(() => {
-    // Do nothing if already logged in
     if (isAuthenticated) return;
     if (!window.google || !buttonRef.current) return;
 
@@ -25,20 +24,16 @@ export function GoogleLoginButton() {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              credentials: "include", // 🔥 REQUIRED
+              credentials: "include",
               body: JSON.stringify({ credential: response.credential }),
             }
           );
 
-          if (!res.ok) {
-            console.error("Google login failed");
-            return;
-          }
+          if (!res.ok) throw new Error("Google login failed");
 
-          // 🔥 Force auth state refresh
-          await refresh();
+          await refresh(); // 🔑 hydrate auth state
         } catch (err) {
-          console.error("Google auth error", err);
+          console.error("Google login error", err);
         }
       },
     });
@@ -51,7 +46,6 @@ export function GoogleLoginButton() {
     });
   }, [isAuthenticated, refresh]);
 
-  // Logged-in UI
   if (isAuthenticated) {
     return (
       <div className="flex items-center gap-3 text-sm">
@@ -60,7 +54,7 @@ export function GoogleLoginButton() {
         </span>
         <button
           onClick={logout}
-          className="text-white font-medium underline"
+          className="text-white underline font-medium"
         >
           Logout
         </button>
@@ -68,6 +62,5 @@ export function GoogleLoginButton() {
     );
   }
 
-  // Logged-out UI
   return <div ref={buttonRef} />;
 }
