@@ -1,73 +1,47 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect } from 'react';
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
-declare global {
-  interface Window {
-    google?: any;
-  }
-}
-
-export function GoogleLoginButton() {
-  const buttonRef = useRef<HTMLDivElement>(null);
-  const { isAuthenticated, user, refresh, logout } = useAuth();
+export default function GoogleLoginButton() {
+  const { isAuthenticated, logout, refresh, loading } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Do nothing if already logged in
-    if (isAuthenticated) return;
-    if (!window.google || !buttonRef.current) return;
-
-    window.google.accounts.id.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID!,
-      callback: async (response: any) => {
-        try {
-          const res = await fetch(
-            `${import.meta.env.VITE_API_URL}/api/auth/google`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include", // 🔥 REQUIRED
-              body: JSON.stringify({ credential: response.credential }),
-            }
-          );
-
-          if (!res.ok) {
-            console.error("Google login failed");
-            return;
-          }
-
-          // 🔥 Force auth state refresh
+    if (window.google && !isAuthenticated) {
+      window.google.accounts.id.initialize({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+        callback: async (response) => {
+          // After successful sign-in, refresh auth state
           await refresh();
-        } catch (err) {
-          console.error("Google auth error", err);
-        }
-      },
-    });
+          toast({ title: "Signed in successfully" });
+        },
+      });
+      window.google.accounts.id.renderButton(
+        document.getElementById("googleSignInDiv"),
+        { theme: "outline", size: "large" }
+      );
+    }
+  }, [isAuthenticated, refresh, toast]);
 
-    window.google.accounts.id.renderButton(buttonRef.current, {
-      theme: "outline",
-      size: "large",
-      text: "signin_with",
-      shape: "rectangular",
-    });
-  }, [isAuthenticated, refresh]);
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
-  // Logged-in UI
-  if (isAuthenticated) {
-    return (
-      <div className="flex items-center gap-3 text-sm">
-        <span className="text-white/90">
-          Signed in{user?.name ? ` as ${user.name}` : ""}
-        </span>
+  return (
+    <div>
+      {!isAuthenticated ? (
+        <div id="googleSignInDiv" />
+      ) : (
         <button
-          onClick={logout}
+          onClick={async () => {
+            await logout();
+            toast({ title: "Logged out successfully" });
+          }}
           className="text-white font-medium underline"
         >
           Logout
         </button>
-      </div>
-    );
-  }
-
-  // Logged-out UI
-  return <div ref={buttonRef} />;
+      )}
+    </div>
+  );
 }
