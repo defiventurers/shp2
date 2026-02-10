@@ -3,11 +3,18 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 export function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth();
+  const { toast } = useToast();
 
   if (loading) return null; // 🔑 prevents flicker + false logout
+
+  const handleLogout = async () => {
+    await logout();
+    toast({ title: "Logged out successfully" });
+  };
 
   return (
     <header className="sticky top-0 z-40 bg-background/90 backdrop-blur border-b">
@@ -27,7 +34,7 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={logout}
+              onClick={handleLogout}
               title="Logout"
             >
               <LogOut className="w-4 h-4 text-red-600" />
