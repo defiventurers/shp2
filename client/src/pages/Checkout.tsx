@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, CheckCircle, FileText } from "lucide-react";
+import { AlertTriangle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
@@ -38,12 +38,12 @@ export default function CheckoutPage() {
     (p) => p.id === selectedPrescriptionId
   );
 
-  /* ---------------- AUTO-FILL FROM GOOGLE PROFILE ---------------- */
+  /* ---------------- AUTO-FILL FROM GOOGLE ---------------- */
   useEffect(() => {
     if (user) {
-      setName((prev) => prev || user.name || "");
-      setEmail((prev) => prev || user.email || "");
-      setPhone((prev) => prev || user.phone || "");
+      if (!name && user.name) setName(user.name);
+      if (!email && user.email) setEmail(user.email);
+      if (!phone && user.phone) setPhone(user.phone);
     }
   }, [user]);
 
@@ -55,7 +55,7 @@ export default function CheckoutPage() {
   const deliveryFee = deliveryType === "delivery" ? 30 : 0;
   const total = subtotal + deliveryFee;
 
-  /* ---------------- HELPERS ---------------- */
+  /* ---------------- VALIDATION ---------------- */
   function isValidPhone(value: string) {
     return /^[6-9]\d{9}$/.test(value);
   }
@@ -104,6 +104,13 @@ export default function CheckoutPage() {
     setLoading(true);
 
     try {
+      /* ✅ STEP 1: SAVE / UPDATE USER PROFILE */
+      await apiRequest("PATCH", "/api/users/me", {
+        name: name.trim(),
+        phone: phone.trim(),
+      });
+
+      /* ✅ STEP 2: CREATE ORDER */
       const data = await apiRequest("POST", "/api/orders", {
         items: items.map((item) => ({
           medicineId: item.medicine.id,
@@ -133,9 +140,7 @@ export default function CheckoutPage() {
       toast({
         title: "Order failed",
         description:
-          err?.message?.includes("Cannot POST")
-            ? "Server not reachable. Please try again."
-            : err?.message || "Failed to place order",
+          err?.message || "Failed to place order. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -222,14 +227,9 @@ export default function CheckoutPage() {
             {selectedPrescription ? (
               <div className="flex gap-3">
                 <CheckCircle className="w-5 h-5 text-green-600" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">
-                    Prescription selected
-                  </p>
-                  <Button asChild size="sm" variant="outline" className="mt-2">
-                    <Link href="/prescription">Change Prescription</Link>
-                  </Button>
-                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/prescription">Change Prescription</Link>
+                </Button>
               </div>
             ) : (
               <div className="flex gap-3">
