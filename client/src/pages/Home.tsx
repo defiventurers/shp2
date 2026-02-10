@@ -13,17 +13,32 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
 import { useAuth } from "@/hooks/useAuth";
 import { CompleteProfileModal } from "@/components/CompleteProfileModal";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function Home() {
   const { isAuthenticated, user, refresh } = useAuth();
+
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profilePrompted, setProfilePrompted] = useState(false);
 
   const profileComplete =
     !!user?.phone && /^[6-9]\d{9}$/.test(user.phone);
 
+  /* 🔑 AUTO-PROMPT PROFILE COMPLETION AFTER LOGIN */
+  useEffect(() => {
+    if (
+      isAuthenticated &&
+      !profileComplete &&
+      !profilePrompted
+    ) {
+      setShowProfileModal(true);
+      setProfilePrompted(true);
+    }
+  }, [isAuthenticated, profileComplete, profilePrompted]);
+
   return (
     <div className="min-h-screen bg-background pb-28">
+      {/* PROFILE COMPLETION MODAL */}
       <CompleteProfileModal
         open={isAuthenticated && !profileComplete && showProfileModal}
         onDone={() => {
