@@ -23,7 +23,7 @@ export default function Profile() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const newPrescriptionInputRef = useRef<HTMLInputElement>(null);
 
   const { prescriptions, refreshPrescriptions } = useCartContext();
 
@@ -44,7 +44,6 @@ export default function Profile() {
 
     if (res.ok) {
       refreshPrescriptions();
-      alert("Prescription deleted");
     } else {
       alert("Failed to delete prescription");
     }
@@ -83,9 +82,50 @@ export default function Profile() {
 
     if (res.ok) {
       refreshPrescriptions();
-      alert("Prescription uploaded & saved to profile");
     } else {
       alert("Upload failed");
+    }
+  }
+
+  async function addPages(prescriptionId: string, files: FileList | null) {
+    if (!files || files.length === 0) return;
+
+    const formData = new FormData();
+    Array.from(files).forEach((f) => formData.append("images", f));
+
+    const res = await fetch(
+      `/api/prescriptions/${prescriptionId}/images`,
+      {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      }
+    );
+
+    if (res.ok) {
+      refreshPrescriptions();
+    } else {
+      alert("Failed to add pages");
+    }
+  }
+
+  async function deletePage(prescriptionId: string, imageUrl: string) {
+    if (!confirm("Delete this page?")) return;
+
+    const res = await fetch(
+      `/api/prescriptions/${prescriptionId}/images`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ imageUrl }),
+      }
+    );
+
+    if (res.ok) {
+      refreshPrescriptions();
+    } else {
+      alert("Cannot delete last page");
     }
   }
 
@@ -101,12 +141,12 @@ export default function Profile() {
           <h2 className="text-lg font-semibold">My Prescriptions</h2>
           <Button
             size="sm"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => newPrescriptionInputRef.current?.click()}
           >
             Upload New
           </Button>
           <input
-            ref={fileInputRef}
+            ref={newPrescriptionInputRef}
             type="file"
             multiple
             accept="image/*"
@@ -124,6 +164,7 @@ export default function Profile() {
         <div className="space-y-3">
           {prescriptions.map((p) => (
             <Card key={p.id} className="p-3 space-y-2">
+              {/* HEADER */}
               <div className="flex justify-between items-center">
                 {renamingId === p.id ? (
                   <div className="flex gap-2 w-full">
@@ -172,14 +213,34 @@ export default function Profile() {
                 )}
               </div>
 
+              {/* IMAGES */}
               <div className="flex gap-2 overflow-x-auto">
-                {p.imageUrls.map((url, idx) => (
-                  <img
-                    key={idx}
-                    src={url}
-                    className="h-20 rounded border"
-                  />
+                {p.imageUrls.map((url) => (
+                  <div key={url} className="relative group">
+                    <img
+                      src={url}
+                      className="h-20 rounded border"
+                    />
+                    <button
+                      onClick={() => deletePage(p.id, url)}
+                      className="absolute top-1 right-1 bg-red-600 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
+
+                {/* ADD PAGES */}
+                <label className="h-20 w-20 flex items-center justify-center border rounded cursor-pointer text-sm">
+                  + Add
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => addPages(p.id, e.target.files)}
+                  />
+                </label>
               </div>
             </Card>
           ))}
