@@ -12,12 +12,26 @@ import { Card } from "@/components/ui/card";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { GoogleLoginButton } from "@/components/GoogleLoginButton";
 import { useAuth } from "@/hooks/useAuth";
+import { CompleteProfileModal } from "@/components/CompleteProfileModal";
+import { useState } from "react";
 
 export default function Home() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, refresh } = useAuth();
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  const profileComplete =
+    !!user?.phone && /^[6-9]\d{9}$/.test(user.phone);
 
   return (
     <div className="min-h-screen bg-background pb-28">
+      <CompleteProfileModal
+        open={isAuthenticated && !profileComplete && showProfileModal}
+        onDone={() => {
+          setShowProfileModal(false);
+          refresh();
+        }}
+      />
+
       {/* ---------------- HERO ---------------- */}
       <div
         className="relative text-white"
@@ -56,6 +70,10 @@ export default function Home() {
               <div className="flex justify-center">
                 <GoogleLoginButton />
               </div>
+            ) : !profileComplete ? (
+              <p className="text-xs text-white/80">
+                Please complete your profile to continue
+              </p>
             ) : (
               <p className="text-xs text-white/80 mt-1">
                 Signed in as <strong>{user?.name}</strong>
@@ -74,6 +92,9 @@ export default function Home() {
               if (!isAuthenticated) {
                 e.preventDefault();
                 window.google?.accounts.id.prompt();
+              } else if (!profileComplete) {
+                e.preventDefault();
+                setShowProfileModal(true);
               }
             }}
           >
@@ -111,7 +132,9 @@ export default function Home() {
               <Phone className="w-6 h-6 text-[#0A7A3D]" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-sm mb-0.5">Need Help?</h3>
+              <h3 className="font-semibold text-sm mb-0.5">
+                Need Help?
+              </h3>
               <p className="text-xs text-muted-foreground">
                 Chat with our pharmacist on WhatsApp
               </p>
@@ -119,39 +142,6 @@ export default function Home() {
             <WhatsAppButton variant="inline" />
           </div>
         </Card>
-
-        <div className="mt-8">
-          <h2 className="font-semibold text-lg mb-4">Why Choose Us</h2>
-          <div className="grid gap-3">
-            {[
-              {
-                icon: Truck,
-                title: "Fast Delivery",
-                desc: "Same day delivery in Bangalore",
-              },
-              {
-                icon: Shield,
-                title: "100% Genuine",
-                desc: "Authorized distributors only",
-              },
-              {
-                icon: Clock,
-                title: "Open 7 Days",
-                desc: "9 AM – 10 PM",
-              },
-            ].map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-[#0A7A3D]" />
-                </div>
-                <div>
-                  <h4 className="font-medium text-sm">{title}</h4>
-                  <p className="text-xs text-muted-foreground">{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
         <div className="mt-10 text-center">
           <Link href="/staff/login">
