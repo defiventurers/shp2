@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
    CONFIG (FIXED)
 ========================= */
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
   "https://sacredheartpharma-backend.onrender.com";
 
 /* =========================
@@ -192,7 +192,9 @@ export default function StaffDashboard() {
 
                 {order.items.map((i, idx) => (
                   <div key={idx} className="flex justify-between text-sm">
-                    <span>{i.medicineName} × {i.quantity}</span>
+                    <span>
+                      {i.medicineName} × {i.quantity}
+                    </span>
                     <span>₹{i.price}</span>
                   </div>
                 ))}
