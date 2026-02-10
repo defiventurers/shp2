@@ -11,8 +11,6 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 
 /* =========================
    Sessions
@@ -79,11 +77,10 @@ export const prescriptions = pgTable("prescriptions", {
 });
 
 /* =========================
-   Orders  ✅ FIXED
+   Orders
 ========================= */
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-
   orderNumber: varchar("order_number").notNull(),
 
   userId: varchar("user_id").references(() => users.id),
@@ -112,8 +109,15 @@ export const orders = pgTable("orders", {
 ========================= */
 export const orderItems = pgTable("order_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: varchar("order_id").references(() => orders.id),
-  medicineId: varchar("medicine_id").references(() => medicines.id),
+
+  orderId: varchar("order_id")
+    .notNull()
+    .references(() => orders.id),
+
+  medicineId: varchar("medicine_id")
+    .notNull()
+    .references(() => medicines.id),
+
   medicineName: varchar("medicine_name").notNull(),
   quantity: integer("quantity").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
@@ -121,7 +125,7 @@ export const orderItems = pgTable("order_items", {
 });
 
 /* =========================
-   Relations
+   Relations (🔥 FIXED 🔥)
 ========================= */
 export const usersRelations = relations(users, ({ many }) => ({
   orders: many(orders),
@@ -138,8 +142,23 @@ export const medicinesRelations = relations(medicines, ({ one }) => ({
   }),
 }));
 
-export const ordersRelations = relations(orders, ({ many }) => ({
+export const ordersRelations = relations(orders, ({ many, one }) => ({
   items: many(orderItems),
+  user: one(users, {
+    fields: [orders.userId],
+    references: [users.id],
+  }),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderItems.orderId],
+    references: [orders.id],
+  }),
+  medicine: one(medicines, {
+    fields: [orderItems.medicineId],
+    references: [medicines.id],
+  }),
 }));
 
 /* =========================
