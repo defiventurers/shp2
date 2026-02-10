@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 const API_BASE =
@@ -9,17 +9,17 @@ const API_BASE =
 
 type Props = {
   open: boolean;
-  onCompleted: () => void;
+  onDone: () => void;
 };
 
-export function CompleteProfileModal({ open, onCompleted }: Props) {
+export function CompleteProfileModal({ open, onDone }: Props) {
   const { toast } = useToast();
   const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   if (!open) return null;
 
-  async function submit() {
+  async function save() {
     if (!/^[6-9]\d{9}$/.test(phone)) {
       toast({
         title: "Invalid phone number",
@@ -30,7 +30,8 @@ export function CompleteProfileModal({ open, onCompleted }: Props) {
     }
 
     try {
-      setLoading(true);
+      setSaving(true);
+
       const res = await fetch(`${API_BASE}/api/users/me`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -41,14 +42,14 @@ export function CompleteProfileModal({ open, onCompleted }: Props) {
       if (!res.ok) throw new Error();
 
       toast({ title: "Profile completed" });
-      onCompleted();
+      onDone();
     } catch {
       toast({
         title: "Failed to save phone",
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -69,9 +70,9 @@ export function CompleteProfileModal({ open, onCompleted }: Props) {
         />
 
         <Button
-          onClick={submit}
-          disabled={loading}
           className="w-full"
+          onClick={save}
+          disabled={saving}
         >
           Save & Continue
         </Button>
