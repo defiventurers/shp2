@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useCart } from "@/hooks/useCart";
+import { useAuth } from "@/hooks/useAuth";
 import type { Prescription } from "@shared/schema";
 
 export interface CartContextType {
@@ -40,9 +41,14 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   /**
-   * 🔑 CART LOGIC (LOCAL + PERSISTED)
+   * 🛒 CART
    */
   const cart = useCart();
+
+  /**
+   * 🔐 AUTH
+   */
+  const { user } = useAuth();
 
   /**
    * 🩺 PRESCRIPTIONS
@@ -52,6 +58,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     useState<string | null>(null);
 
   async function refreshPrescriptions() {
+    if (!user) {
+      setPrescriptions([]);
+      setSelectedPrescriptionId(null);
+      return;
+    }
+
     try {
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/prescriptions`,
@@ -71,9 +83,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // 🔑 FIX: refetch prescriptions when auth resolves
   useEffect(() => {
     refreshPrescriptions();
-  }, []);
+  }, [user?.id]);
 
   return (
     <CartContext.Provider
