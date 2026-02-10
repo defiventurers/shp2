@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 declare global {
   interface Window {
@@ -10,9 +11,9 @@ declare global {
 export function GoogleLoginButton() {
   const buttonRef = useRef<HTMLDivElement>(null);
   const { isAuthenticated, user, refresh, logout } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Do nothing if already logged in
     if (isAuthenticated) return;
     if (!window.google || !buttonRef.current) return;
 
@@ -25,20 +26,26 @@ export function GoogleLoginButton() {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              credentials: "include", // 🔥 REQUIRED
+              credentials: "include",
               body: JSON.stringify({ credential: response.credential }),
             }
           );
 
           if (!res.ok) {
-            console.error("Google login failed");
-            return;
+            throw new Error("Google login failed");
           }
 
-          // 🔥 Force auth state refresh
           await refresh();
+
+          toast({
+            title: "Signed in successfully",
+          });
         } catch (err) {
-          console.error("Google auth error", err);
+          toast({
+            title: "Login failed",
+            description: "Please try again",
+            variant: "destructive",
+          });
         }
       },
     });
@@ -46,21 +53,19 @@ export function GoogleLoginButton() {
     window.google.accounts.id.renderButton(buttonRef.current, {
       theme: "outline",
       size: "large",
-      text: "signin_with",
-      shape: "rectangular",
     });
-  }, [isAuthenticated, refresh]);
+  }, [isAuthenticated, refresh, toast]);
 
-  // Logged-in UI
   if (isAuthenticated) {
     return (
       <div className="flex items-center gap-3 text-sm">
-        <span className="text-white/90">
-          Signed in{user?.name ? ` as ${user.name}` : ""}
-        </span>
+        <span>Signed in as {user?.name}</span>
         <button
-          onClick={logout}
-          className="text-white font-medium underline"
+          onClick={async () => {
+            await logout();
+            toast({ title: "Logged out successfully" });
+          }}
+          className="underline font-medium"
         >
           Logout
         </button>
@@ -68,6 +73,5 @@ export function GoogleLoginButton() {
     );
   }
 
-  // Logged-out UI
   return <div ref={buttonRef} />;
 }
