@@ -1,12 +1,13 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-/* ✅ MUST MATCH VERCEL ENV NAME */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+/* ✅ SINGLE SOURCE OF TRUTH */
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://sacredheartpharma-backend.onrender.com";
 
-if (!API_BASE_URL) {
-  throw new Error("VITE_API_BASE_URL is not defined");
-}
-
+/* ---------------------------------
+   Helper
+---------------------------------- */
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
@@ -14,6 +15,9 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/* ---------------------------------
+   API REQUEST
+---------------------------------- */
 export async function apiRequest(
   method: string,
   url: string,
@@ -30,6 +34,9 @@ export async function apiRequest(
   return res.json();
 }
 
+/* ---------------------------------
+   React Query fetcher
+---------------------------------- */
 type UnauthorizedBehavior = "throw" | "returnNull";
 
 export const getQueryFn =
@@ -37,9 +44,7 @@ export const getQueryFn =
   async ({ queryKey }) => {
     const res = await fetch(
       `${API_BASE_URL}${queryKey.join("/")}`,
-      {
-        credentials: "include",
-      }
+      { credentials: "include" }
     );
 
     if (res.status === 401 && on401 === "returnNull") {
@@ -50,6 +55,9 @@ export const getQueryFn =
     return res.json();
   };
 
+/* ---------------------------------
+   Query Client
+---------------------------------- */
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
