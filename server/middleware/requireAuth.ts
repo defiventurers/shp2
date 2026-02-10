@@ -18,6 +18,17 @@ export async function requireAuth(
   res: Response,
   next: NextFunction
 ) {
+  /* =====================================================
+     ✅ STAFF AUTH (HEADER-BASED, NO JWT)
+     Used by Staff Dashboard only
+  ====================================================== */
+  if (req.headers["x-staff-auth"] === "true") {
+    return next();
+  }
+
+  /* =====================================================
+     ✅ CUSTOMER AUTH (JWT COOKIE)
+  ====================================================== */
   const token = req.cookies?.auth_token;
 
   if (!token) {
@@ -31,7 +42,9 @@ export async function requireAuth(
       name?: string;
     };
 
-    // 🔥 ENSURE USER EXISTS IN DATABASE
+    /* ----------------------------------------
+       ENSURE USER EXISTS IN DATABASE
+    ----------------------------------------- */
     const existingUser = await db.query.users.findFirst({
       where: (u, { eq }) => eq(u.id, decoded.id),
     });
