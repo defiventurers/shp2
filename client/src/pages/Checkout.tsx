@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCartContext } from "@/context/CartContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { AlertTriangle, CheckCircle, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function CheckoutPage() {
   const {
@@ -19,13 +20,16 @@ export default function CheckoutPage() {
     prescriptions,
   } = useCartContext();
 
+  const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
+  /* ---------------- CUSTOMER ---------------- */
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
+  /* ---------------- DELIVERY ---------------- */
   const [deliveryType, setDeliveryType] =
     useState<"pickup" | "delivery">("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -34,41 +38,47 @@ export default function CheckoutPage() {
     (p) => p.id === selectedPrescriptionId
   );
 
-  /* -----------------------------
-     CALCULATIONS
-  ------------------------------ */
+  /* ---------------- AUTO-FILL FROM GOOGLE PROFILE ---------------- */
+  useEffect(() => {
+    if (user) {
+      setName((prev) => prev || user.name || "");
+      setEmail((prev) => prev || user.email || "");
+      setPhone((prev) => prev || user.phone || "");
+    }
+  }, [user]);
+
+  /* ---------------- CALCULATIONS ---------------- */
   const subtotal = items.reduce(
     (sum, item) => sum + Number(item.medicine.price) * item.quantity,
     0
   );
-
   const deliveryFee = deliveryType === "delivery" ? 30 : 0;
   const total = subtotal + deliveryFee;
 
-  /* -----------------------------
-     PLACE ORDER
-  ------------------------------ */
+  /* ---------------- HELPERS ---------------- */
+  function isValidPhone(value: string) {
+    return /^[6-9]\d{9}$/.test(value);
+  }
+
+  /* ---------------- PLACE ORDER ---------------- */
   async function placeOrder() {
-    if (items.length === 0) {
+    if (!isAuthenticated) {
       toast({
-        title: "Cart is empty",
+        title: "Please sign in to continue",
         variant: "destructive",
       });
       return;
     }
 
     if (!name.trim()) {
-      toast({
-        title: "Name required",
-        variant: "destructive",
-      });
+      toast({ title: "Name is required", variant: "destructive" });
       return;
     }
 
-    if (!/^\d{10}$/.test(phone)) {
+    if (!isValidPhone(phone)) {
       toast({
         title: "Invalid phone number",
-        description: "Enter a valid 10-digit mobile number",
+        description: "Enter a valid 10-digit Indian mobile number",
         variant: "destructive",
       });
       return;
@@ -76,7 +86,7 @@ export default function CheckoutPage() {
 
     if (deliveryType === "delivery" && !deliveryAddress.trim()) {
       toast({
-        title: "Address required",
+        title: "Delivery address required",
         variant: "destructive",
       });
       return;
@@ -106,15 +116,15 @@ export default function CheckoutPage() {
         total,
         deliveryType,
         deliveryAddress:
-          deliveryType === "delivery" ? deliveryAddress : null,
+          deliveryType === "delivery" ? deliveryAddress.trim() : null,
         customerName: name.trim(),
-        customerPhone: phone,
+        customerPhone: phone.trim(),
         customerEmail: email?.trim() || null,
         prescriptionId: selectedPrescriptionId || null,
       });
 
       toast({
-        title: "Order placed successfully",
+        title: "Order placed successfully 🎉",
         description: `Order #${data.orderNumber}`,
       });
 
@@ -133,9 +143,7 @@ export default function CheckoutPage() {
     }
   }
 
-  /* =============================
-     UI
-  ============================== */
+  /* ================= UI ================= */
   return (
     <div className="min-h-screen bg-background pb-32">
       <div className="px-4 py-4 max-w-lg mx-auto space-y-5">
@@ -145,10 +153,7 @@ export default function CheckoutPage() {
         <Card className="p-4 space-y-3">
           <div>
             <Label>Full Name *</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 
           <div>
@@ -165,10 +170,7 @@ export default function CheckoutPage() {
 
           <div>
             <Label>Email</Label>
-            <Input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
         </Card>
 
@@ -186,8 +188,7 @@ export default function CheckoutPage() {
               <RadioGroupItem value="pickup" />
               <div>
                 <div className="font-medium">
-                  Store Pickup{" "}
-                  <span className="text-green-600">FREE</span>
+                  Store Pickup <span className="text-green-600">FREE</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   16, Campbell Rd, Bengaluru 560047
@@ -198,9 +199,7 @@ export default function CheckoutPage() {
             <label className="flex gap-3 border p-3 rounded-lg">
               <RadioGroupItem value="delivery" />
               <div>
-                <div className="font-medium">
-                  Home Delivery ₹30
-                </div>
+                <div className="font-medium">Home Delivery ₹30</div>
                 <p className="text-sm text-muted-foreground">
                   Same day delivery
                 </p>
@@ -212,68 +211,39 @@ export default function CheckoutPage() {
             <Input
               placeholder="Delivery address"
               value={deliveryAddress}
-              onChange={(e) =>
-                setDeliveryAddress(e.target.value)
-              }
+              onChange={(e) => setDeliveryAddress(e.target.value)}
             />
           )}
         </Card>
 
         {/* PRESCRIPTION */}
         {requiresPrescription && (
-          <Card className="p-4 border space-y-2">
+          <Card className="p-4 space-y-2">
             {selectedPrescription ? (
-              <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+              <div className="flex gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium flex items-center gap-1">
-                    <FileText size={14} />
+                  <p className="text-sm font-medium">
                     Prescription selected
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedPrescription.imageUrls.length} page(s) •{" "}
-                    {new Date(
-                      selectedPrescription.createdAt
-                    ).toLocaleDateString("en-IN")}
-                  </p>
-
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="outline"
-                    className="mt-2"
-                  >
-                    <Link href="/prescription">
-                      Change Prescription
-                    </Link>
+                  <Button asChild size="sm" variant="outline" className="mt-2">
+                    <Link href="/prescription">Change Prescription</Link>
                   </Button>
                 </div>
               </div>
             ) : (
               <div className="flex gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-600" />
-                <div>
-                  <p className="font-medium text-sm">
-                    Prescription Required
-                  </p>
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="outline"
-                    className="mt-2"
-                  >
-                    <Link href="/prescription">
-                      Upload Prescription
-                    </Link>
-                  </Button>
-                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/prescription">Upload Prescription</Link>
+                </Button>
               </div>
             )}
           </Card>
         )}
       </div>
 
-      {/* FOOTER CTA */}
+      {/* FOOTER */}
       <div className="fixed bottom-16 left-0 right-0 border-t bg-background p-4">
         <Button
           className="w-full"
@@ -281,9 +251,7 @@ export default function CheckoutPage() {
           onClick={placeOrder}
           disabled={loading}
         >
-          {loading
-            ? "Placing order..."
-            : `Place Order • ₹${total}`}
+          {loading ? "Placing order..." : `Place Order • ₹${total}`}
         </Button>
       </div>
     </div>
