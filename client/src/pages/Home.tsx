@@ -25,7 +25,6 @@ export default function Home() {
       >
         <div className="px-4 pt-8 pb-3 sm:pt-10 sm:pb-3">
           <div className="max-w-lg mx-auto text-center">
-            {/* LOGO */}
             <div className="flex justify-center mb-4">
               <img
                 src="/logo.png"
@@ -53,7 +52,6 @@ export default function Home() {
               Order medicines online with prescription upload.
             </p>
 
-            {/* GOOGLE LOGIN */}
             {!isAuthenticated ? (
               <div className="flex justify-center">
                 <GoogleLoginButton />
@@ -70,7 +68,15 @@ export default function Home() {
       {/* ---------------- MAIN CONTENT ---------------- */}
       <div className="px-4 mt-4 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
-          <Link href="/prescription">
+          <Link
+            href="/prescription"
+            onClick={(e) => {
+              if (!isAuthenticated) {
+                e.preventDefault();
+                window.google?.accounts.id.prompt();
+              }
+            }}
+          >
             <Card className="p-4 cursor-pointer">
               <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
                 <Upload className="w-6 h-6 text-[#0A7A3D]" />
@@ -147,7 +153,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ---------------- STAFF LOGIN LINK ---------------- */}
         <div className="mt-10 text-center">
           <Link href="/staff/login">
             <span className="text-xs text-muted-foreground hover:underline cursor-pointer">
