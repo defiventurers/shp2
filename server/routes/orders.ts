@@ -4,10 +4,6 @@ import { orders, orderItems } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 import { eq } from "drizzle-orm";
 
-function generateOrderNumber() {
-  return `ORD-${Date.now()}`;
-}
-
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
@@ -19,53 +15,88 @@ export function registerOrderRoutes(app: Express) {
     requireAuth,
     async (req: AuthRequest, res: Response) => {
       try {
-        const {
-          items,
-          total,
-          deliveryType,
-          deliveryAddress,
-        } = req.body;
+        const user = req.user;
 
-        if (!items || !items.length) {
-          return res
-            .status(400)
-            .json({ error: "Order items are required" });
+        if (!user) {
+          return res.status(401).json({ error: "Unauthorized" });
         }
 
-        const orderNumber = generateOrderNumber();
+        const {
+          items,
+          deliveryType,
+          deliveryAddress,
+          subtotal,
+          deliveryFee,
+          total,
+          prescriptionId,
+          notes,
+        } = req.body;
 
-        const order = await db
+        /* ---------- HARD VALIDATION ---------- */
+
+        if (!Array.isArray(items) || items.length === 0) {
+          return res.status(400).json({ error: "Order must contain items" });
+        }
+
+        if (!user.firstName || !user.phone) {
+          return res.status(400).json({
+            error: "Name and phone number are required to place an order",
+          });
+        }
+
+        if (!deliveryType) {
+          return res.status(400).json({ error: "Delivery type is required" });
+        }
+
+        if (deliveryType === "delivery" && !deliveryAddress) {
+          return res
+            .status(400)
+            .json({ error: "Delivery address is required" });
+        }
+
+        /* ---------- ORDER NUMBER ---------- */
+        const orderNumber = `ORD-${Date.now()}`;
+
+        /* ---------- CREATE ORDER ---------- */
+        const [order] = await db
           .insert(orders)
           .values({
             orderNumber,
-            userId: req.user!.id,
-            total: Number(total), // ✅ force number
+            userId: user.id,
+            customerName: user.firstName,
+            customerPhone: user.phone,
+            customerEmail: user.email ?? null,
             deliveryType,
-            deliveryAddress: deliveryAddress || null,
+            deliveryAddress: deliveryAddress ?? null,
+            subtotal,
+            deliveryFee,
+            total,
             status: "pending",
+            prescriptionId: prescriptionId ?? null,
+            notes: notes ?? null,
           })
           .returning();
 
-        const orderId = order[0].id;
-
-        await db.insert(orderItems).values(
-          items.map((item: any) => ({
-            orderId,
+        /* ---------- CREATE ORDER ITEMS ---------- */
+        for (const item of items) {
+          await db.insert(orderItems).values({
+            orderId: order.id,
+            medicineId: item.medicineId ?? null,
             medicineName: item.medicineName,
-            quantity: Number(item.quantity),
-            price: Number(item.price), // ✅ force number
-          }))
-        );
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+          });
+        }
 
         res.json({
           success: true,
-          order: order[0],
+          orderId: order.id,
+          orderNumber: order.orderNumber,
         });
       } catch (err) {
-        console.error("❌ CREATE ORDER ERROR:", err);
-        res.status(500).json({
-          error: "Failed to create order",
-        });
+        console.error("CREATE ORDER ERROR:", err);
+        res.status(500).json({ error: "Failed to create order" });
       }
     }
   );
