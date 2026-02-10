@@ -4,6 +4,10 @@ import { orders, orderItems } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 import { eq } from "drizzle-orm";
 
+function generateOrderNumber() {
+  return `ORD-${Date.now()}`;
+}
+
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
@@ -28,11 +32,14 @@ export function registerOrderRoutes(app: Express) {
             .json({ error: "Order items are required" });
         }
 
+        const orderNumber = generateOrderNumber();
+
         const order = await db
           .insert(orders)
           .values({
+            orderNumber,
             userId: req.user!.id,
-            total,
+            total: Number(total), // ✅ force number
             deliveryType,
             deliveryAddress: deliveryAddress || null,
             status: "pending",
@@ -45,8 +52,8 @@ export function registerOrderRoutes(app: Express) {
           items.map((item: any) => ({
             orderId,
             medicineName: item.medicineName,
-            quantity: item.quantity,
-            price: item.price,
+            quantity: Number(item.quantity),
+            price: Number(item.price), // ✅ force number
           }))
         );
 
@@ -55,8 +62,10 @@ export function registerOrderRoutes(app: Express) {
           order: order[0],
         });
       } catch (err) {
-        console.error("CREATE ORDER ERROR:", err);
-        res.status(500).json({ error: "Failed to create order" });
+        console.error("❌ CREATE ORDER ERROR:", err);
+        res.status(500).json({
+          error: "Failed to create order",
+        });
       }
     }
   );
