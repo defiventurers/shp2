@@ -1,10 +1,10 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 /* ✅ MUST MATCH VERCEL ENV NAME */
-const API_URL = import.meta.env.VITE_API_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-if (!API_URL) {
-  throw new Error("VITE_API_URL is not defined");
+if (!API_BASE_URL) {
+  throw new Error("VITE_API_BASE_URL is not defined");
 }
 
 async function throwIfResNotOk(res: Response) {
@@ -19,7 +19,7 @@ export async function apiRequest(
   url: string,
   data?: unknown
 ) {
-  const res = await fetch(`${API_URL}${url}`, {
+  const res = await fetch(`${API_BASE_URL}${url}`, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -36,7 +36,7 @@ export const getQueryFn =
   <T>({ on401 }: { on401: UnauthorizedBehavior }): QueryFunction<T> =>
   async ({ queryKey }) => {
     const res = await fetch(
-      `${API_URL}${queryKey.join("/")}`,
+      `${API_BASE_URL}${queryKey.join("/")}`,
       {
         credentials: "include",
       }
