@@ -1,40 +1,43 @@
-import { Link } from "wouter";
-import { LogOut } from "lucide-react";
+import React from 'react';
 import { useAuth } from "@/hooks/useAuth";
-import { GoogleLoginButton } from "@/components/GoogleLoginButton";
-import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import Link from 'next/link';
+import { Button } from '@/components/Button';
 
-export function Header() {
+export default function Header() {
   const { isAuthenticated, user, logout, loading } = useAuth();
+  const { toast } = useToast();
 
-  if (loading) return null; // 🔑 prevents flicker + false logout
+  const handleLogout = async () => {
+    await logout();
+    toast({ title: "Logged out successfully" });
+  };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
-    <header className="sticky top-0 z-40 bg-background/90 backdrop-blur border-b">
-      <div className="flex items-center justify-between h-14 px-4 max-w-7xl mx-auto">
-        <Link href="/" className="font-semibold text-sm">
-          Sacred Heart
-        </Link>
-
-        {!isAuthenticated ? (
-          <GoogleLoginButton />
-        ) : (
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium truncate max-w-[160px]">
-              Signed in as {user?.name}
-            </span>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={logout}
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4 text-red-600" />
+    <header className="flex justify-between items-center p-4 bg-gray-800 text-white">
+      <Link href="/">
+        <a className="text-white font-bold">Home</a>
+      </Link>
+      <nav className="flex space-x-4">
+        {isAuthenticated && user ? (
+          <>
+            <span>Hello, {user.name}</span>
+            <Button onClick={handleLogout} color="gray">
+              Logout
             </Button>
-          </div>
+          </>
+        ) : (
+          <Link href="/signin">
+            <a>
+              <Button color="gray">Sign In</Button>
+            </a>
+          </Link>
         )}
-      </div>
+      </nav>
     </header>
   );
 }
