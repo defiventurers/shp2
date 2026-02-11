@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Clock3, Stethoscope } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { GoogleLoginButton } from "@/components/GoogleLoginButton";
 
 const STORAGE_KEY = "shp_onboarding_seen";
 
@@ -23,11 +24,6 @@ export function OnboardingModal() {
   function skip() {
     localStorage.setItem(STORAGE_KEY, "true");
     setOpen(false);
-  }
-
-  function handleLogin() {
-    localStorage.setItem(STORAGE_KEY, "true");
-    window.google?.accounts.id.prompt();
   }
 
   if (isAuthenticated) return null;
@@ -62,9 +58,12 @@ export function OnboardingModal() {
         </div>
 
         <div className="space-y-2">
-          <Button className="w-full" onClick={handleLogin}>
-            Sign in with Google
-          </Button>
+          <div
+            className="flex justify-center"
+            onClick={() => localStorage.setItem(STORAGE_KEY, "true")}
+          >
+            <GoogleLoginButton />
+          </div>
 
           <Button
             variant="ghost"

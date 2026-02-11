@@ -134,7 +134,7 @@ export default function CheckoutPage() {
 
       toast({
         title: "Order placed successfully 🎉",
-        description: `Order #${data.orderNumber}`,
+        description: `Order #${data.orderNumber} is currently ${data.status || "pending"}.`,
       });
 
       clearCart();

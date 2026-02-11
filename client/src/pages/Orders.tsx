@@ -20,11 +20,7 @@ interface OrderWithItems extends Order {
   items: OrderItem[];
 }
 
-/* ---------------- STATUS CONFIG ---------------- */
-const STATUS_MAP: Record<
-  string,
-  { label: string; icon: any; color: string }
-> = {
+const STATUS_MAP: Record<string, { label: string; icon: any; color: string }> = {
   pending: {
     label: "Pending",
     icon: Clock,
@@ -34,6 +30,11 @@ const STATUS_MAP: Record<
     label: "Confirmed",
     icon: CheckCircle,
     color: "bg-blue-100 text-blue-800",
+  },
+  processing: {
+    label: "Processing",
+    icon: Clock,
+    color: "bg-indigo-100 text-indigo-800",
   },
   ready: {
     label: "Ready",
@@ -60,23 +61,24 @@ const STATUS_MAP: Record<
 export default function Orders() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const { data: orders = [], isLoading } = useQuery<OrderWithItems[]>({
+  const { data: response, isLoading } = useQuery<{ orders: OrderWithItems[] } | OrderWithItems[]>({
     queryKey: ["/api/orders"],
     enabled: isAuthenticated,
+    refetchInterval: 20000,
   });
 
-  /* ---------------- LOADING ---------------- */
+  const orders: OrderWithItems[] = Array.isArray(response)
+    ? response
+    : response?.orders || [];
+
   if (authLoading || isLoading) {
     return <PageLoader />;
   }
 
-  /* ---------------- NOT LOGGED IN ---------------- */
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center">
-        <h2 className="text-xl font-semibold mb-2">
-          Login to View Orders
-        </h2>
+        <h2 className="text-xl font-semibold mb-2">Login to View Orders</h2>
         <p className="text-sm text-muted-foreground mb-6">
           Sign in to see your past and current orders
         </p>
@@ -87,7 +89,6 @@ export default function Orders() {
     );
   }
 
-  /* ---------------- NO ORDERS ---------------- */
   if (orders.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center">
@@ -102,7 +103,6 @@ export default function Orders() {
     );
   }
 
-  /* ---------------- ORDERS LIST ---------------- */
   return (
     <div className="min-h-screen bg-background pb-20">
       <div className="px-4 py-4 max-w-lg mx-auto space-y-4">
@@ -118,20 +118,14 @@ export default function Orders() {
         </Card>
 
         {orders.map((order) => {
-          const status =
-            STATUS_MAP[order.status || "pending"] ||
-            STATUS_MAP.pending;
-
+          const status = STATUS_MAP[order.status || "pending"] || STATUS_MAP.pending;
           const StatusIcon = status.icon;
 
           return (
             <Card key={order.id} className="p-4 space-y-3">
-              {/* HEADER */}
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-medium">
-                    Order #{order.orderNumber}
-                  </p>
+                  <p className="font-medium">Order #{order.orderNumber}</p>
                   <p className="text-xs text-muted-foreground">
                     {new Date(order.createdAt!).toLocaleString("en-IN")}
                   </p>
@@ -143,33 +137,23 @@ export default function Orders() {
                 </Badge>
               </div>
 
-              {/* ITEMS */}
+              <p className="text-xs text-muted-foreground">
+                Current status: <strong className="capitalize">{status.label}</strong>
+              </p>
+
               <div className="text-sm text-muted-foreground">
-                {order.items
-                  .map(
-                    (item) =>
-                      `${item.medicineName} × ${item.quantity}`
-                  )
-                  .join(", ")}
+                {order.items.map((item) => `${item.medicineName} × ${item.quantity}`).join(", ")}
               </div>
 
-              {/* FOOTER */}
               <div className="flex items-center justify-between pt-2 border-t">
                 <div>
-                  <p className="font-semibold">
-                    ₹{Number(order.total).toFixed(0)}
-                  </p>
+                  <p className="font-semibold">₹{Number(order.adjustedTotal || order.total).toFixed(0)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {order.deliveryType === "delivery"
-                      ? "Home Delivery"
-                      : "Store Pickup"}
+                    {order.deliveryType === "delivery" ? "Home Delivery" : "Store Pickup"}
                   </p>
                 </div>
 
-                <WhatsAppButton
-                  orderId={order.orderNumber}
-                  variant="inline"
-                />
+                <WhatsAppButton orderId={order.orderNumber} variant="inline" />
               </div>
             </Card>
           );

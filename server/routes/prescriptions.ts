@@ -3,7 +3,7 @@ import multer from "multer";
 import cloudinary from "cloudinary";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
-import { prescriptions } from "@shared/schema";
+import { prescriptions, orders } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 
 /* -----------------------------
@@ -273,6 +273,11 @@ export function registerPrescriptionRoutes(app: Express) {
     async (req: AuthRequest, res: Response) => {
       try {
         const { id } = req.params;
+
+        await db
+          .update(orders)
+          .set({ prescriptionId: null, updatedAt: new Date() })
+          .where(eq(orders.prescriptionId, id));
 
         await db
           .delete(prescriptions)

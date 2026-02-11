@@ -1,16 +1,20 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCartContext } from "@/context/CartContext";
+import { useAuth } from "@/hooks/useAuth";
 
 type Order = {
   id: string;
   orderNumber: string;
   status: string;
   total: string;
+  adjustedTotal?: string;
   createdAt: string;
+  deliveryAddress?: string | null;
   items: {
     medicineName: string;
     quantity: number;
@@ -27,20 +31,31 @@ type PrescriptionItem = {
 const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function Profile() {
+  const [, navigate] = useLocation();
+  const { user, refresh } = useAuth();
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDate, setEditDate] = useState("");
 
+  const [profileName, setProfileName] = useState(user?.name || "");
+  const [profilePhone, setProfilePhone] = useState(user?.phone || "");
+
   const newPrescriptionInputRef = useRef<HTMLInputElement>(null);
 
   const { prescriptions, refreshPrescriptions } = useCartContext();
 
   useEffect(() => {
+    setProfileName(user?.name || "");
+    setProfilePhone(user?.phone || "");
+  }, [user?.name, user?.phone]);
+
+  useEffect(() => {
     fetch(`${API_BASE}/api/orders`, { credentials: "include" })
       .then((r) => r.json())
-      .then((data) => setOrders(data.orders || []))
+      .then((data) => setOrders(data.orders || data || []))
       .finally(() => setLoading(false));
   }, []);
 
@@ -61,6 +76,30 @@ export default function Profile() {
     }
 
     return fallback;
+  }
+
+  async function saveProfile() {
+    if (!/^[6-9]\d{9}$/.test(profilePhone)) {
+      alert("Enter valid 10-digit Indian mobile number");
+      return;
+    }
+
+    const res = await fetch(`${API_BASE}/api/users/me`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        name: profileName.trim(),
+        phone: profilePhone.trim(),
+      }),
+    });
+
+    if (res.ok) {
+      await refresh();
+      alert("Profile updated");
+    } else {
+      alert(await parseError(res, "Failed to update profile"));
+    }
   }
 
   async function deletePrescription(id: string) {
@@ -147,14 +186,11 @@ export default function Profile() {
     const formData = new FormData();
     Array.from(files).forEach((f) => formData.append("images", f));
 
-    const res = await fetch(
-      `${API_BASE}/api/prescriptions/${prescriptionId}/images`,
-      {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      }
-    );
+    const res = await fetch(`${API_BASE}/api/prescriptions/${prescriptionId}/images`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
 
     if (event?.target) {
       event.target.value = "";
@@ -191,7 +227,43 @@ export default function Profile() {
 
   return (
     <div className="max-w-lg mx-auto p-4 space-y-6">
-      {/* PRESCRIPTIONS */}
+      <Card className="p-4 space-y-3">
+        <h2 className="text-lg font-semibold">My Profile</h2>
+        <Input
+          value={profileName}
+          onChange={(e) => setProfileName(e.target.value)}
+          placeholder="Full name"
+        />
+        <Input
+          value={profilePhone}
+          inputMode="numeric"
+          maxLength={10}
+          onChange={(e) => setProfilePhone(e.target.value.replace(/\D/g, ""))}
+          placeholder="10-digit phone"
+        />
+        <Button onClick={saveProfile}>Save Profile</Button>
+      </Card>
+
+      <Card className="p-4 space-y-2 border-green-200 bg-green-50">
+        <h3 className="font-semibold text-sm">Order Again</h3>
+        {orders.slice(0, 3).map((order) => (
+          <div key={order.id} className="flex items-center justify-between text-sm">
+            <span>
+              #{order.orderNumber} • {order.items[0]?.medicineName || "Medicines"}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                navigate(`/inventory?search=${encodeURIComponent(order.items[0]?.medicineName || "")}`)
+              }
+            >
+              Reorder
+            </Button>
+          </div>
+        ))}
+      </Card>
+
       <div>
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold">My Prescriptions</h2>
@@ -212,15 +284,12 @@ export default function Profile() {
         </div>
 
         {prescriptions.length === 0 && (
-          <p className="text-muted-foreground text-sm">
-            No prescriptions uploaded yet
-          </p>
+          <p className="text-muted-foreground text-sm">No prescriptions uploaded yet</p>
         )}
 
         <div className="space-y-3">
           {(prescriptions as PrescriptionItem[]).map((p) => (
             <Card key={p.id} className="p-3 space-y-2">
-              {/* HEADER */}
               <div className="flex justify-between items-center gap-2">
                 {editingId === p.id ? (
                   <div className="space-y-2 w-full">
@@ -291,7 +360,6 @@ export default function Profile() {
                 )}
               </div>
 
-              {/* IMAGES */}
               <div className="flex gap-2 overflow-x-auto">
                 {p.imageUrls.map((url, index) => (
                   <div key={`${url}-${index}`} className="relative group">
@@ -305,7 +373,6 @@ export default function Profile() {
                   </div>
                 ))}
 
-                {/* ADD PAGES */}
                 <label className="h-20 w-20 flex items-center justify-center border rounded cursor-pointer text-sm">
                   + Add
                   <input
@@ -322,7 +389,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* ORDERS */}
       <div>
         <h2 className="text-lg font-semibold mb-2">My Orders</h2>
 
@@ -341,6 +407,10 @@ export default function Profile() {
               {new Date(order.createdAt).toLocaleDateString("en-IN")}
             </div>
 
+            {order.deliveryAddress && (
+              <p className="text-xs text-muted-foreground">Delivery: {order.deliveryAddress}</p>
+            )}
+
             <ul className="text-sm list-disc ml-5">
               {order.items.map((i, idx) => (
                 <li key={idx}>
@@ -349,7 +419,9 @@ export default function Profile() {
               ))}
             </ul>
 
-            <div className="font-semibold">₹{Number(order.total).toFixed(0)}</div>
+            <div className="font-semibold">
+              ₹{Number(order.adjustedTotal || order.total).toFixed(0)}
+            </div>
           </Card>
         ))}
       </div>

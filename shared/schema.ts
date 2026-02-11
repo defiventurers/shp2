@@ -97,6 +97,8 @@ export const orders = pgTable("orders", {
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).default("0"),
+  adjustedTotal: decimal("adjusted_total", { precision: 10, scale: 2 }),
 
   status: varchar("status").notNull().default("pending"),
   prescriptionId: varchar("prescription_id"),

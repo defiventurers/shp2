@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import MedicineCard from "@/components/MedicineCard";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Medicine = {
   id: string;
@@ -10,6 +13,7 @@ type Medicine = {
   manufacturer: string;
   imageUrl: string | null;
   categoryId: string | null;
+  categoryName?: string;
 };
 
 type Category = {
@@ -24,107 +28,112 @@ const API_BASE =
 const PAGE_SIZE = 24;
 
 export default function Inventory() {
+  const [location] = useLocation();
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] =
+  const [selectedCategoryName, setSelectedCategoryName] =
     useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalMedicines, setTotalMedicines] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  /* ---------------- LOAD DATA ---------------- */
   useEffect(() => {
-    async function loadData() {
+    async function loadCategories() {
       try {
-        const medRes = await fetch(`${API_BASE}/api/medicines`);
-        if (!medRes.ok) throw new Error("Medicines API failed");
+        const catRes = await fetch(`${API_BASE}/api/categories`);
+        if (!catRes.ok) return;
 
-        const medJson = await medRes.json();
-        setMedicines(medJson.medicines || []);
-
-        // Categories are OPTIONAL – never block medicines
-        try {
-          const catRes = await fetch(`${API_BASE}/api/categories`);
-          if (catRes.ok) {
-            const catJson = await catRes.json();
-
-            // 🔒 DEFENSIVE PARSE
-            if (Array.isArray(catJson)) {
-              setCategories(catJson);
-            } else if (Array.isArray(catJson.categories)) {
-              setCategories(catJson.categories);
-            } else {
-              setCategories([]);
-            }
-          }
-        } catch {
-          setCategories([]);
+        const catJson = await catRes.json();
+        if (Array.isArray(catJson.categories)) {
+          setCategories(catJson.categories);
         }
-
-        setPage(1);
-      } catch (err) {
-        console.error("❌ Inventory load failed:", err);
-        setError("Failed to load medicines");
-      } finally {
-        setLoading(false);
+      } catch {
+        setCategories([]);
       }
     }
 
-    loadData();
+    loadCategories();
   }, []);
 
-  /* ---------------- FILTERING ---------------- */
-  const filteredMedicines = useMemo(() => {
-    return medicines.filter((m) => {
-      const matchesSearch =
-        !search ||
-        m.name.toLowerCase().includes(search.toLowerCase()) ||
-        m.manufacturer.toLowerCase().includes(search.toLowerCase());
 
-      const matchesCategory =
-        !selectedCategoryId || m.categoryId === selectedCategoryId;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const qs = params.get("search");
+    if (qs) setSearch(qs);
+  }, [location]);
 
-      return matchesSearch && matchesCategory;
-    });
-  }, [medicines, search, selectedCategoryId]);
+  useEffect(() => {
+    let ignore = false;
 
-  /* ---------------- PAGINATION ---------------- */
-  const totalPages = Math.ceil(filteredMedicines.length / PAGE_SIZE);
+    async function loadMedicines() {
+      try {
+        setLoading(true);
 
-  const paginatedMedicines = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filteredMedicines.slice(start, start + PAGE_SIZE);
-  }, [filteredMedicines, page]);
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("limit", String(PAGE_SIZE));
+
+        if (search.trim()) params.set("q", search.trim());
+        if (selectedCategoryName) params.set("category", selectedCategoryName);
+
+        const medRes = await fetch(`${API_BASE}/api/medicines?${params.toString()}`);
+        if (!medRes.ok) throw new Error("Medicines API failed");
+
+        const medJson = await medRes.json();
+        if (ignore) return;
+
+        setMedicines(medJson.medicines || []);
+        setTotalPages(medJson.totalPages || 1);
+        setTotalMedicines(medJson.total || 0);
+      } catch (err) {
+        if (!ignore) {
+          console.error("❌ Inventory load failed:", err);
+          setError("Failed to load medicines");
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadMedicines();
+
+    return () => {
+      ignore = true;
+    };
+  }, [page, search, selectedCategoryName]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, selectedCategoryId]);
+  }, [search, selectedCategoryName]);
 
-  /* ---------------- STATES ---------------- */
-  if (loading) {
-    return (
-      <div className="p-6 text-center text-gray-500">
-        Loading medicines…
-      </div>
-    );
-  }
+  const title = useMemo(() => {
+    if (selectedCategoryName) return `Medicines • ${selectedCategoryName}`;
+    return "Medicines";
+  }, [selectedCategoryName]);
 
   if (error) {
-    return (
-      <div className="p-6 text-center text-red-600">
-        {error}
-      </div>
-    );
+    return <div className="p-6 text-center text-red-600">{error}</div>;
   }
 
-  /* ---------------- UI ---------------- */
   return (
     <div className="max-w-6xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Medicines</h1>
+      <h1 className="text-2xl font-bold mb-2">{title}</h1>
+      <p className="text-sm text-muted-foreground mb-4">
+        {totalMedicines > 0
+          ? `${totalMedicines.toLocaleString()} medicines found`
+          : "Search medicines by name or manufacturer"}
+      </p>
 
-      {/* 🔍 SEARCH */}
+      <Card className="p-3 mb-4 border-green-200 bg-green-50">
+        <p className="text-xs text-muted-foreground">
+          Verified inventory with fast search. Prescription medicines are clearly marked with Rx.
+        </p>
+      </Card>
+
       <input
         type="text"
         placeholder="Search medicine or manufacturer..."
@@ -133,15 +142,12 @@ export default function Inventory() {
         className="w-full mb-4 px-4 py-2 border rounded-md focus:outline-none focus:ring"
       />
 
-      {/* 🧩 CATEGORY FILTER */}
       {categories.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-2 mb-6">
           <button
-            onClick={() => setSelectedCategoryId(null)}
+            onClick={() => setSelectedCategoryName(null)}
             className={`px-3 py-1 rounded-full text-sm border whitespace-nowrap ${
-              selectedCategoryId === null
-                ? "bg-primary text-white"
-                : "bg-white"
+              selectedCategoryName === null ? "bg-primary text-white" : "bg-white"
             }`}
           >
             ALL
@@ -150,11 +156,9 @@ export default function Inventory() {
           {categories.map((cat) => (
             <button
               key={cat.id}
-              onClick={() => setSelectedCategoryId(cat.id)}
+              onClick={() => setSelectedCategoryName(cat.name)}
               className={`px-3 py-1 rounded-full text-sm border whitespace-nowrap ${
-                selectedCategoryId === cat.id
-                  ? "bg-primary text-white"
-                  : "bg-white"
+                selectedCategoryName === cat.name ? "bg-primary text-white" : "bg-white"
               }`}
             >
               {cat.name}
@@ -163,20 +167,26 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* MEDICINE GRID */}
-      {paginatedMedicines.length === 0 ? (
-        <div className="text-gray-500 text-center">
-          No medicines found
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="p-4 space-y-3">
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-20 w-full" />
+            </Card>
+          ))}
         </div>
+      ) : medicines.length === 0 ? (
+        <div className="text-gray-500 text-center">No medicines found</div>
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginatedMedicines.map((medicine) => (
+            {medicines.map((medicine) => (
               <MedicineCard key={medicine.id} medicine={medicine} />
             ))}
           </div>
 
-          {/* PAGINATION */}
           <div className="flex items-center justify-center gap-4 mt-8">
             <button
               disabled={page === 1}
