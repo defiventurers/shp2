@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npx tsx server/index.ts",
+    "start": "tsx server/index.ts",
     "import:bangalore": "tsx server/scripts/importBangaloreInventory.ts"
   },
   "dependencies": {

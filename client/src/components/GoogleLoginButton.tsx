@@ -11,6 +11,7 @@ declare global {
 
 export function GoogleLoginButton() {
   const buttonRef = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
   const { isAuthenticated, user, refresh, logout, loading } = useAuth();
   const { toast } = useToast();
 
@@ -32,7 +33,8 @@ export function GoogleLoginButton() {
     if (!window.google || !buttonRef.current) return;
     if (!API_URL || !GOOGLE_CLIENT_ID) return;
 
-    window.google.accounts.id.initialize({
+    if (!initializedRef.current) {
+      window.google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
       callback: async (response: any) => {
         try {
@@ -63,13 +65,20 @@ export function GoogleLoginButton() {
           });
         }
       },
-    });
+      });
+      initializedRef.current = true;
+    }
 
+    buttonRef.current.innerHTML = "";
     window.google.accounts.id.renderButton(buttonRef.current, {
       theme: "outline",
       size: "large",
       width: 240,
     });
+
+    return () => {
+      window.google?.accounts.id.cancel();
+    };
   }, [isAuthenticated, loading, API_URL, GOOGLE_CLIENT_ID, refresh, toast]);
 
   /* ---------------- LOGOUT ---------------- */
