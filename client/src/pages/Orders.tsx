@@ -6,6 +6,7 @@ import {
   Truck,
   XCircle,
   Package,
+  ShieldCheck,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -106,6 +107,15 @@ export default function Orders() {
     <div className="min-h-screen bg-background pb-20">
       <div className="px-4 py-4 max-w-lg mx-auto space-y-4">
         <h1 className="text-lg font-semibold">My Orders</h1>
+
+        <Card className="p-3 bg-green-50 border-green-200">
+          <div className="flex gap-2">
+            <ShieldCheck className="w-4 h-4 text-[#0A7A3D] mt-0.5" />
+            <p className="text-xs text-muted-foreground">
+              Need faster support? Tap "Contact Pharmacist" on any order and we will assist you with status, substitutions, and delivery updates.
+            </p>
+          </div>
+        </Card>
 
         {orders.map((order) => {
           const status =
