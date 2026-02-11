@@ -1,14 +1,9 @@
 {
   "buildCommand": "if [ -f client/package.json ]; then npm --prefix client run build && rm -rf dist && cp -r client/dist dist; else npm run build; fi",
   "outputDirectory": "dist",
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/((?!api/|.*\\..*).*)",
-      "destination": "/index.html"
-    }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "^/api/(.*)$", "dest": "/api/$1" },
+    { "src": "^(?!/api/).*$", "dest": "/index.html" }
   ]
 }
