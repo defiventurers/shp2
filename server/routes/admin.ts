@@ -4,55 +4,7 @@ import path from "path";
 import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
-
-/* ---------------- CATEGORY NORMALIZER ---------------- */
-function normalizeCategory(raw: any): string {
-  if (!raw) return "NO CATEGORY";
-
-  const cleaned = String(raw).trim().toUpperCase();
-
-  const MAP: Record<string, string> = {
-    "TABLET": "TABLETS",
-    "TABLETS": "TABLETS",
-
-    "CAPSULE": "CAPSULES",
-    "CAPSULES": "CAPSULES",
-
-    "SYRUP": "SYRUPS",
-    "SYRUPS": "SYRUPS",
-
-    "INJECTION": "INJECTIONS",
-    "INJECTIONS": "INJECTIONS",
-
-    "DROP": "DROPS",
-    "DROPS": "DROPS",
-
-    "TOPICAL": "TOPICALS",
-    "TOPICALS": "TOPICALS",
-
-    "POWDER": "POWDERS",
-    "POWDERS": "POWDERS",
-
-    "MOUTHWASH": "MOUTHWASH",
-
-    "INHALER": "INHALERS",
-    "INHALERS": "INHALERS",
-
-    "DEVICE": "DEVICES",
-    "DEVICES": "DEVICES",
-
-    "SCRUB": "SCRUBS",
-    "SCRUBS": "SCRUBS",
-
-    "SOLUTION": "SOLUTIONS",
-    "SOLUTIONS": "SOLUTIONS",
-
-    "": "NO CATEGORY",
-    "NO CATEGORY": "NO CATEGORY",
-  };
-
-  return MAP[cleaned] ?? "NO CATEGORY";
-}
+import { resolveCategoryNameFromRaw } from "../utils/categoryMapping";
 
 /* ---------------- ROUTES ---------------- */
 export function registerAdminRoutes(app: Express) {
@@ -61,12 +13,7 @@ export function registerAdminRoutes(app: Express) {
   app.post("/api/admin/import-inventory", async (_req: Request, res: Response) => {
     console.log("🚨 ADMIN IMPORT ROUTE HIT");
 
-    const csvPath = path.join(
-      process.cwd(),
-      "server",
-      "data",
-      "easyload_inventory.csv"
-    );
+    const csvPath = path.join(process.cwd(), "server", "data", "easyload_inventory.csv");
 
     console.log("📍 CSV PATH:", csvPath);
 
@@ -127,15 +74,14 @@ export function registerAdminRoutes(app: Express) {
         const isRx = Number(row["Is Prescription Required?"]) === 1;
 
         /* -------- OTHER FIELDS -------- */
-        const manufacturer = String(
-          row["Manufacturer"] || "NOT KNOWN"
-        ).trim();
+        const manufacturer = String(row["Manufacturer"] || "NOT KNOWN").trim();
 
         const imageUrl = String(row["Image URL"] || "").trim();
+        const rawSourceFile = String(row["Source File"] || row["Category"] || "Others").trim();
 
         /* -------- CATEGORY -------- */
-        const normalizedCategory = normalizeCategory(row["Category"]);
-        const categoryId = categoryMap.get(normalizedCategory);
+        const categoryName = resolveCategoryNameFromRaw(rawSourceFile, row["Category"]);
+        const categoryId = categoryMap.get(categoryName.toUpperCase());
 
         if (!categoryId) {
           skipped++;
@@ -153,7 +99,7 @@ export function registerAdminRoutes(app: Express) {
           imageUrl: imageUrl || null,
           categoryId,
           stock: null,
-          sourceFile: "easyload_inventory.csv",
+          sourceFile: rawSourceFile,
         });
 
         if (batch.length >= BATCH_SIZE) {
@@ -165,7 +111,7 @@ export function registerAdminRoutes(app: Express) {
             console.log(`➕ Inserted ${inserted}`);
           }
         }
-      } catch (err) {
+      } catch {
         skipped++;
       }
     }

@@ -135,7 +135,7 @@ export default function Home() {
                 Browse Inventory
               </h3>
               <p className="text-xs text-muted-foreground">
-                1000+ medicines available
+                18000+ medicines available
               </p>
             </Card>
           </Link>
