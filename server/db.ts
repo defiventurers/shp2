@@ -70,7 +70,6 @@ export async function migratePrescriptions() {
       `);
     }
 
-
     // 4️⃣ Ensure name column exists
     const nameCheck = await client.query(`
       SELECT column_name
@@ -104,7 +103,6 @@ export async function migratePrescriptions() {
         ADD COLUMN prescription_date VARCHAR
       `);
     }
-
 
     // 6️⃣ Ensure orders.discount_amount exists
     const discountCheck = await client.query(`
@@ -146,7 +144,6 @@ export async function migratePrescriptions() {
       `);
     }
 
-
     // 8️⃣ Backfill medicines.category_id using source_file mapping
     const categoryRows = await client.query(`
       SELECT id, name FROM categories
@@ -161,7 +158,7 @@ export async function migratePrescriptions() {
       CAPSULES: "CAPSULES",
       SYRUPS: "SYRUPS",
       INJECTIONS: "INJECTIONS",
-  "DIABETIC INJECTIONS": "INJECTIONS",
+      "DIABETIC INJECTIONS": "INJECTIONS",
       TOPICALS: "TOPICALS",
       DROPS: "DROPS",
       POWDERS: "POWDERS",

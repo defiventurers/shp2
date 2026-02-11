@@ -1,423 +1,195 @@
-import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useCartContext } from "@/context/CartContext";
-import { useAuth } from "@/hooks/useAuth";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+import * as schema from "@shared/schema";
 
-type Order = {
-  id: string;
-  orderNumber: string;
-  status: string;
-  total: string;
-  adjustedTotal?: string;
-  createdAt: string;
-  deliveryAddress?: string | null;
-  items: {
-    medicineName: string;
-    quantity: number;
-  }[];
-};
+const { Pool } = pg;
 
-type PrescriptionItem = {
-  id: string;
-  imageUrls: string[];
-  name?: string;
-  prescriptionDate?: string;
-};
+/* =========================
+   Postgres Pool
+========================= */
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-const API_BASE = import.meta.env.VITE_API_URL;
+/* =========================
+   Drizzle DB
+========================= */
+export const db = drizzle(pool, { schema });
 
-export default function Profile() {
-  const [, navigate] = useLocation();
-  const { user, refresh } = useAuth();
+/* =========================
+   🔄 Runtime Migration
+   (SAFE on Render Free Tier)
+========================= */
+export async function migratePrescriptions() {
+  const client = await pool.connect();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editDate, setEditDate] = useState("");
+  try {
+    console.log("🔄 Running prescriptions migration…");
 
-  const [profileName, setProfileName] = useState(user?.name || "");
-  const [profilePhone, setProfilePhone] = useState(user?.phone || "");
+    // 1️⃣ Ensure image_urls exists
+    const imageUrlsCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'prescriptions'
+      AND column_name = 'image_urls'
+    `);
 
-  const newPrescriptionInputRef = useRef<HTMLInputElement>(null);
+    if (imageUrlsCheck.rowCount === 0) {
+      console.log("🛠 Adding image_urls column");
 
-  const { prescriptions, refreshPrescriptions } = useCartContext();
-
-  useEffect(() => {
-    setProfileName(user?.name || "");
-    setProfilePhone(user?.phone || "");
-  }, [user?.name, user?.phone]);
-
-  useEffect(() => {
-    fetch(`${API_BASE}/api/orders`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setOrders(data.orders || data || []))
-      .finally(() => setLoading(false));
-  }, []);
-
-  async function parseError(res: Response, fallback: string) {
-    try {
-      const data = await res.json();
-      if (data?.error) return data.error;
-      if (data?.message) return data.message;
-    } catch {
-      // ignore
+      await client.query(`
+        ALTER TABLE prescriptions
+        ADD COLUMN image_urls JSONB
+      `);
     }
 
-    try {
-      const text = await res.text();
-      if (text) return text;
-    } catch {
-      // ignore
+    // 2️⃣ Migrate legacy image_url → image_urls[]
+    const legacyCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'prescriptions'
+      AND column_name = 'image_url'
+    `);
+
+    if (legacyCheck.rowCount > 0) {
+      console.log("🔁 Migrating legacy image_url → image_urls[]");
+
+      await client.query(`
+        UPDATE prescriptions
+        SET image_urls = jsonb_build_array(image_url)
+        WHERE image_url IS NOT NULL
+        AND image_urls IS NULL
+      `);
+
+      // 3️⃣ Drop NOT NULL constraint on image_url
+      console.log("🧹 Removing NOT NULL constraint on image_url");
+
+      await client.query(`
+        ALTER TABLE prescriptions
+        ALTER COLUMN image_url DROP NOT NULL
+      `);
     }
 
-    return fallback;
+    // 4️⃣ Ensure name column exists
+    const nameCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'prescriptions'
+      AND column_name = 'name'
+    `);
+
+    if (nameCheck.rowCount === 0) {
+      console.log("🛠 Adding name column");
+
+      await client.query(`
+        ALTER TABLE prescriptions
+        ADD COLUMN name VARCHAR
+      `);
+    }
+
+    // 5️⃣ Ensure prescription_date column exists
+    const dateCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'prescriptions'
+      AND column_name = 'prescription_date'
+    `);
+
+    if (dateCheck.rowCount === 0) {
+      console.log("🛠 Adding prescription_date column");
+
+      await client.query(`
+        ALTER TABLE prescriptions
+        ADD COLUMN prescription_date VARCHAR
+      `);
+    }
+
+    // 6️⃣ Ensure orders.discount_amount exists
+    const discountCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'orders'
+      AND column_name = 'discount_amount'
+    `);
+
+    if (discountCheck.rowCount === 0) {
+      console.log("🛠 Adding discount_amount column");
+
+      await client.query(`
+        ALTER TABLE orders
+        ADD COLUMN discount_amount NUMERIC(10,2) DEFAULT 0
+      `);
+    }
+
+    // 7️⃣ Ensure orders.adjusted_total exists
+    const adjustedCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'orders'
+      AND column_name = 'adjusted_total'
+    `);
+
+    if (adjustedCheck.rowCount === 0) {
+      console.log("🛠 Adding adjusted_total column");
+
+      await client.query(`
+        ALTER TABLE orders
+        ADD COLUMN adjusted_total NUMERIC(10,2)
+      `);
+
+      await client.query(`
+        UPDATE orders
+        SET adjusted_total = total
+        WHERE adjusted_total IS NULL
+      `);
+    }
+
+    // 8️⃣ Backfill medicines.category_id using source_file mapping
+    const categoryRows = await client.query(`
+      SELECT id, name FROM categories
+    `);
+    const catMap: Record<string, string> = {};
+    for (const row of categoryRows.rows) {
+      catMap[String(row.name).toUpperCase()] = row.id;
+    }
+
+    const sourceToCategory: Record<string, string> = {
+      TABLETS: "TABLETS",
+      CAPSULES: "CAPSULES",
+      SYRUPS: "SYRUPS",
+      INJECTIONS: "INJECTIONS",
+      "DIABETIC INJECTIONS": "INJECTIONS",
+      TOPICALS: "TOPICALS",
+      DROPS: "DROPS",
+      POWDERS: "POWDERS",
+      MOUTHWASH: "MOUTHWASH",
+      INHALERS: "INHALERS",
+      DEVICES: "DEVICES",
+      SCRUBS: "SCRUBS",
+      SOLUTIONS: "SOLUTIONS",
+      OTHERS: "NO CATEGORY",
+      "NO CATEGORY": "NO CATEGORY",
+    };
+
+    for (const [sourceFile, categoryName] of Object.entries(sourceToCategory)) {
+      const categoryId = catMap[categoryName];
+      if (!categoryId) continue;
+
+      await client.query(
+        `
+          UPDATE medicines
+          SET category_id = $1
+          WHERE (category_id IS NULL OR category_id = '')
+          AND UPPER(COALESCE(source_file, 'OTHERS')) = $2
+        `,
+        [categoryId, sourceFile]
+      );
+    }
+
+    console.log("✅ Prescription migration complete");
+  } catch (err) {
+    console.error("❌ Prescription migration failed:", err);
+  } finally {
+    client.release();
   }
-
-  async function saveProfile() {
-    if (!/^[6-9]\d{9}$/.test(profilePhone)) {
-      alert("Enter valid 10-digit Indian mobile number");
-      return;
-    }
-
-    const res = await fetch(`${API_BASE}/api/users/me`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        name: profileName.trim(),
-        phone: profilePhone.trim(),
-      }),
-    });
-
-    if (res.ok) {
-      await refresh();
-      alert("Profile updated");
-    } else {
-      alert(await parseError(res, "Failed to update profile"));
-    }
-  }
-
-  async function deletePrescription(id: string) {
-    if (!confirm("Delete this prescription permanently?")) return;
-
-    const res = await fetch(`${API_BASE}/api/prescriptions/${id}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-
-    if (res.ok) {
-      await refreshPrescriptions();
-    } else {
-      alert(await parseError(res, "Failed to delete prescription"));
-    }
-  }
-
-  async function savePrescriptionMeta(id: string) {
-    if (!editName.trim() && !editDate.trim()) {
-      alert("Please enter prescription name or date");
-      return;
-    }
-
-    const payload: { name?: string; prescriptionDate?: string } = {};
-
-    if (editName.trim()) {
-      payload.name = editName.trim();
-    }
-
-    if (editDate.trim()) {
-      payload.prescriptionDate = editDate.trim();
-    }
-
-    const res = await fetch(`${API_BASE}/api/prescriptions/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
-
-    if (res.ok) {
-      setEditingId(null);
-      setEditName("");
-      setEditDate("");
-      await refreshPrescriptions();
-    } else {
-      alert(await parseError(res, "Update failed"));
-    }
-  }
-
-  async function uploadNewPrescription(
-    files: FileList | null,
-    event?: ChangeEvent<HTMLInputElement>
-  ) {
-    if (!files || files.length === 0) return;
-
-    const formData = new FormData();
-    Array.from(files).forEach((f) => formData.append("images", f));
-
-    const res = await fetch(`${API_BASE}/api/prescriptions/upload`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-
-    if (event?.target) {
-      event.target.value = "";
-    }
-
-    if (res.ok) {
-      await refreshPrescriptions();
-    } else {
-      alert(await parseError(res, "Upload failed"));
-    }
-  }
-
-  async function addPages(
-    prescriptionId: string,
-    files: FileList | null,
-    event?: ChangeEvent<HTMLInputElement>
-  ) {
-    if (!files || files.length === 0) return;
-
-    const formData = new FormData();
-    Array.from(files).forEach((f) => formData.append("images", f));
-
-    const res = await fetch(`${API_BASE}/api/prescriptions/${prescriptionId}/images`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-
-    if (event?.target) {
-      event.target.value = "";
-    }
-
-    if (res.ok) {
-      await refreshPrescriptions();
-    } else {
-      alert(await parseError(res, "Failed to add pages"));
-    }
-  }
-
-  async function deletePage(prescriptionId: string, index: number) {
-    if (!confirm("Delete this page?")) return;
-
-    const res = await fetch(
-      `${API_BASE}/api/prescriptions/${prescriptionId}/images/${index}`,
-      {
-        method: "DELETE",
-        credentials: "include",
-      }
-    );
-
-    if (res.ok) {
-      await refreshPrescriptions();
-    } else {
-      alert(await parseError(res, "Cannot delete page"));
-    }
-  }
-
-  if (loading) {
-    return <div className="p-6 text-center">Loading profile…</div>;
-  }
-
-  return (
-    <div className="max-w-lg mx-auto p-4 space-y-6">
-      <Card className="p-4 space-y-3">
-        <h2 className="text-lg font-semibold">My Profile</h2>
-        <Input
-          value={profileName}
-          onChange={(e) => setProfileName(e.target.value)}
-          placeholder="Full name"
-        />
-        <Input
-          value={profilePhone}
-          inputMode="numeric"
-          maxLength={10}
-          onChange={(e) => setProfilePhone(e.target.value.replace(/\D/g, ""))}
-          placeholder="10-digit phone"
-        />
-        <Button onClick={saveProfile}>Save Profile</Button>
-      </Card>
-
-      <Card className="p-4 space-y-2 border-green-200 bg-green-50">
-        <h3 className="font-semibold text-sm">Order Again</h3>
-        {orders.slice(0, 3).map((order) => (
-          <div key={order.id} className="flex items-center justify-between text-sm">
-            <span>
-              #{order.orderNumber} • {order.items[0]?.medicineName || "Medicines"}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                navigate(`/inventory?search=${encodeURIComponent(order.items[0]?.medicineName || "")}`)
-              }
-            >
-              Reorder
-            </Button>
-          </div>
-        ))}
-      </Card>
-
-      <div>
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-lg font-semibold">My Prescriptions</h2>
-          <Button
-            size="sm"
-            onClick={() => newPrescriptionInputRef.current?.click()}
-          >
-            Upload New
-          </Button>
-          <input
-            ref={newPrescriptionInputRef}
-            type="file"
-            multiple
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => uploadNewPrescription(e.target.files, e)}
-          />
-        </div>
-
-        {prescriptions.length === 0 && (
-          <p className="text-muted-foreground text-sm">No prescriptions uploaded yet</p>
-        )}
-
-        <div className="space-y-3">
-          {(prescriptions as PrescriptionItem[]).map((p) => (
-            <Card key={p.id} className="p-3 space-y-2">
-              <div className="flex justify-between items-center gap-2">
-                {editingId === p.id ? (
-                  <div className="space-y-2 w-full">
-                    <Input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      placeholder="Prescription name"
-                    />
-                    <Input
-                      value={editDate}
-                      onChange={(e) => setEditDate(e.target.value)}
-                      placeholder="Prescription date (optional)"
-                    />
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => savePrescriptionMeta(p.id)}>
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingId(null);
-                          setEditName("");
-                          setEditDate("");
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <span className="text-sm font-medium block">
-                        {p.name || "Prescription"} ({p.imageUrls.length} page
-                        {p.imageUrls.length > 1 ? "s" : ""})
-                      </span>
-                      {p.prescriptionDate && (
-                        <p className="text-xs text-muted-foreground">Date: {p.prescriptionDate}</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditingId(p.id);
-                          setEditName(p.name || "");
-                          setEditDate(p.prescriptionDate || "");
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deletePrescription(p.id)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto">
-                {p.imageUrls.map((url, index) => (
-                  <div key={`${url}-${index}`} className="relative group">
-                    <img src={url} className="h-20 rounded border" />
-                    <button
-                      onClick={() => deletePage(p.id, index)}
-                      className="absolute top-1 right-1 bg-red-600 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-
-                <label className="h-20 w-20 flex items-center justify-center border rounded cursor-pointer text-sm">
-                  + Add
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => addPages(p.id, e.target.files, e)}
-                  />
-                </label>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h2 className="text-lg font-semibold mb-2">My Orders</h2>
-
-        {orders.length === 0 && (
-          <p className="text-muted-foreground text-sm">No orders placed yet</p>
-        )}
-
-        {orders.map((order) => (
-          <Card key={order.id} className="p-4 space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="font-medium">#{order.orderNumber}</span>
-              <Badge>{order.status}</Badge>
-            </div>
-
-            <div className="text-sm text-muted-foreground">
-              {new Date(order.createdAt).toLocaleDateString("en-IN")}
-            </div>
-
-            {order.deliveryAddress && (
-              <p className="text-xs text-muted-foreground">Delivery: {order.deliveryAddress}</p>
-            )}
-
-            <ul className="text-sm list-disc ml-5">
-              {order.items.map((i, idx) => (
-                <li key={idx}>
-                  {i.medicineName} × {i.quantity}
-                </li>
-              ))}
-            </ul>
-
-            <div className="font-semibold">₹{Number(order.adjustedTotal || order.total).toFixed(0)}</div>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
 }
