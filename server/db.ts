@@ -70,7 +70,6 @@ export async function migratePrescriptions() {
       `);
     }
 
-
     // 4️⃣ Ensure name column exists
     const nameCheck = await client.query(`
       SELECT column_name
@@ -104,7 +103,6 @@ export async function migratePrescriptions() {
         ADD COLUMN prescription_date VARCHAR
       `);
     }
-
 
     // 6️⃣ Ensure orders.discount_amount exists
     const discountCheck = await client.query(`

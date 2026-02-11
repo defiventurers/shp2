@@ -304,7 +304,10 @@ export default function Profile() {
                       placeholder="Prescription date (optional)"
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => savePrescriptionMeta(p.id)}>
+                      <Button
+                        size="sm"
+                        onClick={() => savePrescriptionMeta(p.id)}
+                      >
                         Save
                       </Button>
                       <Button
@@ -328,7 +331,9 @@ export default function Profile() {
                         {p.imageUrls.length > 1 ? "s" : ""})
                       </span>
                       {p.prescriptionDate && (
-                        <p className="text-xs text-muted-foreground">Date: {p.prescriptionDate}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Date: {p.prescriptionDate}
+                        </p>
                       )}
                     </div>
                     <div className="flex gap-2">
@@ -414,7 +419,9 @@ export default function Profile() {
               ))}
             </ul>
 
-            <div className="font-semibold">₹{Number(order.adjustedTotal || order.total).toFixed(0)}</div>
+            <div className="font-semibold">
+              ₹{Number(order.adjustedTotal || order.total).toFixed(0)}
+            </div>
           </Card>
         ))}
       </div>
