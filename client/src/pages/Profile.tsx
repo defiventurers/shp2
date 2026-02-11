@@ -147,11 +147,14 @@ export default function Profile() {
     const formData = new FormData();
     Array.from(files).forEach((f) => formData.append("images", f));
 
-    const res = await fetch(`${API_BASE}/api/prescriptions/${prescriptionId}/images`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
+    const res = await fetch(
+      `${API_BASE}/api/prescriptions/${prescriptionId}/images`,
+      {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      }
+    );
 
     if (event?.target) {
       event.target.value = "";
@@ -232,7 +235,10 @@ export default function Profile() {
                       placeholder="Prescription date (optional)"
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => savePrescriptionMeta(p.id)}>
+                      <Button
+                        size="sm"
+                        onClick={() => savePrescriptionMeta(p.id)}
+                      >
                         Save
                       </Button>
                       <Button
