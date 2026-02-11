@@ -3,115 +3,377 @@ import { db } from "../db";
 import { orders, orderItems } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
 import { eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import multer from "multer";
+import cloudinary from "cloudinary";
+
+cloudinary.v2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
+  api_key: process.env.CLOUDINARY_API_KEY!,
+  api_secret: process.env.CLOUDINARY_API_SECRET!,
+});
+
+const upload = multer({ storage: multer.memoryStorage() });
+const TAX_RATE_PERCENT = 12;
+
+async function sendWhatsAppText(text: string) {
+  const webhook = process.env.WHATSAPP_WEBHOOK_URL;
+  if (!webhook) {
+    console.log("ℹ️ WHATSAPP_WEBHOOK_URL not configured. Message:", text);
+    return;
+  }
+
+  try {
+    await fetch(webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+  } catch (err) {
+    console.error("⚠️ WhatsApp alert failed (non-blocking):", err);
+  }
+}
+
+function toMoney(value: number): string {
+  return Math.max(0, value).toFixed(2);
+}
+
+function computeSave10Discount(totalInclusive: number): {
+  preTaxSubtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  adjustedTotal: number;
+} {
+  const preTaxSubtotal = totalInclusive / (1 + TAX_RATE_PERCENT / 100);
+  const taxAmount = totalInclusive - preTaxSubtotal;
+  const discountAmount = preTaxSubtotal * 0.1;
+  const adjustedTotal = Math.max(0, totalInclusive - discountAmount);
+
+  return {
+    preTaxSubtotal,
+    taxAmount,
+    discountAmount,
+    adjustedTotal,
+  };
+}
+
+async function recalcOrderTotals(orderId: string) {
+  const existing = await db.query.orders.findFirst({
+    where: eq(orders.id, orderId),
+    with: { items: true },
+  });
+
+  if (!existing) return null;
+
+  const subtotal = existing.items.reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
+    0,
+  );
+  const deliveryFee = Number(existing.deliveryFee || 0);
+  const total = subtotal + deliveryFee;
+
+  const promoCode = (existing.promoCode || "").toUpperCase();
+  const hasSave10 = promoCode === "SAVE10";
+
+  let discountAmount = Number(existing.discountAmount || 0);
+  let preTaxSubtotal = Number(existing.preTaxSubtotal || subtotal);
+  let taxAmount = Number(existing.taxAmount || 0);
+  let adjustedTotal = Number(existing.adjustedTotal || total);
+
+  if (hasSave10) {
+    const calc = computeSave10Discount(total);
+    discountAmount = calc.discountAmount;
+    preTaxSubtotal = calc.preTaxSubtotal;
+    taxAmount = calc.taxAmount;
+    adjustedTotal = calc.adjustedTotal;
+  } else {
+    adjustedTotal = Math.max(0, total - discountAmount);
+    preTaxSubtotal = subtotal;
+    taxAmount = 0;
+  }
+
+  const [updated] = await db
+    .update(orders)
+    .set({
+      subtotal: toMoney(subtotal),
+      total: toMoney(total),
+      discountAmount: toMoney(discountAmount),
+      adjustedTotal: toMoney(adjustedTotal),
+      preTaxSubtotal: toMoney(preTaxSubtotal),
+      taxAmount: toMoney(taxAmount),
+      taxRate: TAX_RATE_PERCENT.toFixed(2),
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, orderId))
+    .returning();
+
+  return updated;
+}
 
 export function registerOrderRoutes(app: Express) {
   console.log("🔥 ORDER ROUTES REGISTERED 🔥");
 
-  /* =========================
-     CREATE ORDER  ✅ FIXED
-  ========================= */
-  app.post(
-    "/api/orders",
-    requireAuth,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const {
-          items,
-          subtotal,
-          deliveryFee,
-          total,
-          deliveryType,
-          deliveryAddress,
-          customerName,
-          customerPhone,
-          customerEmail,
-          prescriptionId,
-        } = req.body;
+  app.post("/api/orders", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+      const {
+        items,
+        subtotal,
+        deliveryFee,
+        total,
+        deliveryType,
+        deliveryAddress,
+        customerName,
+        customerPhone,
+        customerEmail,
+        prescriptionId,
+        promoCode,
+      } = req.body;
 
-        // ✅ HARD VALIDATION (BODY FIRST)
-        if (!customerName || !customerPhone) {
-          return res.status(400).json({
-            error: "Name and phone number are required to place an order",
-          });
-        }
-
-        if (!items || items.length === 0) {
-          return res.status(400).json({
-            error: "Order must contain at least one item",
-          });
-        }
-
-        const orderNumber = `ORD-${Date.now()}`;
-
-        const [order] = await db
-          .insert(orders)
-          .values({
-            orderNumber,
-            userId: req.user!.id,
-            customerName,
-            customerPhone,
-            customerEmail: customerEmail || null,
-            deliveryType,
-            deliveryAddress: deliveryAddress || null,
-            subtotal,
-            deliveryFee,
-            total,
-            prescriptionId: prescriptionId || null,
-          })
-          .returning();
-
-        // ✅ INSERT ITEMS
-        for (const item of items) {
-          await db.insert(orderItems).values({
-            orderId: order.id,
-            medicineId: item.medicineId,
-            medicineName: item.medicineName,
-            quantity: item.quantity,
-            price: item.price,
-            total: item.price * item.quantity,
-          });
-        }
-
-        res.json({
-          success: true,
-          orderNumber: order.orderNumber,
-        });
-      } catch (err) {
-        console.error("❌ CREATE ORDER ERROR:", err);
-        res.status(500).json({
-          error: "Failed to create order",
+      if (!customerName || !customerPhone) {
+        return res.status(400).json({
+          error: "Name and phone number are required to place an order",
         });
       }
-    }
-  );
 
-  /* =========================
-     GET ORDERS
-  ========================= */
-  app.get(
-    "/api/orders",
+      if (!items || items.length === 0) {
+        return res.status(400).json({
+          error: "Order must contain at least one item",
+        });
+      }
+
+      const orderNumber = `ORD-${Date.now()}`;
+      const normalizedPromo = String(promoCode || "")
+        .trim()
+        .toUpperCase();
+      const hasSave10 = normalizedPromo === "SAVE10";
+
+      const totalNum = Number(total || 0);
+      const subtotalNum = Number(subtotal || 0);
+      const deliveryNum = Number(deliveryFee || 0);
+
+      const discountCalc = hasSave10
+        ? computeSave10Discount(totalNum)
+        : {
+            preTaxSubtotal: subtotalNum,
+            taxAmount: 0,
+            discountAmount: 0,
+            adjustedTotal: totalNum,
+          };
+
+      const [order] = await db
+        .insert(orders)
+        .values({
+          orderNumber,
+          userId: req.user!.id,
+          customerName,
+          customerPhone,
+          customerEmail: customerEmail || null,
+          deliveryType,
+          deliveryAddress: deliveryAddress || null,
+          subtotal: toMoney(subtotalNum),
+          deliveryFee: toMoney(deliveryNum),
+          total: toMoney(totalNum),
+          preTaxSubtotal: toMoney(discountCalc.preTaxSubtotal),
+          taxAmount: toMoney(discountCalc.taxAmount),
+          taxRate: TAX_RATE_PERCENT.toFixed(2),
+          promoCode: hasSave10 ? "SAVE10" : null,
+          adjustedTotal: toMoney(discountCalc.adjustedTotal),
+          discountAmount: toMoney(discountCalc.discountAmount),
+          prescriptionId: prescriptionId || null,
+        })
+        .returning();
+
+      for (const item of items) {
+        const itemPrice = Number(item.price || 0);
+        const itemQty = Number(item.quantity || 0);
+
+        await db.insert(orderItems).values({
+          orderId: order.id,
+          medicineId: item.medicineId,
+          medicineName: item.medicineName,
+          quantity: itemQty,
+          price: toMoney(itemPrice),
+          total: toMoney(itemPrice * itemQty),
+        });
+      }
+
+      const orderItemsSummary = items
+        .slice(0, 6)
+        .map((i: any) => `• ${i.medicineName} x${i.quantity}`)
+        .join("\n");
+
+      void sendWhatsAppText(
+        [
+          `🧾 New order placed: ${order.orderNumber}`,
+          `Customer: ${customerName} (${customerPhone})`,
+          `Delivery: ${deliveryType}${deliveryAddress ? ` - ${deliveryAddress}` : ""}`,
+          `Payable: ₹${toMoney(discountCalc.adjustedTotal)}`,
+          `Items:\n${orderItemsSummary}`,
+        ].join("\n"),
+      );
+
+      res.json({
+        success: true,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        promoCode: order.promoCode,
+        discountAmount: order.discountAmount,
+        adjustedTotal: order.adjustedTotal,
+      });
+    } catch (err) {
+      console.error("❌ CREATE ORDER ERROR:", err);
+      res.status(500).json({ error: "Failed to create order" });
+    }
+  });
+
+  app.get("/api/orders", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+      const isStaff = req.headers["x-staff-auth"] === "true";
+
+      const data = isStaff
+        ? await db.query.orders.findMany({
+            with: { items: true },
+            orderBy: (o, { desc }) => [desc(o.createdAt)],
+          })
+        : await db.query.orders.findMany({
+            where: eq(orders.userId, req.user!.id),
+            with: { items: true },
+            orderBy: (o, { desc }) => [desc(o.createdAt)],
+          });
+
+      res.json({ success: true, orders: data });
+    } catch (err) {
+      console.error("FETCH ORDERS ERROR:", err);
+      res.status(500).json({ error: "Failed to fetch orders" });
+    }
+  });
+
+  app.patch("/api/orders/:id/status", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+      const isStaff = req.headers["x-staff-auth"] === "true";
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const [updated] = await db
+        .update(orders)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(orders.id, id))
+        .returning();
+
+      if (!updated) return res.status(404).json({ error: "Order not found" });
+
+      void sendWhatsAppText(
+        `📦 Order ${updated.orderNumber} status updated to ${status}. Customer: ${updated.customerName} (${updated.customerPhone})`,
+      );
+
+      res.json({ success: true, order: updated });
+    } catch (err) {
+      console.error("UPDATE STATUS ERROR:", err);
+      res.status(500).json({ error: "Failed to update status" });
+    }
+  });
+
+  app.patch("/api/orders/:id/billing", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+      const isStaff = req.headers["x-staff-auth"] === "true";
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const { id } = req.params;
+      const { discountAmount, adjustedTotal } = req.body;
+
+      const existing = await db.query.orders.findFirst({ where: eq(orders.id, id) });
+      if (!existing) return res.status(404).json({ error: "Order not found" });
+
+      const totalNum = Number(existing.total || 0);
+      const discount = Math.max(0, Number(discountAmount || 0));
+      const adjusted = adjustedTotal == null ? Math.max(0, totalNum - discount) : Math.max(0, Number(adjustedTotal));
+
+      const [updated] = await db
+        .update(orders)
+        .set({
+          promoCode: null,
+          discountAmount: toMoney(discount),
+          adjustedTotal: toMoney(adjusted),
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, id))
+        .returning();
+
+      res.json({ success: true, order: updated });
+    } catch (err) {
+      console.error("UPDATE BILLING ERROR:", err);
+      res.status(500).json({ error: "Failed to update billing" });
+    }
+  });
+
+  app.patch("/api/orders/:id/line-items", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+      const isStaff = req.headers["x-staff-auth"] === "true";
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const { id } = req.params;
+      const updates = Array.isArray(req.body?.items) ? req.body.items : [];
+      if (!updates.length) return res.status(400).json({ error: "No line item updates provided" });
+
+      for (const item of updates) {
+        const qty = Math.max(1, Number(item.quantity || 1));
+        const price = Math.max(0, Number(item.price || 0));
+        const total = qty * price;
+
+        await db
+          .update(orderItems)
+          .set({
+            quantity: qty,
+            price: toMoney(price),
+            total: toMoney(total),
+          })
+          .where(eq(orderItems.id, item.id));
+      }
+
+      const recalculated = await recalcOrderTotals(id);
+      if (!recalculated) return res.status(404).json({ error: "Order not found" });
+
+      res.json({ success: true, order: recalculated });
+    } catch (err) {
+      console.error("UPDATE LINE ITEMS ERROR:", err);
+      res.status(500).json({ error: "Failed to update line items" });
+    }
+  });
+
+  app.post(
+    "/api/orders/:id/bill-image",
     requireAuth,
+    upload.single("billImage"),
     async (req: AuthRequest, res: Response) => {
       try {
         const isStaff = req.headers["x-staff-auth"] === "true";
+        if (!isStaff) return res.status(403).json({ error: "Forbidden" });
 
-        const data = isStaff
-          ? await db.query.orders.findMany({
-              with: { items: true },
-              orderBy: (o, { desc }) => [desc(o.createdAt)],
+        if (!req.file) return res.status(400).json({ error: "Bill image is required" });
+
+        const uploadResult = await new Promise<any>((resolve, reject) => {
+          cloudinary.v2.uploader
+            .upload_stream({ folder: "order_bills" }, (err, result) => {
+              if (err) reject(err);
+              else resolve(result);
             })
-          : await db.query.orders.findMany({
-              where: eq(orders.userId, req.user!.id),
-              with: { items: true },
-              orderBy: (o, { desc }) => [desc(o.createdAt)],
-            });
+            .end(req.file!.buffer);
+        });
 
-        res.json({ success: true, orders: data });
+        const [updated] = await db
+          .update(orders)
+          .set({ billImageUrl: uploadResult.secure_url, updatedAt: new Date() })
+          .where(eq(orders.id, req.params.id))
+          .returning();
+
+        if (!updated) return res.status(404).json({ error: "Order not found" });
+
+        res.json({ success: true, order: updated, billImageUrl: uploadResult.secure_url });
       } catch (err) {
-        console.error("FETCH ORDERS ERROR:", err);
-        res.status(500).json({ error: "Failed to fetch orders" });
+        console.error("UPLOAD BILL IMAGE ERROR:", err);
+        res.status(500).json({ error: "Failed to upload bill image" });
       }
-    }
+    },
   );
 }

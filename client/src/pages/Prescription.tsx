@@ -56,6 +56,8 @@ export default function PrescriptionPage() {
     mutationFn: async () => {
       const formData = new FormData();
       selectedFiles.forEach((f) => formData.append("images", f));
+      formData.append("name", prescriptionName.trim());
+      formData.append("prescriptionDate", prescriptionDate.trim());
 
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/api/prescriptions/upload`,
