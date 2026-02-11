@@ -70,6 +70,41 @@ export async function migratePrescriptions() {
       `);
     }
 
+
+    // 4️⃣ Ensure name column exists
+    const nameCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'prescriptions'
+      AND column_name = 'name'
+    `);
+
+    if (nameCheck.rowCount === 0) {
+      console.log("🛠 Adding name column");
+
+      await client.query(`
+        ALTER TABLE prescriptions
+        ADD COLUMN name VARCHAR
+      `);
+    }
+
+    // 5️⃣ Ensure prescription_date column exists
+    const dateCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'prescriptions'
+      AND column_name = 'prescription_date'
+    `);
+
+    if (dateCheck.rowCount === 0) {
+      console.log("🛠 Adding prescription_date column");
+
+      await client.query(`
+        ALTER TABLE prescriptions
+        ADD COLUMN prescription_date VARCHAR
+      `);
+    }
+
     console.log("✅ Prescription migration complete");
   } catch (err) {
     console.error("❌ Prescription migration failed:", err);
