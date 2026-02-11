@@ -5,10 +5,31 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 import { resolveCategoryNameFromRaw } from "../utils/categoryMapping";
+import { sql } from "drizzle-orm";
+
+function resolveImportTokens(row: Record<string, unknown>) {
+  const rawCategory = String(row["Category"] || "").trim();
+  const rawSourceFile = String(row["Source File"] || "").trim();
+
+  const sourceToken = rawSourceFile || rawCategory || "Others";
+  const categoryToken = rawCategory || rawSourceFile || "";
+
+  return { sourceToken, categoryToken };
+}
 
 /* ---------------- ROUTES ---------------- */
 export function registerAdminRoutes(app: Express) {
   console.log("🛠️ ADMIN ROUTES REGISTERED");
+
+  app.post("/api/admin/clear-medicines", async (_req: Request, res: Response) => {
+    try {
+      const deleted = await db.delete(medicines).returning({ id: medicines.id });
+      res.json({ success: true, deleted: deleted.length });
+    } catch (err) {
+      console.error("❌ FAILED TO CLEAR MEDICINES", err);
+      res.status(500).json({ success: false, error: "Failed to clear medicines" });
+    }
+  });
 
   app.post("/api/admin/import-inventory", async (_req: Request, res: Response) => {
     console.log("🚨 ADMIN IMPORT ROUTE HIT");
@@ -40,6 +61,7 @@ export function registerAdminRoutes(app: Express) {
     let inserted = 0;
     let skipped = 0;
 
+    const categoryStats = new Map<string, number>();
     const batch: any[] = [];
     const BATCH_SIZE = 250;
 
@@ -75,18 +97,20 @@ export function registerAdminRoutes(app: Express) {
 
         /* -------- OTHER FIELDS -------- */
         const manufacturer = String(row["Manufacturer"] || "NOT KNOWN").trim();
-
         const imageUrl = String(row["Image URL"] || "").trim();
-        const rawSourceFile = String(row["Source File"] || row["Category"] || "Others").trim();
+
+        const { sourceToken, categoryToken } = resolveImportTokens(row);
 
         /* -------- CATEGORY -------- */
-        const categoryName = resolveCategoryNameFromRaw(rawSourceFile, row["Category"]);
+        const categoryName = resolveCategoryNameFromRaw(sourceToken, categoryToken);
         const categoryId = categoryMap.get(categoryName.toUpperCase());
 
         if (!categoryId) {
           skipped++;
           continue;
         }
+
+        categoryStats.set(categoryName, (categoryStats.get(categoryName) || 0) + 1);
 
         batch.push({
           name,
@@ -99,7 +123,7 @@ export function registerAdminRoutes(app: Express) {
           imageUrl: imageUrl || null,
           categoryId,
           stock: null,
-          sourceFile: rawSourceFile,
+          sourceFile: sourceToken,
         });
 
         if (batch.length >= BATCH_SIZE) {
@@ -121,15 +145,27 @@ export function registerAdminRoutes(app: Express) {
       inserted += batch.length;
     }
 
+    const categoryBreakdown = await db.execute(sql`
+      SELECT c.name as category_name, COUNT(*)::int as count
+      FROM medicines m
+      LEFT JOIN categories c ON c.id = m.category_id
+      GROUP BY c.name
+      ORDER BY COUNT(*) DESC
+    `);
+
     console.log("✅ IMPORT COMPLETE");
     console.log(`➕ Inserted: ${inserted}`);
     console.log(`⏭️ Skipped: ${skipped}`);
-    console.log(`🎯 Expected total: 18433`);
+    console.log("📊 Category stats from CSV mapping:", Object.fromEntries(categoryStats.entries()));
+    console.log("📊 Category stats in DB:", categoryBreakdown.rows);
+    console.log("🎯 Expected total: 18433");
 
     res.json({
       success: true,
       inserted,
       skipped,
+      categoryStats: Object.fromEntries(categoryStats.entries()),
+      categoryBreakdown: categoryBreakdown.rows,
     });
   });
 }
