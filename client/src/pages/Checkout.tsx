@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, CheckCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, ShieldCheck, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
@@ -65,8 +65,10 @@ export default function CheckoutPage() {
     if (!isAuthenticated) {
       toast({
         title: "Please sign in to continue",
+        description: "Sign in helps us save your details and verify orders faster.",
         variant: "destructive",
       });
+      window.google?.accounts.id.prompt();
       return;
     }
 
@@ -153,6 +155,20 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-background pb-32">
       <div className="px-4 py-4 max-w-lg mx-auto space-y-5">
         <h2 className="text-lg font-semibold">Checkout</h2>
+
+        <Card className="p-3 bg-green-50 border-green-200">
+          <div className="flex gap-2">
+            <ShieldCheck className="w-4 h-4 text-[#0A7A3D] mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-[#0A7A3D]">
+                Trusted & pharmacist-verified ordering
+              </p>
+              <p className="text-xs text-muted-foreground">
+                We review prescriptions and confirm your order on call or WhatsApp before dispatch.
+              </p>
+            </div>
+          </div>
+        </Card>
 
         {/* CUSTOMER */}
         <Card className="p-4 space-y-3">
@@ -253,6 +269,10 @@ export default function CheckoutPage() {
         >
           {loading ? "Placing order..." : `Place Order • ₹${total}`}
         </Button>
+        <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
+          <MessageCircle className="w-3 h-3" />
+          After placing your order, we will quickly confirm availability and delivery details.
+        </p>
       </div>
     </div>
   );
