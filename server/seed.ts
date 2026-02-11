@@ -2,11 +2,11 @@ import { db } from "./db";
 import { categories } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
-const CATEGORY_NAMES = [
+const DOSAGE_FORM_CATEGORY_NAMES = [
   "TABLETS",
   "CAPSULES",
-  "SYRUPS",
   "INJECTIONS",
+  "SYRUPS",
   "TOPICALS",
   "DROPS",
   "POWDERS",
@@ -16,12 +16,12 @@ const CATEGORY_NAMES = [
   "SCRUBS",
   "SOLUTIONS",
   "NO CATEGORY",
-];
+] as const;
 
 export async function seedDatabase() {
-  console.log("🌱 Seeding categories (ALL CAPS, canonical)…");
+  console.log("🌱 Seeding dosage-form categories only (ALL CAPS, canonical)…");
 
-  for (const name of CATEGORY_NAMES) {
+  for (const name of DOSAGE_FORM_CATEGORY_NAMES) {
     const existing = await db
       .select()
       .from(categories)
