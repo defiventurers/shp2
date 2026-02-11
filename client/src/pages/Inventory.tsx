@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import MedicineCard from "@/components/MedicineCard";
 import { Card } from "@/components/ui/card";
@@ -31,15 +31,17 @@ export default function Inventory() {
   const [location] = useLocation();
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategoryName, setSelectedCategoryName] =
-    useState<string | null>(null);
+  const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalMedicines, setTotalMedicines] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     async function loadCategories() {
@@ -59,61 +61,80 @@ export default function Inventory() {
     loadCategories();
   }, []);
 
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const qs = params.get("search");
     if (qs) setSearch(qs);
   }, [location]);
 
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadMedicines() {
-      try {
+  async function loadMedicines(targetPage: number, reset = false) {
+    try {
+      if (reset) {
         setLoading(true);
-
-        const params = new URLSearchParams();
-        params.set("page", String(page));
-        params.set("limit", String(PAGE_SIZE));
-
-        if (search.trim()) params.set("q", search.trim());
-        if (selectedCategoryName) params.set("category", selectedCategoryName);
-
-        const medRes = await fetch(`${API_BASE}/api/medicines?${params.toString()}`);
-        if (!medRes.ok) throw new Error("Medicines API failed");
-
-        const medJson = await medRes.json();
-        if (ignore) return;
-
-        setMedicines(medJson.medicines || []);
-        setTotalPages(medJson.totalPages || 1);
-        setTotalMedicines(medJson.total || 0);
-      } catch (err) {
-        if (!ignore) {
-          console.error("❌ Inventory load failed:", err);
-          setError("Failed to load medicines");
-        }
-      } finally {
-        if (!ignore) setLoading(false);
+      } else {
+        setLoadingMore(true);
       }
+
+      const params = new URLSearchParams();
+      params.set("page", String(targetPage));
+      params.set("limit", String(PAGE_SIZE));
+
+      if (search.trim()) params.set("q", search.trim());
+      if (selectedCategoryName) params.set("category", selectedCategoryName);
+
+      const medRes = await fetch(`${API_BASE}/api/medicines?${params.toString()}`);
+      if (!medRes.ok) throw new Error("Medicines API failed");
+
+      const medJson = await medRes.json();
+
+      setTotalPages(medJson.totalPages || 1);
+      setTotalMedicines(medJson.total || 0);
+
+      if (reset) {
+        setMedicines(medJson.medicines || []);
+      } else {
+        setMedicines((prev) => {
+          const incoming: Medicine[] = medJson.medicines || [];
+          const existingIds = new Set(prev.map((m) => m.id));
+          const uniqueIncoming = incoming.filter((m) => !existingIds.has(m.id));
+          return [...prev, ...uniqueIncoming];
+        });
+      }
+    } catch (err) {
+      console.error("❌ Inventory load failed:", err);
+      setError("Failed to load medicines");
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
     }
-
-    loadMedicines();
-
-    return () => {
-      ignore = true;
-    };
-  }, [page, search, selectedCategoryName]);
+  }
 
   useEffect(() => {
     setPage(1);
+    loadMedicines(1, true);
   }, [search, selectedCategoryName]);
 
-  const title = useMemo(() => {
-    if (selectedCategoryName) return `Medicines • ${selectedCategoryName}`;
-    return "Medicines";
-  }, [selectedCategoryName]);
+  useEffect(() => {
+    if (page === 1) return;
+    loadMedicines(page, false);
+  }, [page]);
+
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && !loadingMore && !loading && page < totalPages) {
+          setPage((p) => p + 1);
+        }
+      },
+      { threshold: 0.3 }
+    );
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [loadingMore, loading, page, totalPages]);
 
   if (error) {
     return <div className="p-6 text-center text-red-600">{error}</div>;
@@ -121,16 +142,16 @@ export default function Inventory() {
 
   return (
     <div className="max-w-6xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-2">{title}</h1>
+      <h1 className="text-2xl font-bold mb-2">Medicines</h1>
       <p className="text-sm text-muted-foreground mb-4">
         {totalMedicines > 0
-          ? `${totalMedicines.toLocaleString()} medicines found`
+          ? `${totalMedicines.toLocaleString()} medicines available`
           : "Search medicines by name or manufacturer"}
       </p>
 
       <Card className="p-3 mb-4 border-green-200 bg-green-50">
         <p className="text-xs text-muted-foreground">
-          Verified inventory with fast search. Prescription medicines are clearly marked with Rx.
+          Fast search on our full catalog. Keep scrolling to load more medicines instantly.
         </p>
       </Card>
 
@@ -187,26 +208,19 @@ export default function Inventory() {
             ))}
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-8">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="px-4 py-2 rounded border disabled:opacity-50"
-            >
-              Previous
-            </button>
-
-            <span className="text-sm text-gray-600">
-              Page {page} of {totalPages}
-            </span>
-
-            <button
-              disabled={page === totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="px-4 py-2 rounded border disabled:opacity-50"
-            >
-              Next
-            </button>
+          <div ref={loadMoreRef} className="h-10 mt-6 flex items-center justify-center">
+            {loadingMore ? (
+              <span className="text-xs text-muted-foreground">Loading more medicines...</span>
+            ) : page >= totalPages ? (
+              <span className="text-xs text-muted-foreground">You have reached the end</span>
+            ) : (
+              <button
+                className="px-4 py-2 rounded border text-sm"
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Load More
+              </button>
+            )}
           </div>
         </>
       )}

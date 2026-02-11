@@ -54,8 +54,8 @@ export function CompleteProfileModal({ open, onDone }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
-      <Card className="w-full max-w-sm p-4 space-y-4">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center px-4">
+      <Card className="w-full max-w-sm p-4 space-y-4 bg-white text-black shadow-2xl border border-gray-200">
         <h2 className="text-lg font-semibold">Complete your profile</h2>
 
         <p className="text-sm text-muted-foreground">
@@ -66,14 +66,10 @@ export function CompleteProfileModal({ open, onDone }: Props) {
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="10-digit mobile number"
-          className="w-full border rounded px-3 py-2"
+          className="w-full border rounded px-3 py-2 bg-white"
         />
 
-        <Button
-          className="w-full"
-          onClick={save}
-          disabled={saving}
-        >
+        <Button className="w-full" onClick={save} disabled={saving}>
           Save & Continue
         </Button>
       </Card>

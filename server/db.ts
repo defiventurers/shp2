@@ -144,6 +144,48 @@ export async function migratePrescriptions() {
       `);
     }
 
+    // 8️⃣ Backfill medicines.category_id using source_file mapping
+    const categoryRows = await client.query(`
+      SELECT id, name FROM categories
+    `);
+    const catMap: Record<string, string> = {};
+    for (const row of categoryRows.rows) {
+      catMap[String(row.name).toUpperCase()] = row.id;
+    }
+
+    const sourceToCategory: Record<string, string> = {
+      TABLETS: "TABLETS",
+      CAPSULES: "CAPSULES",
+      SYRUPS: "SYRUPS",
+      INJECTIONS: "INJECTIONS",
+      "DIABETIC INJECTIONS": "INJECTIONS",
+      TOPICALS: "TOPICALS",
+      DROPS: "DROPS",
+      POWDERS: "POWDERS",
+      MOUTHWASH: "MOUTHWASH",
+      INHALERS: "INHALERS",
+      DEVICES: "DEVICES",
+      SCRUBS: "SCRUBS",
+      SOLUTIONS: "SOLUTIONS",
+      OTHERS: "NO CATEGORY",
+      "NO CATEGORY": "NO CATEGORY",
+    };
+
+    for (const [sourceFile, categoryName] of Object.entries(sourceToCategory)) {
+      const categoryId = catMap[categoryName];
+      if (!categoryId) continue;
+
+      await client.query(
+        `
+          UPDATE medicines
+          SET category_id = $1
+          WHERE (category_id IS NULL OR category_id = '')
+          AND UPPER(COALESCE(source_file, 'OTHERS')) = $2
+        `,
+        [categoryId, sourceFile]
+      );
+    }
+
     console.log("✅ Prescription migration complete");
   } catch (err) {
     console.error("❌ Prescription migration failed:", err);
