@@ -1,17 +1,10 @@
 {
-  "builds": [
+  "buildCommand": "if [ -f client/package.json ]; then npm --prefix client run build && rm -rf dist && cp -r client/dist dist; else npm run build; fi",
+  "outputDirectory": "dist",
+  "rewrites": [
     {
-      "src": "client/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
