@@ -1,3 +1,4 @@
+cat > shared/schema.ts <<'EOF'
 import { sql } from "drizzle-orm";
 import {
   pgTable,
@@ -97,8 +98,13 @@ export const orders = pgTable("orders", {
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  preTaxSubtotal: decimal("pre_tax_subtotal", { precision: 10, scale: 2 }),
+  taxAmount: decimal("tax_amount", { precision: 10, scale: 2 }),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("12.00"),
+  promoCode: varchar("promo_code"),
   discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).default("0"),
   adjustedTotal: decimal("adjusted_total", { precision: 10, scale: 2 }),
+  billImageUrl: varchar("bill_image_url"),
 
   status: varchar("status").notNull().default("pending"),
   prescriptionId: varchar("prescription_id"),
@@ -169,7 +175,20 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
    Types
 ========================= */
 export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+
 export type Category = typeof categories.$inferSelect;
+export type InsertCategory = typeof categories.$inferInsert;
+
 export type Medicine = typeof medicines.$inferSelect;
+export type InsertMedicine = typeof medicines.$inferInsert;
+
 export type Prescription = typeof prescriptions.$inferSelect;
+export type InsertPrescription = typeof prescriptions.$inferInsert;
+
 export type Order = typeof orders.$inferSelect;
+export type InsertOrder = typeof orders.$inferInsert;
+
+export type OrderItem = typeof orderItems.$inferSelect;
+export type InsertOrderItem = typeof orderItems.$inferInsert;
+EOF

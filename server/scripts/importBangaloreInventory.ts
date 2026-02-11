@@ -1,26 +1,10 @@
+cat > server/scripts/importBangaloreInventory.ts <<'EOF'
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
-
-const SOURCE_TO_CATEGORY: Record<string, string> = {
-  TABLETS: "TABLETS",
-  CAPSULES: "CAPSULES",
-  SYRUPS: "SYRUPS",
-  INJECTIONS: "INJECTIONS",
-  "DIABETIC INJECTIONS": "INJECTIONS",
-  TOPICALS: "TOPICALS",
-  DROPS: "DROPS",
-  POWDERS: "POWDERS",
-  MOUTHWASH: "MOUTHWASH",
-  INHALERS: "INHALERS",
-  DEVICES: "DEVICES",
-  SCRUBS: "SCRUBS",
-  SOLUTIONS: "SOLUTIONS",
-  OTHERS: "NO CATEGORY",
-  "NO CATEGORY": "NO CATEGORY",
-};
+import { resolveCategoryNameFromRaw } from "../utils/categoryMapping";
 
 export async function importBangaloreInventory() {
   console.log("📦 Starting inventory import");
@@ -52,9 +36,9 @@ export async function importBangaloreInventory() {
           const packSize = Number(row["Pack-Size"]);
           const manufacturer = row["Manufacturer"]?.trim() || "Not Known";
           const imageUrl = row["Image URL"]?.trim() || null;
-          const sourceFile = (row["Source File"] || "Others").trim();
-          const normalizedSource = sourceFile.toUpperCase();
-          const categoryName = SOURCE_TO_CATEGORY[normalizedSource] || "NO CATEGORY";
+
+          const rawSourceFile = (row["Source File"] || row["Category"] || "Others").trim();
+          const categoryName = resolveCategoryNameFromRaw(rawSourceFile, row["Category"]);
           const isRx = String(row["Is Prescription Required?"] || "").trim() === "1";
 
           if (!name || Number.isNaN(price)) {
@@ -73,7 +57,7 @@ export async function importBangaloreInventory() {
             imageUrl,
             requiresPrescription: isRx,
             categoryId,
-            sourceFile,
+            sourceFile: rawSourceFile,
           });
 
           inserted++;
@@ -100,3 +84,4 @@ export async function importBangaloreInventory() {
       .on("error", reject);
   });
 }
+EOF
