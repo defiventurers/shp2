@@ -4,25 +4,35 @@ import csv from "csv-parser";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
+const SOURCE_TO_CATEGORY: Record<string, string> = {
+  TABLETS: "TABLETS",
+  CAPSULES: "CAPSULES",
+  SYRUPS: "SYRUPS",
+  INJECTIONS: "INJECTIONS",
+  "DIABETIC INJECTIONS": "INJECTIONS",
+  TOPICALS: "TOPICALS",
+  DROPS: "DROPS",
+  POWDERS: "POWDERS",
+  MOUTHWASH: "MOUTHWASH",
+  INHALERS: "INHALERS",
+  DEVICES: "DEVICES",
+  SCRUBS: "SCRUBS",
+  SOLUTIONS: "SOLUTIONS",
+  OTHERS: "NO CATEGORY",
+  "NO CATEGORY": "NO CATEGORY",
+};
+
 export async function importBangaloreInventory() {
   console.log("📦 Starting inventory import");
 
-  const csvPath = path.join(
-    process.cwd(),
-    "server",
-    "data",
-    "easyload_inventory.csv"
-  );
+  const csvPath = path.join(process.cwd(), "server", "data", "easyload_inventory.csv");
 
   if (!fs.existsSync(csvPath)) {
     throw new Error("CSV not found");
   }
 
-  // 🔑 Build category lookup
   const categoryRows = await db.select().from(categories);
-  const categoryMap = new Map(
-    categoryRows.map((c) => [c.name.toUpperCase(), c.id])
-  );
+  const categoryMap = new Map(categoryRows.map((c) => [c.name.toUpperCase(), c.id]));
 
   await db.delete(medicines);
   console.log("🧨 Medicines table cleared");
@@ -37,13 +47,15 @@ export async function importBangaloreInventory() {
       .on("data", (row) => {
         try {
           const name = row["Medicine Name"]?.trim();
-          const price = Number(row["Price"]);
+          const rawPrice = row["Price"]?.replace(/[^\d.]/g, "");
+          const price = Number(rawPrice);
           const packSize = Number(row["Pack-Size"]);
           const manufacturer = row["Manufacturer"]?.trim() || "Not Known";
-          const imageUrl = row["Image URL"]?.trim();
-          const categoryName = row["Category"]?.trim().toUpperCase();
-          const isRx =
-            row["Is Prescription Required?"]?.toLowerCase() === "yes";
+          const imageUrl = row["Image URL"]?.trim() || null;
+          const sourceFile = (row["Source File"] || "Others").trim();
+          const normalizedSource = sourceFile.toUpperCase();
+          const categoryName = SOURCE_TO_CATEGORY[normalizedSource] || "NO CATEGORY";
+          const isRx = String(row["Is Prescription Required?"] || "").trim() === "1";
 
           if (!name || Number.isNaN(price)) {
             skipped++;
@@ -54,15 +66,14 @@ export async function importBangaloreInventory() {
 
           batch.push({
             name,
-            price,
-            mrp: price,
-            packSize: packSize || 0,
+            price: price.toFixed(2),
+            mrp: price.toFixed(2),
+            packSize: Number.isNaN(packSize) ? 0 : packSize,
             manufacturer,
             imageUrl,
             requiresPrescription: isRx,
-            isScheduleH: isRx,
             categoryId,
-            sourceFile: "easyload_inventory.csv",
+            sourceFile,
           });
 
           inserted++;
@@ -82,7 +93,7 @@ export async function importBangaloreInventory() {
         console.log("✅ IMPORT COMPLETE");
         console.log(`➕ Inserted: ${inserted}`);
         console.log(`⏭️ Skipped: ${skipped}`);
-        console.log(`🎯 Expected total: 18433`);
+        console.log("🎯 Expected total: ~18433");
 
         resolve();
       })
