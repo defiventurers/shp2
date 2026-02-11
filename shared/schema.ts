@@ -71,6 +71,8 @@ export const medicines = pgTable("medicines", {
 export const prescriptions = pgTable("prescriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id),
+  name: varchar("name"),
+  prescriptionDate: varchar("prescription_date"),
   imageUrls: jsonb("image_urls").$type<string[]>(),
   status: varchar("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -167,4 +169,5 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
 export type User = typeof users.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Medicine = typeof medicines.$inferSelect;
+export type Prescription = typeof prescriptions.$inferSelect;
 export type Order = typeof orders.$inferSelect;
