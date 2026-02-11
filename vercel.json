@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm --prefix client run build",
-  "outputDirectory": "client/dist",
+  "buildCommand": "if [ -f client/package.json ]; then npm --prefix client run build && rm -rf dist && cp -r client/dist dist; else npm run build; fi",
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/(.*)",
