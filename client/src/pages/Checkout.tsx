@@ -1,4 +1,3 @@
-cat > client/src/pages/Checkout.tsx <<'EOF'
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
@@ -280,4 +279,3 @@ export default function Checkout() {
     </div>
   );
 }
-EOF

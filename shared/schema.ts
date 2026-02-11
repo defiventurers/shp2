@@ -1,4 +1,4 @@
-cat > shared/schema.ts <<'EOF'
+/* Sacred Heart Pharmacy schema definitions */
 import { sql } from "drizzle-orm";
 import {
   pgTable,
@@ -175,20 +175,7 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
    Types
 ========================= */
 export type User = typeof users.$inferSelect;
-export type InsertUser = typeof users.$inferInsert;
-
 export type Category = typeof categories.$inferSelect;
-export type InsertCategory = typeof categories.$inferInsert;
-
 export type Medicine = typeof medicines.$inferSelect;
-export type InsertMedicine = typeof medicines.$inferInsert;
-
 export type Prescription = typeof prescriptions.$inferSelect;
-export type InsertPrescription = typeof prescriptions.$inferInsert;
-
 export type Order = typeof orders.$inferSelect;
-export type InsertOrder = typeof orders.$inferInsert;
-
-export type OrderItem = typeof orderItems.$inferSelect;
-export type InsertOrderItem = typeof orderItems.$inferInsert;
-EOF
