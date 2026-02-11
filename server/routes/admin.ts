@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 
@@ -23,25 +23,85 @@ const DOSAGE_FORM_CATEGORIES = [
 ] as const;
 
 const DOSAGE_FORM_ALLOWLIST = new Set<string>(DOSAGE_FORM_CATEGORIES);
+const IMPORT_KEY_PREFIX = "IMPORT_KEY:";
 
-function normalizeCategory(rawCategory: unknown): string {
-  const normalized = String(rawCategory ?? "")
+const CATEGORY_ALIAS_MAP: Record<string, string> = {
+  TABLET: "TABLETS",
+  CAPSULE: "CAPSULES",
+  INJECTION: "INJECTIONS",
+  SYRUP: "SYRUPS",
+  DROP: "DROPS",
+  POWDER: "POWDERS",
+  SOLUTION: "SOLUTIONS",
+  SCRUB: "SCRUBS",
+  INHALER: "INHALERS",
+  DEVICE: "DEVICES",
+  "MOUTH WASH": "MOUTHWASH",
+  "MOUTH-WASH": "MOUTHWASH",
+};
+
+function normalizeText(rawValue: unknown): string {
+  return String(rawValue ?? "")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, " ");
-
-  if (!normalized) {
-    return "NO CATEGORY";
-  }
-
-  return DOSAGE_FORM_ALLOWLIST.has(normalized) ? normalized : "NO CATEGORY";
 }
 
-function normalizeCategoryKey(rawCategory: unknown): string {
-  return String(rawCategory ?? "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, " ");
+function normalizeCategory(rawCategory: unknown): { normalized: string; normalizedInput: string; forcedInvalid: boolean } {
+  const normalizedInput = normalizeText(rawCategory);
+
+  if (!normalizedInput) {
+    return {
+      normalized: "NO CATEGORY",
+      normalizedInput,
+      forcedInvalid: false,
+    };
+  }
+
+  const aliased = CATEGORY_ALIAS_MAP[normalizedInput] ?? normalizedInput;
+
+  if (!DOSAGE_FORM_ALLOWLIST.has(aliased)) {
+    return {
+      normalized: "NO CATEGORY",
+      normalizedInput,
+      forcedInvalid: true,
+    };
+  }
+
+  return {
+    normalized: aliased,
+    normalizedInput,
+    forcedInvalid: false,
+  };
+}
+
+function extractImportKey(sourceFile: string | null | undefined): string | null {
+  const token = String(sourceFile ?? "");
+  const markerIndex = token.indexOf(IMPORT_KEY_PREFIX);
+
+  if (markerIndex === -1) {
+    return null;
+  }
+
+  return token.slice(markerIndex + IMPORT_KEY_PREFIX.length).trim() || null;
+}
+
+function buildIdentityBaseKey(
+  name: string,
+  manufacturer: string,
+  packSize: number,
+  price: number,
+  imageUrl: string,
+  sourceToken: string,
+): string {
+  return [
+    normalizeText(name),
+    normalizeText(manufacturer),
+    String(packSize),
+    Number(price).toFixed(2),
+    normalizeText(imageUrl),
+    normalizeText(sourceToken),
+  ].join("|");
 }
 
 function resolveImportTokens(row: Record<string, unknown>) {
@@ -98,14 +158,17 @@ export function registerAdminRoutes(app: Express) {
 
       console.log("📦 Starting inventory import");
 
-      const categoryMap = new Map<string, string>();
-      const allCategories = await db.select().from(categories);
+      const dosageCategories = await db
+        .select()
+        .from(categories)
+        .where(inArray(categories.name, [...DOSAGE_FORM_CATEGORIES]));
 
-      for (const c of allCategories) {
-        categoryMap.set(normalizeCategoryKey(c.name), c.id);
+      const categoryMap = new Map<string, string>();
+      for (const c of dosageCategories) {
+        categoryMap.set(normalizeText(c.name), c.id);
       }
 
-      console.log("📦 Loaded categories:", [...categoryMap.keys()]);
+      console.log("📦 Loaded dosage categories:", [...categoryMap.keys()]);
 
       const existingMedicines = await db
         .select({
@@ -113,31 +176,46 @@ export function registerAdminRoutes(app: Express) {
           name: medicines.name,
           manufacturer: medicines.manufacturer,
           packSize: medicines.packSize,
+          price: medicines.price,
+          imageUrl: medicines.imageUrl,
+          sourceFile: medicines.sourceFile,
         })
         .from(medicines);
 
-      const existingByKey = new Map<string, { id: string }>();
+      const existingByImportKey = new Map<string, string>();
+      const legacyBuckets = new Map<string, string[]>();
 
       for (const row of existingMedicines) {
-        const key = medicineKey(row.name || "", row.manufacturer || "NOT KNOWN", row.packSize || 0);
-        existingByKey.set(key, {
-          id: row.id,
-        });
+        const existingImportKey = extractImportKey(row.sourceFile);
+        if (existingImportKey) {
+          existingByImportKey.set(existingImportKey, row.id);
+        }
+
+        const legacyKey = medicineKey(row.name || "", row.manufacturer || "NOT KNOWN", row.packSize || 0);
+        const bucket = legacyBuckets.get(legacyKey) || [];
+        bucket.push(row.id);
+        legacyBuckets.set(legacyKey, bucket);
       }
+
+      const consumedLegacyIds = new Set<string>();
 
       let totalRowsProcessed = 0;
       let inserted = 0;
       let updated = 0;
       let skipped = 0;
       let forcedNoCategoryCount = 0;
+      let collisionsPrevented = 0;
 
       const categoryStats = new Map<string, number>();
       const invalidCategoryValues = new Set<string>();
       const unknownDbCategoryValues = new Set<string>();
       const loggedUnknownDbCategories = new Set<string>();
+      const identityOccurrences = new Map<string, number>();
+      const identityDuplicateCounts = new Map<string, number>();
       const insertBatch: any[] = [];
       const updateBatch: Array<{ id: string; payload: any }> = [];
       const BATCH_SIZE = 250;
+      let headersLogged = false;
 
       const flushInserts = async () => {
         if (!insertBatch.length) return;
@@ -165,6 +243,11 @@ export function registerAdminRoutes(app: Express) {
       for await (const row of stream) {
         totalRowsProcessed++;
 
+        if (!headersLogged) {
+          console.log("🧾 CSV headers detected:", Object.keys(row));
+          headersLogged = true;
+        }
+
         try {
           const name = String(row["Medicine Name"] || "").trim();
           if (!name) {
@@ -191,15 +274,14 @@ export function registerAdminRoutes(app: Express) {
           const imageUrl = String(row["Image URL"] || "").trim();
 
           const { sourceToken, rawCategory, rawSourceFile } = resolveImportTokens(row);
-          const rawCategoryInput = rawCategory || rawSourceFile;
-          const normalizedInput = normalizeCategoryKey(rawCategoryInput);
+          const categoryInput = rawCategory || rawSourceFile;
+          const categoryResolution = normalizeCategory(categoryInput);
 
-          let normalizedCategory = normalizeCategory(rawCategoryInput);
-          const invalidCategory = Boolean(normalizedInput) && !DOSAGE_FORM_ALLOWLIST.has(normalizedInput);
+          let normalizedCategory = categoryResolution.normalized;
 
-          if (invalidCategory) {
+          if (categoryResolution.forcedInvalid) {
             forcedNoCategoryCount++;
-            invalidCategoryValues.add(normalizedInput);
+            invalidCategoryValues.add(categoryResolution.normalizedInput);
           }
 
           let categoryId = categoryMap.get(normalizedCategory);
@@ -224,6 +306,24 @@ export function registerAdminRoutes(app: Express) {
 
           categoryStats.set(normalizedCategory, (categoryStats.get(normalizedCategory) || 0) + 1);
 
+          const identityBaseKey = buildIdentityBaseKey(
+            name,
+            manufacturer,
+            normalizedPackSize,
+            price,
+            imageUrl,
+            sourceToken,
+          );
+          const occurrence = (identityOccurrences.get(identityBaseKey) || 0) + 1;
+          identityOccurrences.set(identityBaseKey, occurrence);
+
+          if (occurrence > 1) {
+            collisionsPrevented++;
+            identityDuplicateCounts.set(identityBaseKey, occurrence);
+          }
+
+          const importKey = `${identityBaseKey}#${occurrence}`;
+
           const payload = {
             name,
             price,
@@ -235,17 +335,22 @@ export function registerAdminRoutes(app: Express) {
             imageUrl: imageUrl || null,
             categoryId,
             stock: null,
-            sourceFile: sourceToken,
+            sourceFile: `${sourceToken} | ${IMPORT_KEY_PREFIX}${importKey}`,
           };
 
-          const key = medicineKey(name, manufacturer, normalizedPackSize);
-          const existing = existingByKey.get(key);
+          let targetId = existingByImportKey.get(importKey) || null;
 
-          if (existing) {
-            updateBatch.push({ id: existing.id, payload });
+          if (!targetId) {
+            const legacyKey = medicineKey(name, manufacturer, normalizedPackSize);
+            const bucket = legacyBuckets.get(legacyKey) || [];
+            targetId = bucket.find((id) => !consumedLegacyIds.has(id)) || null;
+          }
+
+          if (targetId) {
+            consumedLegacyIds.add(targetId);
+            updateBatch.push({ id: targetId, payload });
           } else {
             insertBatch.push(payload);
-            existingByKey.set(key, { id: `pending-${inserted + insertBatch.length}` });
           }
 
           if (insertBatch.length >= BATCH_SIZE) {
@@ -286,11 +391,19 @@ export function registerAdminRoutes(app: Express) {
         ORDER BY COUNT(*) DESC
       `);
 
+      const duplicateKeysTop30 = [...identityDuplicateCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 30)
+        .map(([key, count]) => ({ key, count }));
+
       console.log("✅ IMPORT COMPLETE");
       console.log(`📈 Total rows processed: ${totalRowsProcessed}`);
       console.log(`➕ Inserted: ${inserted}`);
       console.log(`🔁 Updated: ${updated}`);
       console.log(`⏭️ Skipped: ${skipped}`);
+      console.log(`🔑 Distinct unique keys: ${identityOccurrences.size}`);
+      console.log(`🧩 Unique-key duplicates encountered: ${collisionsPrevented}`);
+      console.log("🧩 Duplicate unique keys (max 30):", duplicateKeysTop30);
       console.log(`🧭 Forced to NO CATEGORY (invalid): ${forcedNoCategoryCount}`);
       console.log(`🧹 Deleted orphan legacy rows: ${deletedOrphans.rows.length}`);
       console.log("📊 Category stats from normalized mapping:", Object.fromEntries(categoryStats.entries()));
@@ -311,6 +424,9 @@ export function registerAdminRoutes(app: Express) {
         forcedNoCategoryCount,
         invalidCategories: [...invalidCategoryValues].slice(0, 30),
         missingDbCategories: [...unknownDbCategoryValues],
+        distinctUniqueKeys: identityOccurrences.size,
+        duplicateUniqueKeysCount: collisionsPrevented,
+        duplicateUniqueKeysTop30: duplicateKeysTop30,
         note: "Referenced medicines are updated in-place to preserve order_items foreign keys.",
       });
     } catch (err) {
