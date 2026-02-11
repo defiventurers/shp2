@@ -26,6 +26,7 @@ export function OnboardingModal() {
     setOpen(false);
   }
 
+
   if (isAuthenticated) return null;
 
   return (

@@ -70,6 +70,7 @@ export async function migratePrescriptions() {
       `);
     }
 
+
     // 4️⃣ Ensure name column exists
     const nameCheck = await client.query(`
       SELECT column_name
@@ -103,6 +104,7 @@ export async function migratePrescriptions() {
         ADD COLUMN prescription_date VARCHAR
       `);
     }
+
 
     // 6️⃣ Ensure orders.discount_amount exists
     const discountCheck = await client.query(`
@@ -142,6 +144,49 @@ export async function migratePrescriptions() {
         SET adjusted_total = total
         WHERE adjusted_total IS NULL
       `);
+    }
+
+
+    // 8️⃣ Backfill medicines.category_id using source_file mapping
+    const categoryRows = await client.query(`
+      SELECT id, name FROM categories
+    `);
+    const catMap: Record<string, string> = {};
+    for (const row of categoryRows.rows) {
+      catMap[String(row.name).toUpperCase()] = row.id;
+    }
+
+    const sourceToCategory: Record<string, string> = {
+      TABLETS: "TABLETS",
+      CAPSULES: "CAPSULES",
+      SYRUPS: "SYRUPS",
+      INJECTIONS: "INJECTIONS",
+  "DIABETIC INJECTIONS": "INJECTIONS",
+      TOPICALS: "TOPICALS",
+      DROPS: "DROPS",
+      POWDERS: "POWDERS",
+      MOUTHWASH: "MOUTHWASH",
+      INHALERS: "INHALERS",
+      DEVICES: "DEVICES",
+      SCRUBS: "SCRUBS",
+      SOLUTIONS: "SOLUTIONS",
+      OTHERS: "NO CATEGORY",
+      "NO CATEGORY": "NO CATEGORY",
+    };
+
+    for (const [sourceFile, categoryName] of Object.entries(sourceToCategory)) {
+      const categoryId = catMap[categoryName];
+      if (!categoryId) continue;
+
+      await client.query(
+        `
+          UPDATE medicines
+          SET category_id = $1
+          WHERE (category_id IS NULL OR category_id = '')
+          AND UPPER(COALESCE(source_file, 'OTHERS')) = $2
+        `,
+        [categoryId, sourceFile]
+      );
     }
 
     console.log("✅ Prescription migration complete");

@@ -3,19 +3,26 @@ import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
 import { and, eq, ilike, sql } from "drizzle-orm";
 
-function deriveCategoryFromName(name: string): string {
-  const upper = (name || "").toUpperCase();
-  if (upper.includes("TAB") || upper.includes("TABLET")) return "TABLETS";
-  if (upper.includes("CAP") || upper.includes("CAPSULE")) return "CAPSULES";
-  if (upper.includes("SYR") || upper.includes("SYP")) return "SYRUPS";
-  if (upper.includes("INJ") || upper.includes("VIAL")) return "INJECTIONS";
-  if (upper.includes("DROP")) return "DROPS";
-  if (upper.includes("INHAL")) return "INHALERS";
-  if (upper.includes("MOUTHWASH")) return "MOUTHWASH";
-  if (upper.includes("POWDER")) return "POWDERS";
-  if (upper.includes("GEL") || upper.includes("CREAM") || upper.includes("OINT"))
-    return "TOPICALS";
-  return "NO CATEGORY";
+const SOURCE_TO_CATEGORY: Record<string, string> = {
+  TABLETS: "TABLETS",
+  CAPSULES: "CAPSULES",
+  SYRUPS: "SYRUPS",
+  INJECTIONS: "INJECTIONS",
+  "DIABETIC INJECTIONS": "INJECTIONS",
+  TOPICALS: "TOPICALS",
+  DROPS: "DROPS",
+  POWDERS: "POWDERS",
+  MOUTHWASH: "MOUTHWASH",
+  INHALERS: "INHALERS",
+  DEVICES: "DEVICES",
+  SCRUBS: "SCRUBS",
+  SOLUTIONS: "SOLUTIONS",
+  OTHERS: "NO CATEGORY",
+  "NO CATEGORY": "NO CATEGORY",
+};
+
+function normalizeSourceFile(value: string | null | undefined): string {
+  return (value || "").trim().toUpperCase();
 }
 
 export function registerMedicineRoutes(app: Express) {
@@ -24,13 +31,31 @@ export function registerMedicineRoutes(app: Express) {
   app.get("/api/medicines", async (req: Request, res: Response) => {
     try {
       const search = req.query.q?.toString()?.trim();
-      const categoryName = req.query.category?.toString()?.trim().toUpperCase();
+      const categoryNameParam = req.query.category
+        ?.toString()
+        ?.trim()
+        .toUpperCase();
       const page = Math.max(1, Number(req.query.page || 1));
       const limit = Math.min(60, Math.max(12, Number(req.query.limit || 24)));
       const offset = (page - 1) * limit;
 
-      const where = and(
-        search ? ilike(medicines.name, `%${search}%`) : undefined
+      let categoryIdFilter: string | null = null;
+
+      if (categoryNameParam) {
+        const [cat] = await db
+          .select({ id: categories.id })
+          .from(categories)
+          .where(eq(categories.name, categoryNameParam))
+          .limit(1);
+
+        categoryIdFilter = cat?.id || null;
+      }
+
+      const whereBase = and(
+        search ? ilike(medicines.name, `%${search}%`) : undefined,
+        categoryNameParam && categoryIdFilter
+          ? eq(medicines.categoryId, categoryIdFilter)
+          : undefined
       );
 
       const rows = await db
@@ -42,30 +67,62 @@ export function registerMedicineRoutes(app: Express) {
           price: medicines.price,
           imageUrl: medicines.imageUrl,
           categoryId: medicines.categoryId,
-          categoryName: categories.name,
           requiresPrescription: medicines.requiresPrescription,
           sourceFile: medicines.sourceFile,
         })
         .from(medicines)
-        .leftJoin(categories, eq(medicines.categoryId, categories.id))
-        .where(where)
-        .limit(5000); // keep query bounded before in-memory fallback category filtering
+        .where(whereBase)
+        .limit(limit)
+        .offset(offset);
 
-      const enriched = rows.map((m) => ({
-        ...m,
-        categoryName: m.categoryName || deriveCategoryFromName(m.name || ""),
-      }));
+      let finalRows = rows;
+      let total = 0;
 
-      const filteredByCategory = categoryName
-        ? enriched.filter((m) => (m.categoryName || "NO CATEGORY") === categoryName)
-        : enriched;
+      if (categoryNameParam && !categoryIdFilter) {
+        const fallbackCategory = categoryNameParam;
 
-      const total = filteredByCategory.length;
-      const paginated = filteredByCategory.slice(offset, offset + limit);
+        const fullSearchRows = await db
+          .select({
+            id: medicines.id,
+            name: medicines.name,
+            manufacturer: medicines.manufacturer,
+            packSize: medicines.packSize,
+            price: medicines.price,
+            imageUrl: medicines.imageUrl,
+            categoryId: medicines.categoryId,
+            requiresPrescription: medicines.requiresPrescription,
+            sourceFile: medicines.sourceFile,
+          })
+          .from(medicines)
+          .where(search ? ilike(medicines.name, `%${search}%`) : undefined);
+
+        const filtered = fullSearchRows.filter((m) => {
+          const mapped =
+            SOURCE_TO_CATEGORY[normalizeSourceFile(m.sourceFile)] || "NO CATEGORY";
+          return mapped === fallbackCategory;
+        });
+
+        total = filtered.length;
+        finalRows = filtered.slice(offset, offset + limit);
+      } else {
+        const countWhere = and(
+          search ? ilike(medicines.name, `%${search}%`) : undefined,
+          categoryNameParam && categoryIdFilter
+            ? eq(medicines.categoryId, categoryIdFilter)
+            : undefined
+        );
+
+        const [countRow] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(medicines)
+          .where(countWhere);
+
+        total = Number(countRow?.count || 0);
+      }
 
       res.json({
         success: true,
-        medicines: paginated,
+        medicines: finalRows,
         total,
         page,
         limit,
