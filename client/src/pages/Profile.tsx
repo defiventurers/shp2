@@ -24,6 +24,8 @@ type PrescriptionItem = {
   prescriptionDate?: string;
 };
 
+const API_BASE = import.meta.env.VITE_API_URL;
+
 export default function Profile() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,16 +38,35 @@ export default function Profile() {
   const { prescriptions, refreshPrescriptions } = useCartContext();
 
   useEffect(() => {
-    fetch("/api/orders", { credentials: "include" })
+    fetch(`${API_BASE}/api/orders`, { credentials: "include" })
       .then((r) => r.json())
       .then((data) => setOrders(data.orders || []))
       .finally(() => setLoading(false));
   }, []);
 
+  async function parseError(res: Response, fallback: string) {
+    try {
+      const data = await res.json();
+      if (data?.error) return data.error;
+      if (data?.message) return data.message;
+    } catch {
+      // ignore
+    }
+
+    try {
+      const text = await res.text();
+      if (text) return text;
+    } catch {
+      // ignore
+    }
+
+    return fallback;
+  }
+
   async function deletePrescription(id: string) {
     if (!confirm("Delete this prescription permanently?")) return;
 
-    const res = await fetch(`/api/prescriptions/${id}`, {
+    const res = await fetch(`${API_BASE}/api/prescriptions/${id}`, {
       method: "DELETE",
       credentials: "include",
     });
@@ -53,25 +74,27 @@ export default function Profile() {
     if (res.ok) {
       await refreshPrescriptions();
     } else {
-      alert("Failed to delete prescription");
+      alert(await parseError(res, "Failed to delete prescription"));
     }
   }
 
   async function savePrescriptionMeta(id: string) {
-    if (!editName.trim()) {
-      alert("Please enter a prescription name");
+    if (!editName.trim() && !editDate.trim()) {
+      alert("Please enter prescription name or date");
       return;
     }
 
-    const payload: { name: string; prescriptionDate?: string } = {
-      name: editName.trim(),
-    };
+    const payload: { name?: string; prescriptionDate?: string } = {};
+
+    if (editName.trim()) {
+      payload.name = editName.trim();
+    }
 
     if (editDate.trim()) {
       payload.prescriptionDate = editDate.trim();
     }
 
-    const res = await fetch(`/api/prescriptions/${id}`, {
+    const res = await fetch(`${API_BASE}/api/prescriptions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -84,8 +107,7 @@ export default function Profile() {
       setEditDate("");
       await refreshPrescriptions();
     } else {
-      const text = await res.text();
-      alert(text || "Update failed");
+      alert(await parseError(res, "Update failed"));
     }
   }
 
@@ -98,7 +120,7 @@ export default function Profile() {
     const formData = new FormData();
     Array.from(files).forEach((f) => formData.append("images", f));
 
-    const res = await fetch("/api/prescriptions/upload", {
+    const res = await fetch(`${API_BASE}/api/prescriptions/upload`, {
       method: "POST",
       credentials: "include",
       body: formData,
@@ -111,7 +133,7 @@ export default function Profile() {
     if (res.ok) {
       await refreshPrescriptions();
     } else {
-      alert("Upload failed");
+      alert(await parseError(res, "Upload failed"));
     }
   }
 
@@ -125,11 +147,14 @@ export default function Profile() {
     const formData = new FormData();
     Array.from(files).forEach((f) => formData.append("images", f));
 
-    const res = await fetch(`/api/prescriptions/${prescriptionId}/images`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
+    const res = await fetch(
+      `${API_BASE}/api/prescriptions/${prescriptionId}/images`,
+      {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      }
+    );
 
     if (event?.target) {
       event.target.value = "";
@@ -138,24 +163,25 @@ export default function Profile() {
     if (res.ok) {
       await refreshPrescriptions();
     } else {
-      const text = await res.text();
-      alert(text || "Failed to add pages");
+      alert(await parseError(res, "Failed to add pages"));
     }
   }
 
   async function deletePage(prescriptionId: string, index: number) {
     if (!confirm("Delete this page?")) return;
 
-    const res = await fetch(`/api/prescriptions/${prescriptionId}/images/${index}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
+    const res = await fetch(
+      `${API_BASE}/api/prescriptions/${prescriptionId}/images/${index}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      }
+    );
 
     if (res.ok) {
       await refreshPrescriptions();
     } else {
-      const text = await res.text();
-      alert(text || "Cannot delete page");
+      alert(await parseError(res, "Cannot delete page"));
     }
   }
 
@@ -209,7 +235,10 @@ export default function Profile() {
                       placeholder="Prescription date (optional)"
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => savePrescriptionMeta(p.id)}>
+                      <Button
+                        size="sm"
+                        onClick={() => savePrescriptionMeta(p.id)}
+                      >
                         Save
                       </Button>
                       <Button
