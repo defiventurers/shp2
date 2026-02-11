@@ -34,6 +34,7 @@ export default function Inventory() {
   const [selectedCategoryName, setSelectedCategoryName] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalMedicines, setTotalMedicines] = useState(0);
@@ -42,6 +43,7 @@ export default function Inventory() {
   const [error, setError] = useState<string | null>(null);
 
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const latestRequestRef = useRef(0);
 
   useEffect(() => {
     async function loadCategories() {
@@ -64,10 +66,23 @@ export default function Inventory() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const qs = params.get("search");
+    const category = params.get("category");
     if (qs) setSearch(qs);
+    if (category) setSelectedCategoryName(category.toUpperCase());
   }, [location]);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [search]);
+
   async function loadMedicines(targetPage: number, reset = false) {
+    const requestId = Date.now() + Math.random();
+    latestRequestRef.current = requestId;
+
     try {
       if (reset) {
         setLoading(true);
@@ -79,13 +94,17 @@ export default function Inventory() {
       params.set("page", String(targetPage));
       params.set("limit", String(PAGE_SIZE));
 
-      if (search.trim()) params.set("q", search.trim());
+      if (debouncedSearch) params.set("q", debouncedSearch);
       if (selectedCategoryName) params.set("category", selectedCategoryName);
 
       const medRes = await fetch(`${API_BASE}/api/medicines?${params.toString()}`);
       if (!medRes.ok) throw new Error("Medicines API failed");
 
       const medJson = await medRes.json();
+
+      if (latestRequestRef.current !== requestId) {
+        return;
+      }
 
       setTotalPages(medJson.totalPages || 1);
       setTotalMedicines(medJson.total || 0);
@@ -112,7 +131,7 @@ export default function Inventory() {
   useEffect(() => {
     setPage(1);
     loadMedicines(1, true);
-  }, [search, selectedCategoryName]);
+  }, [debouncedSearch, selectedCategoryName]);
 
   useEffect(() => {
     if (page === 1) return;

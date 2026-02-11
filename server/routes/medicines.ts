@@ -21,7 +21,7 @@ export function registerMedicineRoutes(app: Express) {
         const [cat] = await db
           .select({ id: categories.id })
           .from(categories)
-          .where(eq(categories.name, categoryNameParam))
+          .where(sql<boolean>`UPPER(${categories.name}) = ${categoryNameParam}`)
           .limit(1);
 
         categoryIdFilter = cat?.id || null;
@@ -46,10 +46,14 @@ export function registerMedicineRoutes(app: Express) {
           })()
         : undefined;
 
-      const whereBase = and(
-        search ? ilike(medicines.name, `%${search}%`) : undefined,
-        categoryMatch,
-      );
+      const searchMatch = search
+        ? or(
+            ilike(medicines.name, `%${search}%`),
+            ilike(medicines.manufacturer, `%${search}%`),
+          )
+        : undefined;
+
+      const whereBase = and(searchMatch, categoryMatch);
 
       const rows = await db
         .select({
@@ -65,6 +69,7 @@ export function registerMedicineRoutes(app: Express) {
         })
         .from(medicines)
         .where(whereBase)
+        .orderBy(medicines.name)
         .limit(limit)
         .offset(offset);
 

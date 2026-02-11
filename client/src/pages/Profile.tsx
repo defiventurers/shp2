@@ -55,11 +55,21 @@ export default function Profile() {
   }, [user?.name, user?.phone]);
 
   useEffect(() => {
+    if (!user) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
+
     fetch(`${API_BASE}/api/orders`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setOrders(data.orders || data || []))
+      .then(async (r) => {
+        if (!r.ok) return [];
+        return r.json();
+      })
+      .then((data) => setOrders(data?.orders || data || []))
+      .catch(() => setOrders([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user?.id]);
 
   async function parseError(res: Response, fallback: string) {
     try {
@@ -227,6 +237,18 @@ export default function Profile() {
     return <div className="p-6 text-center">Loading profile…</div>;
   }
 
+  if (!user) {
+    return (
+      <div className="max-w-lg mx-auto p-4">
+        <Card className="p-4 text-center space-y-2">
+          <h2 className="text-lg font-semibold">Sign in required</h2>
+          <p className="text-sm text-muted-foreground">Please sign in to view and update your profile.</p>
+          <Button onClick={() => navigate("/")}>Go to Home</Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-lg mx-auto p-4 space-y-6">
       <Card className="p-4 space-y-3">
@@ -251,13 +273,13 @@ export default function Profile() {
         {orders.slice(0, 3).map((order) => (
           <div key={order.id} className="flex items-center justify-between text-sm">
             <span>
-              #{order.orderNumber} • {order.items[0]?.medicineName || "Medicines"}
+              #{order.orderNumber} • {order.items?.[0]?.medicineName || "Medicines"}
             </span>
             <Button
               size="sm"
               variant="outline"
               onClick={() =>
-                navigate(`/inventory?search=${encodeURIComponent(order.items[0]?.medicineName || "")}`)
+                navigate(`/inventory?search=${encodeURIComponent(order.items?.[0]?.medicineName || "")}`)
               }
             >
               Reorder
@@ -409,7 +431,7 @@ export default function Profile() {
             )}
 
             <ul className="text-sm list-disc ml-5">
-              {order.items.map((i, idx) => (
+              {(order.items || []).map((i, idx) => (
                 <li key={idx}>
                   {i.medicineName} × {i.quantity}
                 </li>
