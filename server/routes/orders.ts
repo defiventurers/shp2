@@ -2,7 +2,7 @@ import type { Express, Response } from "express";
 import { db } from "../db";
 import { orders, orderItems } from "@shared/schema";
 import { requireAuth, AuthRequest } from "../middleware/requireAuth";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import multer from "multer";
 import cloudinary from "cloudinary";
 

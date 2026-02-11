@@ -179,3 +179,9 @@ export type Category = typeof categories.$inferSelect;
 export type Medicine = typeof medicines.$inferSelect;
 export type Prescription = typeof prescriptions.$inferSelect;
 export type Order = typeof orders.$inferSelect;
+export type OrderItem = typeof orderItems.$inferSelect;
+
+export type CartItem = {
+  medicine: Medicine;
+  quantity: number;
+};

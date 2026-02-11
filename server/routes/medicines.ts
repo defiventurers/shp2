@@ -27,56 +27,28 @@ export function registerMedicineRoutes(app: Express) {
         categoryIdFilter = cat?.id || null;
       }
 
-      if (categoryNameParam && !categoryIdFilter) {
-        const sourceTokens = sourceTokensForCategory(categoryNameParam);
-        const sourceConditions = sourceTokens.map((token) =>
-          sql<boolean>`UPPER(COALESCE(${medicines.sourceFile}, 'OTHERS')) = ${token}`,
-        );
+      const categoryMatch = categoryNameParam
+        ? (() => {
+            const sourceTokens = sourceTokensForCategory(categoryNameParam);
+            const sourceConditions = sourceTokens.map((token) =>
+              sql<boolean>`UPPER(COALESCE(${medicines.sourceFile}, 'OTHERS')) = ${token}`,
+            );
 
-        const whereFallback = and(
-          search ? ilike(medicines.name, `%${search}%`) : undefined,
-          sourceConditions.length ? or(...sourceConditions) : undefined,
-        );
+            if (!categoryIdFilter) {
+              return sourceConditions.length ? or(...sourceConditions) : undefined;
+            }
 
-        const rows = await db
-          .select({
-            id: medicines.id,
-            name: medicines.name,
-            manufacturer: medicines.manufacturer,
-            packSize: medicines.packSize,
-            price: medicines.price,
-            imageUrl: medicines.imageUrl,
-            categoryId: medicines.categoryId,
-            requiresPrescription: medicines.requiresPrescription,
-            sourceFile: medicines.sourceFile,
-          })
-          .from(medicines)
-          .where(whereFallback)
-          .limit(limit)
-          .offset(offset);
+            if (!sourceConditions.length) {
+              return eq(medicines.categoryId, categoryIdFilter);
+            }
 
-        const [countRow] = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(medicines)
-          .where(whereFallback);
-
-        const total = Number(countRow?.count || 0);
-
-        return res.json({
-          success: true,
-          medicines: rows,
-          total,
-          page,
-          limit,
-          totalPages: Math.max(1, Math.ceil(total / limit)),
-        });
-      }
+            return or(eq(medicines.categoryId, categoryIdFilter), ...sourceConditions);
+          })()
+        : undefined;
 
       const whereBase = and(
         search ? ilike(medicines.name, `%${search}%`) : undefined,
-        categoryNameParam && categoryIdFilter
-          ? eq(medicines.categoryId, categoryIdFilter)
-          : undefined,
+        categoryMatch,
       );
 
       const rows = await db
