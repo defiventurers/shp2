@@ -1,3 +1,4 @@
+cat > server/routes/medicines.ts <<'EOF'
 import type { Express, Request, Response } from "express";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
@@ -117,3 +118,4 @@ export function registerMedicineRoutes(app: Express) {
     }
   });
 }
+EOF

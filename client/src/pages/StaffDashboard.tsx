@@ -1,3 +1,4 @@
+cat > client/src/pages/StaffDashboard.tsx <<'EOF'
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -394,3 +395,4 @@ export default function StaffDashboard() {
     </div>
   );
 }
+EOF

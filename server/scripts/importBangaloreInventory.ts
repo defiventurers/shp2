@@ -1,3 +1,4 @@
+cat > server/scripts/importBangaloreInventory.ts <<'EOF'
 import fs from "fs";
 import path from "path";
 import csv from "csv-parser";
@@ -83,3 +84,4 @@ export async function importBangaloreInventory() {
       .on("error", reject);
   });
 }
+EOF

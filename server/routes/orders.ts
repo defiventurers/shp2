@@ -1,3 +1,4 @@
+cat > server/routes/orders.ts <<'EOF'
 import type { Express, Response } from "express";
 import { db } from "../db";
 import { orders, orderItems } from "@shared/schema";
@@ -377,3 +378,4 @@ export function registerOrderRoutes(app: Express) {
     },
   );
 }
+EOF

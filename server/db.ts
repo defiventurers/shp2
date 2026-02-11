@@ -1,3 +1,4 @@
+cat > server/db.ts <<'EOF'
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
@@ -171,3 +172,4 @@ export async function migratePrescriptions() {
     client.release();
   }
 }
+EOF
