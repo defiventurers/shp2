@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,19 @@ type Order = {
   }[];
 };
 
+type PrescriptionItem = {
+  id: string;
+  imageUrls: string[];
+  name?: string;
+  prescriptionDate?: string;
+};
+
 export default function Profile() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDate, setEditDate] = useState("");
 
   const newPrescriptionInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,32 +51,48 @@ export default function Profile() {
     });
 
     if (res.ok) {
-      refreshPrescriptions();
+      await refreshPrescriptions();
     } else {
       alert("Failed to delete prescription");
     }
   }
 
-  async function renamePrescription(id: string) {
-    if (!newName.trim()) return;
+  async function savePrescriptionMeta(id: string) {
+    if (!editName.trim()) {
+      alert("Please enter a prescription name");
+      return;
+    }
+
+    const payload: { name: string; prescriptionDate?: string } = {
+      name: editName.trim(),
+    };
+
+    if (editDate.trim()) {
+      payload.prescriptionDate = editDate.trim();
+    }
 
     const res = await fetch(`/api/prescriptions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ name: newName }),
+      body: JSON.stringify(payload),
     });
 
     if (res.ok) {
-      setRenamingId(null);
-      setNewName("");
-      refreshPrescriptions();
+      setEditingId(null);
+      setEditName("");
+      setEditDate("");
+      await refreshPrescriptions();
     } else {
-      alert("Rename failed");
+      const text = await res.text();
+      alert(text || "Update failed");
     }
   }
 
-  async function uploadNewPrescription(files: FileList | null) {
+  async function uploadNewPrescription(
+    files: FileList | null,
+    event?: ChangeEvent<HTMLInputElement>
+  ) {
     if (!files || files.length === 0) return;
 
     const formData = new FormData();
@@ -80,52 +104,58 @@ export default function Profile() {
       body: formData,
     });
 
+    if (event?.target) {
+      event.target.value = "";
+    }
+
     if (res.ok) {
-      refreshPrescriptions();
+      await refreshPrescriptions();
     } else {
       alert("Upload failed");
     }
   }
 
-  async function addPages(prescriptionId: string, files: FileList | null) {
+  async function addPages(
+    prescriptionId: string,
+    files: FileList | null,
+    event?: ChangeEvent<HTMLInputElement>
+  ) {
     if (!files || files.length === 0) return;
 
     const formData = new FormData();
     Array.from(files).forEach((f) => formData.append("images", f));
 
-    const res = await fetch(
-      `/api/prescriptions/${prescriptionId}/images`,
-      {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      }
-    );
+    const res = await fetch(`/api/prescriptions/${prescriptionId}/images`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    });
+
+    if (event?.target) {
+      event.target.value = "";
+    }
 
     if (res.ok) {
-      refreshPrescriptions();
+      await refreshPrescriptions();
     } else {
-      alert("Failed to add pages");
+      const text = await res.text();
+      alert(text || "Failed to add pages");
     }
   }
 
-  async function deletePage(prescriptionId: string, imageUrl: string) {
+  async function deletePage(prescriptionId: string, index: number) {
     if (!confirm("Delete this page?")) return;
 
-    const res = await fetch(
-      `/api/prescriptions/${prescriptionId}/images`,
-      {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ imageUrl }),
-      }
-    );
+    const res = await fetch(`/api/prescriptions/${prescriptionId}/images/${index}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
 
     if (res.ok) {
-      refreshPrescriptions();
+      await refreshPrescriptions();
     } else {
-      alert("Cannot delete last page");
+      const text = await res.text();
+      alert(text || "Cannot delete page");
     }
   }
 
@@ -151,7 +181,7 @@ export default function Profile() {
             multiple
             accept="image/*"
             className="hidden"
-            onChange={(e) => uploadNewPrescription(e.target.files)}
+            onChange={(e) => uploadNewPrescription(e.target.files, e)}
           />
         </div>
 
@@ -162,44 +192,63 @@ export default function Profile() {
         )}
 
         <div className="space-y-3">
-          {prescriptions.map((p) => (
+          {(prescriptions as PrescriptionItem[]).map((p) => (
             <Card key={p.id} className="p-3 space-y-2">
               {/* HEADER */}
-              <div className="flex justify-between items-center">
-                {renamingId === p.id ? (
-                  <div className="flex gap-2 w-full">
+              <div className="flex justify-between items-center gap-2">
+                {editingId === p.id ? (
+                  <div className="space-y-2 w-full">
                     <Input
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
                       placeholder="Prescription name"
                     />
-                    <Button size="sm" onClick={() => renamePrescription(p.id)}>
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setRenamingId(null)}
-                    >
-                      Cancel
-                    </Button>
+                    <Input
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      placeholder="Prescription date (optional)"
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => savePrescriptionMeta(p.id)}>
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingId(null);
+                          setEditName("");
+                          setEditDate("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <>
-                    <span className="text-sm font-medium">
-                      {p.name || "Prescription"} ({p.imageUrls.length} page
-                      {p.imageUrls.length > 1 ? "s" : ""})
-                    </span>
+                    <div>
+                      <span className="text-sm font-medium block">
+                        {p.name || "Prescription"} ({p.imageUrls.length} page
+                        {p.imageUrls.length > 1 ? "s" : ""})
+                      </span>
+                      {p.prescriptionDate && (
+                        <p className="text-xs text-muted-foreground">
+                          Date: {p.prescriptionDate}
+                        </p>
+                      )}
+                    </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          setRenamingId(p.id);
-                          setNewName(p.name || "");
+                          setEditingId(p.id);
+                          setEditName(p.name || "");
+                          setEditDate(p.prescriptionDate || "");
                         }}
                       >
-                        Rename
+                        Edit
                       </Button>
                       <Button
                         size="sm"
@@ -215,14 +264,11 @@ export default function Profile() {
 
               {/* IMAGES */}
               <div className="flex gap-2 overflow-x-auto">
-                {p.imageUrls.map((url) => (
-                  <div key={url} className="relative group">
-                    <img
-                      src={url}
-                      className="h-20 rounded border"
-                    />
+                {p.imageUrls.map((url, index) => (
+                  <div key={`${url}-${index}`} className="relative group">
+                    <img src={url} className="h-20 rounded border" />
                     <button
-                      onClick={() => deletePage(p.id, url)}
+                      onClick={() => deletePage(p.id, index)}
                       className="absolute top-1 right-1 bg-red-600 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100"
                     >
                       ✕
@@ -238,7 +284,7 @@ export default function Profile() {
                     multiple
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => addPages(p.id, e.target.files)}
+                    onChange={(e) => addPages(p.id, e.target.files, e)}
                   />
                 </label>
               </div>
@@ -252,9 +298,7 @@ export default function Profile() {
         <h2 className="text-lg font-semibold mb-2">My Orders</h2>
 
         {orders.length === 0 && (
-          <p className="text-muted-foreground text-sm">
-            No orders placed yet
-          </p>
+          <p className="text-muted-foreground text-sm">No orders placed yet</p>
         )}
 
         {orders.map((order) => (
@@ -276,9 +320,7 @@ export default function Profile() {
               ))}
             </ul>
 
-            <div className="font-semibold">
-              ₹{Number(order.total).toFixed(0)}
-            </div>
+            <div className="font-semibold">₹{Number(order.total).toFixed(0)}</div>
           </Card>
         ))}
       </div>

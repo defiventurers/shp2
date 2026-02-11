@@ -39,6 +39,12 @@ export function registerPrescriptionRoutes(app: Express) {
     async (req: AuthRequest, res: Response) => {
       try {
         const files = req.files as Express.Multer.File[];
+        const name =
+          typeof req.body?.name === "string" ? req.body.name.trim() : "";
+        const prescriptionDate =
+          typeof req.body?.prescriptionDate === "string"
+            ? req.body.prescriptionDate.trim()
+            : "";
 
         if (!files || files.length === 0) {
           return res.status(400).json({ error: "No images uploaded" });
@@ -63,6 +69,8 @@ export function registerPrescriptionRoutes(app: Express) {
           .insert(prescriptions)
           .values({
             userId: req.user!.id,
+            name: name || null,
+            prescriptionDate: prescriptionDate || null,
             imageUrls,
             status: "pending",
           })
@@ -108,16 +116,26 @@ export function registerPrescriptionRoutes(app: Express) {
     async (req: AuthRequest, res: Response) => {
       try {
         const { id } = req.params;
-        const { name } = req.body;
+        const rawName =
+          typeof req.body?.name === "string" ? req.body.name.trim() : "";
+        const rawPrescriptionDate =
+          typeof req.body?.prescriptionDate === "string"
+            ? req.body.prescriptionDate.trim()
+            : "";
 
-        if (!name) {
-          return res.status(400).json({ error: "Missing name" });
+        if (!rawName && !rawPrescriptionDate) {
+          return res
+            .status(400)
+            .json({ error: "Provide name or prescriptionDate" });
         }
 
         const [updated] = await db
           .update(prescriptions)
           .set({
-            extractedMedicines: { meta: { name } }, // safe storage
+            ...(rawName ? { name: rawName } : {}),
+            ...(rawPrescriptionDate
+              ? { prescriptionDate: rawPrescriptionDate }
+              : {}),
           })
           .where(
             and(
