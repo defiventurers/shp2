@@ -4,25 +4,16 @@ import {
   Shield,
   ChevronDown,
   ChevronUp,
-  Phone,
-  Truck,
   Bell,
-  MessageCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
-/* =========================
-   CONFIG (FIXED)
-========================= */
 const API_BASE =
   import.meta.env.VITE_API_URL ||
   "https://sacredheartpharma-backend.onrender.com";
 
-/* =========================
-   TYPES
-========================= */
 type OrderItem = {
   medicineName: string;
   quantity: number;
@@ -34,6 +25,8 @@ type Order = {
   orderNumber: string;
   status: string;
   total: string;
+  adjustedTotal?: string | null;
+  discountAmount?: string | null;
   deliveryType: "pickup" | "delivery";
   deliveryAddress?: string | null;
   customerName: string;
@@ -51,9 +44,6 @@ const STATUS_FLOW = [
   "delivered",
 ];
 
-/* =========================
-   PHONE NORMALIZATION
-========================= */
 function normalizeIndianPhone(input: string): string {
   if (!input) return "";
   let phone = input.replace(/[^\d+]/g, "");
@@ -72,23 +62,21 @@ export default function StaffDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [discountDraft, setDiscountDraft] = useState<Record<string, string>>({});
 
   const prevOrderCount = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  /* ---------------- AUTH GUARD ---------------- */
   useEffect(() => {
     if (localStorage.getItem("staff_auth") !== "true") {
       navigate("/staff/login");
     }
   }, [navigate]);
 
-  /* ---------------- SOUND ---------------- */
   useEffect(() => {
     audioRef.current = new Audio("/ding.mp3");
   }, []);
 
-  /* ---------------- FETCH ORDERS ---------------- */
   async function fetchOrders() {
     try {
       const res = await fetch(`${API_BASE}/api/orders`, {
@@ -98,14 +86,15 @@ export default function StaffDashboard() {
 
       if (!res.ok) throw new Error();
 
-      const data: Order[] = await res.json();
+      const data = await res.json();
+      const rows: Order[] = Array.isArray(data) ? data : data.orders || [];
 
-      if (data.length > prevOrderCount.current) {
+      if (rows.length > prevOrderCount.current) {
         audioRef.current?.play().catch(() => {});
       }
 
-      prevOrderCount.current = data.length;
-      setOrders(data);
+      prevOrderCount.current = rows.length;
+      setOrders(rows);
     } catch {
       toast({
         title: "Failed to fetch orders",
@@ -116,35 +105,61 @@ export default function StaffDashboard() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 60000);
+    const interval = setInterval(fetchOrders, 20000);
     return () => clearInterval(interval);
   }, []);
 
-  /* ---------------- UPDATE STATUS ---------------- */
   async function updateStatus(order: Order, status: string) {
     setUpdatingId(order.id);
 
     try {
-      const res = await fetch(
-        `${API_BASE}/api/orders/${order.id}/status`,
-        {
-          method: "PATCH",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "x-staff-auth": "true",
-          },
-          body: JSON.stringify({ status }),
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/orders/${order.id}/status`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-staff-auth": "true",
+        },
+        body: JSON.stringify({ status }),
+      });
 
       if (!res.ok) throw new Error();
       await fetchOrders();
 
-      toast({ title: "Order updated" });
+      toast({ title: "Order status updated" });
     } catch {
       toast({
         title: "Failed to update status",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function applyDiscount(order: Order) {
+    setUpdatingId(order.id);
+
+    try {
+      const discountAmount = Number(discountDraft[order.id] || 0);
+
+      const res = await fetch(`${API_BASE}/api/orders/${order.id}/billing`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-staff-auth": "true",
+        },
+        body: JSON.stringify({ discountAmount }),
+      });
+
+      if (!res.ok) throw new Error();
+
+      await fetchOrders();
+      toast({ title: "Discount applied" });
+    } catch {
+      toast({
+        title: "Failed to apply discount",
         variant: "destructive",
       });
     } finally {
@@ -163,6 +178,9 @@ export default function StaffDashboard() {
         <Shield className="w-5 h-5 text-green-600" />
         Staff Dashboard
       </h1>
+      <p className="text-xs text-muted-foreground flex items-center gap-1">
+        <Bell className="w-3 h-3" /> Live order feed refreshes every 20 seconds
+      </p>
 
       {orders.map((order) => {
         const isOpen = expandedId === order.id;
@@ -172,13 +190,11 @@ export default function StaffDashboard() {
           <Card key={order.id} className="p-3 space-y-3">
             <div
               className="flex justify-between cursor-pointer"
-              onClick={() =>
-                setExpandedId(isOpen ? null : order.id)
-              }
+              onClick={() => setExpandedId(isOpen ? null : order.id)}
             >
               <div>
                 <p className="font-medium">#{order.orderNumber}</p>
-                <p className="text-xs capitalize">{order.status}</p>
+                <p className="text-xs capitalize">Current status: {order.status}</p>
               </div>
               {isOpen ? <ChevronUp /> : <ChevronDown />}
             </div>
@@ -188,6 +204,9 @@ export default function StaffDashboard() {
                 <div className="text-sm">
                   <strong>{order.customerName}</strong>
                   <p>📞 {phone}</p>
+                  {order.deliveryAddress && (
+                    <p className="text-xs text-muted-foreground">📍 {order.deliveryAddress}</p>
+                  )}
                 </div>
 
                 {order.items.map((i, idx) => (
@@ -202,9 +221,7 @@ export default function StaffDashboard() {
                 <select
                   value={order.status}
                   disabled={updatingId === order.id}
-                  onChange={(e) =>
-                    updateStatus(order, e.target.value)
-                  }
+                  onChange={(e) => updateStatus(order, e.target.value)}
                   className="w-full border rounded p-2"
                 >
                   {STATUS_FLOW.map((s) => (
@@ -213,6 +230,32 @@ export default function StaffDashboard() {
                     </option>
                   ))}
                 </select>
+
+                <div className="space-y-2 border rounded p-2">
+                  <p className="text-xs text-muted-foreground">Billing adjustment</p>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="Discount amount"
+                    value={discountDraft[order.id] ?? order.discountAmount ?? "0"}
+                    onChange={(e) =>
+                      setDiscountDraft((prev) => ({ ...prev, [order.id]: e.target.value }))
+                    }
+                    className="w-full border rounded p-2 text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    disabled={updatingId === order.id}
+                    onClick={() => applyDiscount(order)}
+                  >
+                    Apply Discount
+                  </Button>
+                  <p className="text-sm">
+                    Final Total: ₹
+                    {Number(order.adjustedTotal || order.total || 0).toFixed(2)}
+                  </p>
+                </div>
               </>
             )}
           </Card>

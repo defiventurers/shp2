@@ -70,6 +70,82 @@ export async function migratePrescriptions() {
       `);
     }
 
+
+    // 4️⃣ Ensure name column exists
+    const nameCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'prescriptions'
+      AND column_name = 'name'
+    `);
+
+    if (nameCheck.rowCount === 0) {
+      console.log("🛠 Adding name column");
+
+      await client.query(`
+        ALTER TABLE prescriptions
+        ADD COLUMN name VARCHAR
+      `);
+    }
+
+    // 5️⃣ Ensure prescription_date column exists
+    const dateCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'prescriptions'
+      AND column_name = 'prescription_date'
+    `);
+
+    if (dateCheck.rowCount === 0) {
+      console.log("🛠 Adding prescription_date column");
+
+      await client.query(`
+        ALTER TABLE prescriptions
+        ADD COLUMN prescription_date VARCHAR
+      `);
+    }
+
+
+    // 6️⃣ Ensure orders.discount_amount exists
+    const discountCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'orders'
+      AND column_name = 'discount_amount'
+    `);
+
+    if (discountCheck.rowCount === 0) {
+      console.log("🛠 Adding discount_amount column");
+
+      await client.query(`
+        ALTER TABLE orders
+        ADD COLUMN discount_amount NUMERIC(10,2) DEFAULT 0
+      `);
+    }
+
+    // 7️⃣ Ensure orders.adjusted_total exists
+    const adjustedCheck = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'orders'
+      AND column_name = 'adjusted_total'
+    `);
+
+    if (adjustedCheck.rowCount === 0) {
+      console.log("🛠 Adding adjusted_total column");
+
+      await client.query(`
+        ALTER TABLE orders
+        ADD COLUMN adjusted_total NUMERIC(10,2)
+      `);
+
+      await client.query(`
+        UPDATE orders
+        SET adjusted_total = total
+        WHERE adjusted_total IS NULL
+      `);
+    }
+
     console.log("✅ Prescription migration complete");
   } catch (err) {
     console.error("❌ Prescription migration failed:", err);
