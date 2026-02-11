@@ -5,16 +5,52 @@ import csv from "csv-parser";
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { medicines, categories } from "@shared/schema";
-import { resolveCategoryNameFromRaw } from "../utils/categoryMapping";
+
+const DOSAGE_FORM_CATEGORIES = [
+  "TABLETS",
+  "CAPSULES",
+  "INJECTIONS",
+  "SYRUPS",
+  "TOPICALS",
+  "DROPS",
+  "POWDERS",
+  "MOUTHWASH",
+  "INHALERS",
+  "DEVICES",
+  "SCRUBS",
+  "SOLUTIONS",
+  "NO CATEGORY",
+] as const;
+
+const DOSAGE_FORM_ALLOWLIST = new Set<string>(DOSAGE_FORM_CATEGORIES);
+
+function normalizeCategory(rawCategory: unknown): string {
+  const normalized = String(rawCategory ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+
+  if (!normalized) {
+    return "NO CATEGORY";
+  }
+
+  return DOSAGE_FORM_ALLOWLIST.has(normalized) ? normalized : "NO CATEGORY";
+}
+
+function normalizeCategoryKey(rawCategory: unknown): string {
+  return String(rawCategory ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
 
 function resolveImportTokens(row: Record<string, unknown>) {
   const rawCategory = String(row["Category"] || "").trim();
   const rawSourceFile = String(row["Source File"] || "").trim();
 
   const sourceToken = rawSourceFile || rawCategory || "Others";
-  const categoryToken = rawCategory || rawSourceFile || "";
 
-  return { sourceToken, categoryToken };
+  return { sourceToken, rawCategory, rawSourceFile };
 }
 
 function medicineKey(name: string, manufacturer: string, packSize: number) {
@@ -66,7 +102,7 @@ export function registerAdminRoutes(app: Express) {
       const allCategories = await db.select().from(categories);
 
       for (const c of allCategories) {
-        categoryMap.set(c.name.toUpperCase(), c.id);
+        categoryMap.set(normalizeCategoryKey(c.name), c.id);
       }
 
       console.log("📦 Loaded categories:", [...categoryMap.keys()]);
@@ -89,11 +125,16 @@ export function registerAdminRoutes(app: Express) {
         });
       }
 
+      let totalRowsProcessed = 0;
       let inserted = 0;
       let updated = 0;
       let skipped = 0;
+      let forcedNoCategoryCount = 0;
 
       const categoryStats = new Map<string, number>();
+      const invalidCategoryValues = new Set<string>();
+      const unknownDbCategoryValues = new Set<string>();
+      const loggedUnknownDbCategories = new Set<string>();
       const insertBatch: any[] = [];
       const updateBatch: Array<{ id: string; payload: any }> = [];
       const BATCH_SIZE = 250;
@@ -122,6 +163,8 @@ export function registerAdminRoutes(app: Express) {
       const stream = fs.createReadStream(csvPath).pipe(csv());
 
       for await (const row of stream) {
+        totalRowsProcessed++;
+
         try {
           const name = String(row["Medicine Name"] || "").trim();
           if (!name) {
@@ -147,17 +190,39 @@ export function registerAdminRoutes(app: Express) {
           const manufacturer = String(row["Manufacturer"] || "NOT KNOWN").trim();
           const imageUrl = String(row["Image URL"] || "").trim();
 
-          const { sourceToken, categoryToken } = resolveImportTokens(row);
+          const { sourceToken, rawCategory, rawSourceFile } = resolveImportTokens(row);
+          const rawCategoryInput = rawCategory || rawSourceFile;
+          const normalizedInput = normalizeCategoryKey(rawCategoryInput);
 
-          const categoryName = resolveCategoryNameFromRaw(sourceToken, categoryToken);
-          const categoryId = categoryMap.get(categoryName.toUpperCase());
+          let normalizedCategory = normalizeCategory(rawCategoryInput);
+          const invalidCategory = Boolean(normalizedInput) && !DOSAGE_FORM_ALLOWLIST.has(normalizedInput);
+
+          if (invalidCategory) {
+            forcedNoCategoryCount++;
+            invalidCategoryValues.add(normalizedInput);
+          }
+
+          let categoryId = categoryMap.get(normalizedCategory);
+
+          if (!categoryId) {
+            unknownDbCategoryValues.add(normalizedCategory);
+            if (!loggedUnknownDbCategories.has(normalizedCategory)) {
+              console.warn(
+                `⚠️ Missing DB category '${normalizedCategory}', falling back to 'NO CATEGORY'.`,
+              );
+              loggedUnknownDbCategories.add(normalizedCategory);
+            }
+
+            normalizedCategory = "NO CATEGORY";
+            categoryId = categoryMap.get(normalizedCategory) ?? null;
+          }
 
           if (!categoryId) {
             skipped++;
             continue;
           }
 
-          categoryStats.set(categoryName, (categoryStats.get(categoryName) || 0) + 1);
+          categoryStats.set(normalizedCategory, (categoryStats.get(normalizedCategory) || 0) + 1);
 
           const payload = {
             name,
@@ -222,22 +287,30 @@ export function registerAdminRoutes(app: Express) {
       `);
 
       console.log("✅ IMPORT COMPLETE");
+      console.log(`📈 Total rows processed: ${totalRowsProcessed}`);
       console.log(`➕ Inserted: ${inserted}`);
       console.log(`🔁 Updated: ${updated}`);
       console.log(`⏭️ Skipped: ${skipped}`);
+      console.log(`🧭 Forced to NO CATEGORY (invalid): ${forcedNoCategoryCount}`);
       console.log(`🧹 Deleted orphan legacy rows: ${deletedOrphans.rows.length}`);
-      console.log("📊 Category stats from CSV mapping:", Object.fromEntries(categoryStats.entries()));
+      console.log("📊 Category stats from normalized mapping:", Object.fromEntries(categoryStats.entries()));
       console.log("📊 Category stats in DB:", categoryBreakdown.rows);
+      console.log("📛 Distinct invalid categories (max 30):", [...invalidCategoryValues].slice(0, 30));
+      console.log("📛 Distinct missing DB categories:", [...unknownDbCategoryValues]);
       console.log("🎯 Expected total: 18433");
 
       res.json({
         success: true,
+        totalRowsProcessed,
         inserted,
         updated,
         skipped,
         deletedOrphans: deletedOrphans.rows.length,
         categoryStats: Object.fromEntries(categoryStats.entries()),
         categoryBreakdown: categoryBreakdown.rows,
+        forcedNoCategoryCount,
+        invalidCategories: [...invalidCategoryValues].slice(0, 30),
+        missingDbCategories: [...unknownDbCategoryValues],
         note: "Referenced medicines are updated in-place to preserve order_items foreign keys.",
       });
     } catch (err) {
