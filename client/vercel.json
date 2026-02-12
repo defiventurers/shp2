@@ -1,5 +1,5 @@
 {
-  "buildCommand": "if [ -f client/package.json ]; then npm --prefix client run build && rm -rf dist && cp -r client/dist dist; else npm run build; fi",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "routes": [
     { "handle": "filesystem" },

@@ -23,6 +23,7 @@ export default function Cart() {
     itemCount,
     subtotal,
     requiresPrescription,
+    selectedPrescriptionId,
   } = useCartContext();
 
   /* ---------------- EMPTY CART ---------------- */
@@ -202,10 +203,10 @@ export default function Cart() {
             className="w-full"
             size="lg"
             asChild
-            disabled={requiresPrescription}
+            disabled={requiresPrescription && !selectedPrescriptionId}
           >
             <Link href="/checkout">
-              {requiresPrescription
+              {requiresPrescription && !selectedPrescriptionId
                 ? "Upload Prescription to Continue"
                 : "Proceed to Checkout"}
             </Link>
