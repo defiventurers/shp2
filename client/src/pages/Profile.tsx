@@ -23,6 +23,15 @@ type Order = {
     medicineName: string;
     quantity: number;
   }[];
+  requestedItems?: {
+    id: string;
+    name: string;
+    quantity: number;
+    customerNotes?: string;
+    status?: "pending" | "available" | "not_available";
+    pharmacistPricePerUnit?: number | null;
+    pharmacistNote?: string;
+  }[];
 };
 
 type PrescriptionItem = {
@@ -452,13 +461,42 @@ export default function Profile() {
               <p className="text-xs text-muted-foreground">Delivery: {order.deliveryAddress}</p>
             )}
 
-            <ul className="text-sm list-disc ml-5">
-              {(order.items || []).map((i, idx) => (
-                <li key={idx}>
-                  {i.medicineName} × {i.quantity}
-                </li>
-              ))}
-            </ul>
+            {!!(order.items || []).length && (
+              <ul className="text-sm list-disc ml-5">
+                {(order.items || []).map((i, idx) => (
+                  <li key={idx}>
+                    {i.medicineName} × {i.quantity}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {!!order.requestedItems?.length && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Requested Items</p>
+                {order.requestedItems.map((item) => (
+                  <div key={item.id} className="border rounded p-2 text-sm">
+                    <p className="font-medium">{item.name} × {item.quantity}</p>
+                    {item.customerNotes ? (
+                      <p className="text-xs text-muted-foreground">Customer note: {item.customerNotes}</p>
+                    ) : null}
+                    <p className="text-xs mt-1">
+                      Status: <span className="capitalize">{(item.status || "pending").replace("_", " ")}</span>
+                    </p>
+                    {item.status === "available" && item.pharmacistPricePerUnit != null ? (
+                      <p className="text-xs text-green-700">
+                        Price: ₹{Number(item.pharmacistPricePerUnit).toFixed(2)} / unit
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-700">Price to be confirmed</p>
+                    )}
+                    {item.pharmacistNote ? (
+                      <p className="text-xs text-muted-foreground">Pharmacist note: {item.pharmacistNote}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="text-sm space-y-1">
               <div className="flex justify-between">

@@ -24,6 +24,16 @@ type OrderItem = {
   price: string;
 };
 
+type RequestedItem = {
+  id: string;
+  name: string;
+  quantity: number;
+  customerNotes?: string;
+  status?: "pending" | "available" | "not_available";
+  pharmacistPricePerUnit?: number | null;
+  pharmacistNote?: string;
+};
+
 type OrderPrescription = {
   id: string;
   name?: string | null;
@@ -45,6 +55,7 @@ type Order = {
   customerEmail?: string | null;
   createdAt: string;
   items: OrderItem[];
+  requestedItems?: RequestedItem[];
   prescription?: OrderPrescription | null;
 };
 
@@ -71,6 +82,9 @@ export default function StaffDashboard() {
   const [discountDraft, setDiscountDraft] = useState<Record<string, string>>({});
   const [adjustedDraft, setAdjustedDraft] = useState<Record<string, string>>({});
   const [lineDraft, setLineDraft] = useState<Record<string, { quantity: number; price: string }>>({});
+  const [requestedDraft, setRequestedDraft] = useState<
+    Record<string, { status: "pending" | "available" | "not_available"; pharmacistPricePerUnit: string; pharmacistNote: string }>
+  >({});
 
   const prevOrderCount = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -98,6 +112,23 @@ export default function StaffDashboard() {
     setLineDraft(next);
   }
 
+  function seedRequestedDraft(rows: Order[]) {
+    const next: Record<string, { status: "pending" | "available" | "not_available"; pharmacistPricePerUnit: string; pharmacistNote: string }> = {};
+
+    for (const order of rows) {
+      for (const item of order.requestedItems || []) {
+        next[item.id] = {
+          status: item.status || "pending",
+          pharmacistPricePerUnit:
+            item.pharmacistPricePerUnit == null ? "" : String(item.pharmacistPricePerUnit),
+          pharmacistNote: String(item.pharmacistNote || ""),
+        };
+      }
+    }
+
+    setRequestedDraft(next);
+  }
+
   async function fetchOrders() {
     try {
       const res = await fetch(`${API_BASE}/api/orders`, {
@@ -117,6 +148,7 @@ export default function StaffDashboard() {
       prevOrderCount.current = rows.length;
       setOrders(rows);
       seedLineDraft(rows);
+      seedRequestedDraft(rows);
     } catch {
       toast({
         title: "Failed to fetch orders",
@@ -209,19 +241,54 @@ export default function StaffDashboard() {
     }
   }
 
-  async function uploadBillImage(order: Order, file: File | null) {
-    if (!file) return;
+  async function saveRequestedItems(order: Order) {
     setUpdatingId(order.id);
 
     try {
-      const form = new FormData();
-      form.append("billImage", file);
+      const payload = (order.requestedItems || []).map((item) => ({
+        id: item.id,
+        status: requestedDraft[item.id]?.status || item.status || "pending",
+        pharmacistPricePerUnit:
+          requestedDraft[item.id]?.status === "available"
+            ? Number(requestedDraft[item.id]?.pharmacistPricePerUnit || 0)
+            : null,
+        pharmacistNote: requestedDraft[item.id]?.pharmacistNote || "",
+      }));
+
+      const res = await fetch(`${API_BASE}/api/orders/${order.id}/requested-items`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-staff-auth": "true",
+        },
+        body: JSON.stringify({ requestedItems: payload }),
+      });
+
+      if (!res.ok) throw new Error();
+
+      await fetchOrders();
+      toast({ title: "Requested items updated" });
+    } catch {
+      toast({ title: "Failed to update requested items", variant: "destructive" });
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function uploadBillImage(order: Order, file: File | null) {
+    if (!file) return;
+
+    setUpdatingId(order.id);
+    try {
+      const formData = new FormData();
+      formData.append("billImage", file);
 
       const res = await fetch(`${API_BASE}/api/orders/${order.id}/bill-image`, {
         method: "POST",
         credentials: "include",
         headers: { "x-staff-auth": "true" },
-        body: form,
+        body: formData,
       });
 
       if (!res.ok) throw new Error();
@@ -240,32 +307,50 @@ export default function StaffDashboard() {
   }
 
   return (
-    <div className="min-h-screen p-4 max-w-lg mx-auto space-y-6">
-      <h1 className="text-lg font-semibold flex items-center gap-2">
-        <Shield className="w-5 h-5 text-green-600" />
-        Staff Dashboard
-      </h1>
-      <p className="text-xs text-muted-foreground flex items-center gap-1">
-        <Bell className="w-3 h-3" /> Live order feed refreshes every 20 seconds
-      </p>
+    <div className="min-h-screen p-4 max-w-3xl mx-auto space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-semibold text-xl flex items-center gap-2">
+            <Shield className="w-5 h-5 text-[#0A7A3D]" /> Staff Dashboard
+          </h1>
+          <p className="text-xs text-muted-foreground">Live orders • auto-refresh every 20s</p>
+        </div>
+        <div className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs">
+          <Bell className="w-3 h-3" /> Live
+        </div>
+      </div>
 
       {orders.map((order) => {
         const isOpen = expandedId === order.id;
         const phone = normalizeIndianPhone(order.customerPhone);
-        const whatsappLink = `https://wa.me/${phone.replace(/\D/g, "")}`;
+        const whatsappLink = `https://wa.me/${phone.replace("+", "")}`;
         const callLink = `tel:${phone}`;
 
         return (
-          <Card key={order.id} className="p-3 space-y-3">
-            <div
-              className="flex justify-between cursor-pointer"
-              onClick={() => setExpandedId(isOpen ? null : order.id)}
-            >
-              <div>
-                <p className="font-medium">#{order.orderNumber}</p>
-                <p className="text-xs capitalize">Current status: {order.status}</p>
+          <Card key={order.id} className="p-3 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold truncate">#{order.orderNumber}</p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(order.createdAt).toLocaleString("en-IN")}
+                </p>
+                <p className="text-sm mt-1">
+                  {order.customerName} • {order.deliveryType === "delivery" ? "Delivery" : "Pickup"}
+                </p>
               </div>
-              {isOpen ? <ChevronUp /> : <ChevronDown />}
+
+              <div className="text-right">
+                <p className="text-sm font-semibold">₹{Number(order.adjustedTotal || order.total || 0).toFixed(2)}</p>
+                <p className="text-xs text-muted-foreground capitalize">{order.status}</p>
+              </div>
+
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setExpandedId(isOpen ? null : order.id)}
+              >
+                {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </Button>
             </div>
 
             {isOpen && (
@@ -318,48 +403,130 @@ export default function StaffDashboard() {
                   )}
                 </div>
 
-                <div className="space-y-2 border rounded p-2">
-                  <p className="text-xs text-muted-foreground">Edit medicines (price + qty)</p>
-                  {order.items.map((item) => (
-                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center text-sm">
-                      <span className="col-span-6 truncate">{item.medicineName}</span>
-                      <input
-                        type="number"
-                        min="1"
-                        className="col-span-2 border rounded p-1"
-                        value={lineDraft[item.id]?.quantity ?? item.quantity}
-                        onChange={(e) =>
-                          setLineDraft((prev) => ({
-                            ...prev,
-                            [item.id]: {
-                              quantity: Math.max(1, Number(e.target.value || 1)),
-                              price: prev[item.id]?.price ?? String(item.price),
-                            },
-                          }))
-                        }
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        className="col-span-4 border rounded p-1"
-                        value={lineDraft[item.id]?.price ?? String(item.price)}
-                        onChange={(e) =>
-                          setLineDraft((prev) => ({
-                            ...prev,
-                            [item.id]: {
-                              quantity: prev[item.id]?.quantity ?? Number(item.quantity),
-                              price: e.target.value,
-                            },
-                          }))
-                        }
-                      />
-                    </div>
-                  ))}
-                  <Button size="sm" disabled={updatingId === order.id} onClick={() => saveLineItems(order)}>
-                    Save Line Items
-                  </Button>
-                </div>
+                {!!order.requestedItems?.length && (
+                  <div className="space-y-2 border rounded p-2">
+                    <p className="text-xs text-muted-foreground">Requested Items</p>
+                    {order.requestedItems.map((item) => {
+                      const draft = requestedDraft[item.id] || {
+                        status: item.status || "pending",
+                        pharmacistPricePerUnit:
+                          item.pharmacistPricePerUnit == null ? "" : String(item.pharmacistPricePerUnit),
+                        pharmacistNote: item.pharmacistNote || "",
+                      };
+
+                      return (
+                        <div key={item.id} className="border rounded p-2 space-y-2">
+                          <p className="text-sm font-medium">{item.name} × {item.quantity}</p>
+                          {item.customerNotes ? (
+                            <p className="text-xs text-muted-foreground">Customer note: {item.customerNotes}</p>
+                          ) : null}
+
+                          <select
+                            value={draft.status}
+                            className="w-full border rounded p-2 text-sm"
+                            onChange={(e) =>
+                              setRequestedDraft((prev) => ({
+                                ...prev,
+                                [item.id]: {
+                                  ...draft,
+                                  status: e.target.value as "pending" | "available" | "not_available",
+                                },
+                              }))
+                            }
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="available">Available</option>
+                            <option value="not_available">Not Available</option>
+                          </select>
+
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            disabled={draft.status !== "available"}
+                            placeholder="Price per unit (₹)"
+                            className="w-full border rounded p-2 text-sm"
+                            value={draft.pharmacistPricePerUnit}
+                            onChange={(e) =>
+                              setRequestedDraft((prev) => ({
+                                ...prev,
+                                [item.id]: {
+                                  ...draft,
+                                  pharmacistPricePerUnit: e.target.value,
+                                },
+                              }))
+                            }
+                          />
+
+                          <input
+                            type="text"
+                            placeholder="Pharmacist note"
+                            className="w-full border rounded p-2 text-sm"
+                            value={draft.pharmacistNote}
+                            onChange={(e) =>
+                              setRequestedDraft((prev) => ({
+                                ...prev,
+                                [item.id]: {
+                                  ...draft,
+                                  pharmacistNote: e.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+
+                    <Button size="sm" disabled={updatingId === order.id} onClick={() => saveRequestedItems(order)}>
+                      Save Requested Items
+                    </Button>
+                  </div>
+                )}
+
+                {!!order.items.length && (
+                  <div className="space-y-2 border rounded p-2">
+                    <p className="text-xs text-muted-foreground">Edit medicines (price + qty)</p>
+                    {order.items.map((item) => (
+                      <div key={item.id} className="grid grid-cols-12 gap-2 items-center text-sm">
+                        <span className="col-span-6 truncate">{item.medicineName}</span>
+                        <input
+                          type="number"
+                          min="1"
+                          className="col-span-2 border rounded p-1"
+                          value={lineDraft[item.id]?.quantity ?? item.quantity}
+                          onChange={(e) =>
+                            setLineDraft((prev) => ({
+                              ...prev,
+                              [item.id]: {
+                                quantity: Math.max(1, Number(e.target.value || 1)),
+                                price: prev[item.id]?.price ?? String(item.price),
+                              },
+                            }))
+                          }
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="col-span-4 border rounded p-1"
+                          value={lineDraft[item.id]?.price ?? String(item.price)}
+                          onChange={(e) =>
+                            setLineDraft((prev) => ({
+                              ...prev,
+                              [item.id]: {
+                                quantity: prev[item.id]?.quantity ?? Number(item.quantity),
+                                price: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                    <Button size="sm" disabled={updatingId === order.id} onClick={() => saveLineItems(order)}>
+                      Save Line Items
+                    </Button>
+                  </div>
+                )}
 
                 <select
                   value={order.status}
