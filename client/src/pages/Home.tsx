@@ -15,7 +15,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { CompleteProfileModal } from "@/components/CompleteProfileModal";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCartContext } from "@/context/CartContext";
@@ -48,19 +53,21 @@ export default function Home() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profilePrompted, setProfilePrompted] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
+
   const [requestRows, setRequestRows] = useState<DraftRequestedItem[]>([
-    { id: crypto.randomUUID(), name: "", quantity: "1", customerNotes: "" },
+    {
+      id: crypto.randomUUID(),
+      name: "",
+      quantity: "1",
+      customerNotes: "",
+    },
   ]);
 
   const profileComplete =
     !!user?.phone && /^[6-9]\d{9}$/.test(user.phone);
 
   useEffect(() => {
-    if (
-      isAuthenticated &&
-      !profileComplete &&
-      !profilePrompted
-    ) {
+    if (isAuthenticated && !profileComplete && !profilePrompted) {
       setShowProfileModal(true);
       setProfilePrompted(true);
     }
@@ -68,11 +75,15 @@ export default function Home() {
 
   const requestValidationError = useMemo(() => {
     for (const row of requestRows) {
-      if (!row.name.trim()) return "Product name is required for all requested items.";
+      if (!row.name.trim())
+        return "Product name is required for all requested items.";
       const qty = Number(row.quantity);
-      if (!Number.isFinite(qty) || qty < 1) return "Quantity must be at least 1 for all requested items.";
-      if (row.customerNotes.length > MAX_NOTE_CHARS) return `Notes cannot exceed ${MAX_NOTE_CHARS} characters.`;
-      if (!noteHasAtMostTwoSentences(row.customerNotes)) return "Additional notes can contain at most 2 sentences.";
+      if (!Number.isFinite(qty) || qty < 1)
+        return "Quantity must be at least 1 for all requested items.";
+      if (row.customerNotes.length > MAX_NOTE_CHARS)
+        return `Notes cannot exceed ${MAX_NOTE_CHARS} characters.`;
+      if (!noteHasAtMostTwoSentences(row.customerNotes))
+        return "Additional notes can contain at most 2 sentences.";
     }
     return null;
   }, [requestRows]);
@@ -80,16 +91,25 @@ export default function Home() {
   function addAnotherRow() {
     setRequestRows((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), name: "", quantity: "1", customerNotes: "" },
+      {
+        id: crypto.randomUUID(),
+        name: "",
+        quantity: "1",
+        customerNotes: "",
+      },
     ]);
   }
 
   function updateRow(id: string, patch: Partial<DraftRequestedItem>) {
-    setRequestRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setRequestRows((prev) =>
+      prev.map((row) => (row.id === id ? { ...row, ...patch } : row))
+    );
   }
 
   function removeRow(id: string) {
-    setRequestRows((prev) => (prev.length === 1 ? prev : prev.filter((row) => row.id !== id)));
+    setRequestRows((prev) =>
+      prev.length === 1 ? prev : prev.filter((row) => row.id !== id)
+    );
   }
 
   function continueToCheckout() {
@@ -109,6 +129,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background pb-28">
+      {/* PROFILE MODAL */}
       <CompleteProfileModal
         open={isAuthenticated && !profileComplete && showProfileModal}
         onDone={() => {
@@ -117,22 +138,27 @@ export default function Home() {
         }}
       />
 
+      {/* REQUEST ITEM MODAL */}
       <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Request an item we don&apos;t have</DialogTitle>
+            <DialogTitle>
+              Request an item we don&apos;t have
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
             {requestRows.map((row, idx) => (
               <Card key={row.id} className="p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Requested item #{idx + 1}</p>
+                  <p className="text-sm font-medium">
+                    Requested item #{idx + 1}
+                  </p>
+
                   {requestRows.length > 1 && (
                     <button
                       className="text-muted-foreground"
                       onClick={() => removeRow(row.id)}
-                      aria-label="Remove requested item"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -142,7 +168,9 @@ export default function Home() {
                 <Input
                   placeholder="Product name *"
                   value={row.name}
-                  onChange={(e) => updateRow(row.id, { name: e.target.value })}
+                  onChange={(e) =>
+                    updateRow(row.id, { name: e.target.value })
+                  }
                 />
 
                 <Input
@@ -150,36 +178,54 @@ export default function Home() {
                   min="1"
                   placeholder="Quantity *"
                   value={row.quantity}
-                  onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
+                  onChange={(e) =>
+                    updateRow(row.id, { quantity: e.target.value })
+                  }
                 />
 
                 <Textarea
-                  placeholder="Additional notes (optional, max 2 sentences)"
+                  placeholder="Additional notes (optional)"
                   value={row.customerNotes}
                   maxLength={MAX_NOTE_CHARS}
-                  onChange={(e) => updateRow(row.id, { customerNotes: e.target.value })}
+                  onChange={(e) =>
+                    updateRow(row.id, {
+                      customerNotes: e.target.value,
+                    })
+                  }
                 />
+
                 <p className="text-[11px] text-muted-foreground">
                   {row.customerNotes.length}/{MAX_NOTE_CHARS} chars
                 </p>
               </Card>
             ))}
 
-            <Button variant="outline" onClick={addAnotherRow} className="w-full">
+            <Button
+              variant="outline"
+              onClick={addAnotherRow}
+              className="w-full"
+            >
               <Plus className="w-4 h-4 mr-1" /> Add another item
             </Button>
 
             {requestValidationError && (
-              <p className="text-sm text-red-600">{requestValidationError}</p>
+              <p className="text-sm text-red-600">
+                {requestValidationError}
+              </p>
             )}
 
-            <Button className="w-full" disabled={!!requestValidationError} onClick={continueToCheckout}>
+            <Button
+              className="w-full"
+              disabled={!!requestValidationError}
+              onClick={continueToCheckout}
+            >
               Continue to Checkout
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
+      {/* HERO */}
       <div
         className="relative text-white"
         style={{ backgroundColor: "#0A7A3D" }}
@@ -205,7 +251,8 @@ export default function Home() {
             <div className="flex items-center justify-center gap-1 text-xs text-white/70 mb-2">
               <MapPin className="w-3 h-3" />
               <span>
-                16, Campbell Rd, opposite to ST. PHILOMENA&apos;S HOSPITAL
+                16, Campbell Rd, opposite to ST. PHILOMENA&apos;S
+                HOSPITAL
               </span>
             </div>
 
@@ -230,6 +277,7 @@ export default function Home() {
         </div>
       </div>
 
+      {/* MAIN */}
       <div className="px-4 mt-4 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-3">
           <Link
@@ -272,14 +320,21 @@ export default function Home() {
           </Link>
         </div>
 
-        <Card className="mt-4 p-4 cursor-pointer" onClick={() => setRequestOpen(true)}>
+        <Card
+          className="mt-4 p-4 cursor-pointer"
+          onClick={() => setRequestOpen(true)}
+        >
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
               <Search className="w-6 h-6 text-amber-700" />
             </div>
             <div className="flex-1">
-              <h3 className="font-semibold text-sm mb-0.5">Looking for something specific?</h3>
-              <p className="text-xs text-muted-foreground">Can&apos;t find it? We may be able to arrange it.</p>
+              <h3 className="font-semibold text-sm mb-0.5">
+                Looking for something specific?
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Can&apos;t find it? We may be able to arrange it.
+              </p>
             </div>
           </div>
         </Card>
