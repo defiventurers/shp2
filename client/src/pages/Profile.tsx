@@ -11,13 +11,26 @@ type Order = {
   id: string;
   orderNumber: string;
   status: string;
+  subtotal?: string;
+  deliveryFee?: string;
   total: string;
   adjustedTotal?: string;
+  discountAmount?: string;
+  promoCode?: string | null;
   createdAt: string;
   deliveryAddress?: string | null;
   items: {
     medicineName: string;
     quantity: number;
+  }[];
+  requestedItems?: {
+    id: string;
+    name: string;
+    quantity: number;
+    customerNotes?: string;
+    status?: "pending" | "available" | "not_available";
+    pharmacistPricePerUnit?: number | null;
+    pharmacistNote?: string;
   }[];
 };
 
@@ -55,20 +68,38 @@ export default function Profile() {
   }, [user?.name, user?.phone]);
 
   useEffect(() => {
-    if (!user) {
-      setOrders([]);
-      setLoading(false);
-      return;
+    let active = true;
+
+    async function fetchOrders() {
+      if (!user) {
+        if (!active) return;
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const r = await fetch(`${API_BASE}/api/orders`, { credentials: "include" });
+        if (!r.ok) {
+          if (active) setOrders([]);
+          return;
+        }
+        const data = await r.json();
+        if (active) setOrders(data?.orders || data || []);
+      } catch {
+        if (active) setOrders([]);
+      } finally {
+        if (active) setLoading(false);
+      }
     }
 
-    fetch(`${API_BASE}/api/orders`, { credentials: "include" })
-      .then(async (r) => {
-        if (!r.ok) return [];
-        return r.json();
-      })
-      .then((data) => setOrders(data?.orders || data || []))
-      .catch(() => setOrders([]))
-      .finally(() => setLoading(false));
+    setLoading(true);
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 20000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [user?.id]);
 
   async function parseError(res: Response, fallback: string) {
@@ -430,15 +461,64 @@ export default function Profile() {
               <p className="text-xs text-muted-foreground">Delivery: {order.deliveryAddress}</p>
             )}
 
-            <ul className="text-sm list-disc ml-5">
-              {(order.items || []).map((i, idx) => (
-                <li key={idx}>
-                  {i.medicineName} × {i.quantity}
-                </li>
-              ))}
-            </ul>
+            {!!(order.items || []).length && (
+              <ul className="text-sm list-disc ml-5">
+                {(order.items || []).map((i, idx) => (
+                  <li key={idx}>
+                    {i.medicineName} × {i.quantity}
+                  </li>
+                ))}
+              </ul>
+            )}
 
-            <div className="font-semibold">₹{Number(order.adjustedTotal || order.total).toFixed(0)}</div>
+            {!!order.requestedItems?.length && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Requested Items</p>
+                {order.requestedItems.map((item) => (
+                  <div key={item.id} className="border rounded p-2 text-sm">
+                    <p className="font-medium">{item.name} × {item.quantity}</p>
+                    {item.customerNotes ? (
+                      <p className="text-xs text-muted-foreground">Customer note: {item.customerNotes}</p>
+                    ) : null}
+                    <p className="text-xs mt-1">
+                      Status: <span className="capitalize">{(item.status || "pending").replace("_", " ")}</span>
+                    </p>
+                    {item.status === "available" && item.pharmacistPricePerUnit != null ? (
+                      <p className="text-xs text-green-700">
+                        Price: ₹{Number(item.pharmacistPricePerUnit).toFixed(2)} / unit
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-700">Price to be confirmed</p>
+                    )}
+                    {item.pharmacistNote ? (
+                      <p className="text-xs text-muted-foreground">Pharmacist note: {item.pharmacistNote}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Estimated total</span>
+                <span>₹{Number(order.total || 0).toFixed(2)}</span>
+              </div>
+              {(Number(order.discountAmount || 0) > 0 || !!order.promoCode) && (
+                <div className="flex justify-between text-green-700">
+                  <span>{order.promoCode ? `${order.promoCode} savings` : "Discount"}</span>
+                  <span>-₹{Number(order.discountAmount || 0).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold">
+                <span>Final total</span>
+                <span>₹{Number(order.adjustedTotal || order.total || 0).toFixed(2)}</span>
+              </div>
+              {order.adjustedTotal && Number(order.adjustedTotal) !== Number(order.total) && (
+                <p className="text-xs text-muted-foreground">
+                  Updated by pharmacist based on availability/pricing.
+                </p>
+              )}
+            </div>
           </Card>
         ))}
       </div>
