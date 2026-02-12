@@ -27,6 +27,8 @@ export default function Checkout() {
   const {
     items,
     clearCart,
+    requestedItems,
+    clearRequestedItems,
     selectedPrescriptionId,
     selectedPrescription,
   } = useCartContext();
@@ -70,8 +72,19 @@ export default function Checkout() {
 
   const finalTotal = Math.max(0, Number((totalInclusive - save10Discount).toFixed(2)));
 
+  const checkoutHasAnyItems = items.length > 0 || requestedItems.length > 0;
+
   const whatsappUrl = useMemo(() => {
     if (!placedOrder) return "";
+
+    const inventorySummary = items
+      .map((item) => `- ${item.medicine.name} x${item.quantity}`)
+      .join("\n");
+
+    const requestSummary = requestedItems
+      .map((item) => `- ${item.name} x${item.quantity} (price to be confirmed)`)
+      .join("\n");
+
     const message = [
       `Hello Sacred Heart Pharmacy,`,
       `I have placed an order and wanted to inform the pharmacist.`,
@@ -80,13 +93,14 @@ export default function Checkout() {
       `Phone: ${phone.trim()}`,
       `Delivery Option: ${placedOrder.deliveryOptionLabel}`,
       `Address: ${placedOrder.addressLabel}`,
-      `Items:\n${placedOrder.itemSummary}`,
+      inventorySummary ? `Inventory Items:\n${inventorySummary}` : "Inventory Items: None",
+      requestSummary ? `Requested Items:\n${requestSummary}` : "Requested Items: None",
       `Estimated Total: ₹${placedOrder.estimatedTotal.toFixed(2)}`,
       `Prescription attached in staff portal: ${selectedPrescription ? selectedPrescription.name || selectedPrescription.id : "Not attached"}`,
     ].join("\n");
 
     return `https://wa.me/${PHARMACIST_WHATSAPP}?text=${encodeURIComponent(message)}`;
-  }, [placedOrder, name, phone, selectedPrescription]);
+  }, [placedOrder, name, phone, selectedPrescription, items, requestedItems]);
 
   function applyPromo() {
     const normalized = promoInput.trim().toUpperCase();
@@ -100,14 +114,18 @@ export default function Checkout() {
     toast({ title: "SAVE10 applied", description: `You save ₹${save10Discount || "..."}` });
   }
 
-
   useEffect(() => {
-    if (placedOrder && items.length > 0) {
+    if (placedOrder && (items.length > 0 || requestedItems.length > 0)) {
       setPlacedOrder(null);
     }
-  }, [items, placedOrder]);
+  }, [items, requestedItems, placedOrder]);
 
   async function placeOrder() {
+    if (!checkoutHasAnyItems) {
+      toast({ title: "Add at least one item before checkout", variant: "destructive" });
+      return;
+    }
+
     if (!name.trim() || !/^[6-9]\d{9}$/.test(phone)) {
       toast({ title: "Enter valid name and phone", variant: "destructive" });
       return;
@@ -142,6 +160,7 @@ export default function Checkout() {
           quantity: item.quantity,
           price: Number(item.medicine.price),
         })),
+        requestedItems,
         subtotal: Number(subtotal.toFixed(2)),
         deliveryFee,
         total: Number(totalInclusive.toFixed(2)),
@@ -159,9 +178,10 @@ export default function Checkout() {
         orderNumber: data.orderNumber,
         status: data.status,
         adjustedTotal: data.adjustedTotal,
-        itemSummary: items
-          .map((item) => `- ${item.medicine.name} x${item.quantity}`)
-          .join("\n"),
+        itemSummary: [
+          ...items.map((item) => `- ${item.medicine.name} x${item.quantity}`),
+          ...requestedItems.map((item) => `- ${item.name} x${item.quantity} (price to be confirmed)`),
+        ].join("\n"),
         estimatedTotal: finalTotal,
         deliveryOptionLabel: deliveryType,
         addressLabel: deliveryType === "delivery" ? deliveryAddress.trim() : "Store pickup",
@@ -173,6 +193,7 @@ export default function Checkout() {
       });
 
       clearCart();
+      clearRequestedItems();
     } catch (err: any) {
       toast({
         title: "Order failed",
@@ -224,6 +245,31 @@ export default function Checkout() {
             <Input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
         </Card>
+
+        {!!requestedItems.length && (
+          <Card className="p-4 space-y-2">
+            <p className="text-sm font-medium">Requested Items (Price to be confirmed)</p>
+            {requestedItems.map((item) => (
+              <div key={item.id} className="border rounded p-2 text-sm">
+                <p className="font-medium">{item.name} × {item.quantity}</p>
+                <p className="text-xs text-amber-700">Price to be confirmed</p>
+                {item.customerNotes ? <p className="text-xs text-muted-foreground mt-1">Note: {item.customerNotes}</p> : null}
+              </div>
+            ))}
+          </Card>
+        )}
+
+        {!!items.length && (
+          <Card className="p-4 space-y-2">
+            <p className="text-sm font-medium">Inventory Items</p>
+            {items.map((item) => (
+              <div key={item.medicine.id} className="flex justify-between text-sm">
+                <span>{item.medicine.name} × {item.quantity}</span>
+                <span>₹{(Number(item.medicine.price) * item.quantity).toFixed(2)}</span>
+              </div>
+            ))}
+          </Card>
+        )}
 
         <Card className="p-4 space-y-3">
           <Label>Delivery Option</Label>
@@ -344,33 +390,33 @@ export default function Checkout() {
       </div>
 
       {!placedOrder && (
-      <div className="fixed bottom-16 left-0 right-0 border-t bg-background p-4 space-y-2">
-        <div className="text-sm text-muted-foreground flex justify-between">
-          <span>Subtotal</span>
-          <span>₹{subtotal.toFixed(2)}</span>
-        </div>
-        <div className="text-sm text-muted-foreground flex justify-between">
-          <span>Delivery fee</span>
-          <span>₹{deliveryFee.toFixed(2)}</span>
-        </div>
-        {promoApplied && (
-          <div className="text-sm text-green-700 flex justify-between">
-            <span>SAVE10 Discount</span>
-            <span>-₹{save10Discount.toFixed(2)}</span>
+        <div className="fixed bottom-16 left-0 right-0 border-t bg-background p-4 space-y-2">
+          <div className="text-sm text-muted-foreground flex justify-between">
+            <span>Subtotal</span>
+            <span>₹{subtotal.toFixed(2)}</span>
           </div>
-        )}
-        <div className="text-sm font-medium flex justify-between">
-          <span>Estimated total</span>
-          <span>₹{finalTotal.toFixed(2)}</span>
+          <div className="text-sm text-muted-foreground flex justify-between">
+            <span>Delivery fee</span>
+            <span>₹{deliveryFee.toFixed(2)}</span>
+          </div>
+          {promoApplied && (
+            <div className="text-sm text-green-700 flex justify-between">
+              <span>SAVE10 Discount</span>
+              <span>-₹{save10Discount.toFixed(2)}</span>
+            </div>
+          )}
+          <div className="text-sm font-medium flex justify-between">
+            <span>Estimated total</span>
+            <span>₹{finalTotal.toFixed(2)}</span>
+          </div>
+          <Button className="w-full" size="lg" onClick={placeOrder} disabled={loading || !!placedOrder}>
+            {loading ? "Placing order..." : `Place Order • ₹${finalTotal.toFixed(2)}`}
+          </Button>
+          <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
+            <MessageCircle className="w-3 h-3" />
+            Estimated total. Final bill may change based on availability and current pricing. Pharmacist will confirm final amount.
+          </p>
         </div>
-        <Button className="w-full" size="lg" onClick={placeOrder} disabled={loading || !!placedOrder}>
-          {loading ? "Placing order..." : `Place Order • ₹${finalTotal.toFixed(2)}`}
-        </Button>
-        <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
-          <MessageCircle className="w-3 h-3" />
-          Estimated total. Final bill may change based on availability and current pricing. Pharmacist will confirm final amount.
-        </p>
-      </div>
       )}
     </div>
   );
