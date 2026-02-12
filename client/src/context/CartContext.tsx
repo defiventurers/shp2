@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { Prescription } from "@shared/schema";
 
 const SELECTED_PRESCRIPTION_STORAGE_KEY = "selectedPrescriptionId";
+<<<<<<< codex/determine-re-import-strategy-for-medicines-e3fnq9
 const REQUESTED_ITEMS_STORAGE_KEY = "requestedItems";
 
 export type RequestedItem = {
@@ -12,6 +13,8 @@ export type RequestedItem = {
   quantity: number;
   customerNotes?: string;
 };
+=======
+>>>>>>> main
 
 export interface CartContextType {
   // CART
@@ -99,6 +102,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setRequestedItems([]);
     localStorage.removeItem(REQUESTED_ITEMS_STORAGE_KEY);
   }
+
+  useEffect(() => {
+    const storedId = localStorage.getItem(SELECTED_PRESCRIPTION_STORAGE_KEY);
+    if (storedId) {
+      setSelectedPrescriptionId(storedId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedPrescriptionId) {
+      localStorage.setItem(SELECTED_PRESCRIPTION_STORAGE_KEY, selectedPrescriptionId);
+    } else {
+      localStorage.removeItem(SELECTED_PRESCRIPTION_STORAGE_KEY);
+    }
+  }, [selectedPrescriptionId]);
 
   async function refreshPrescriptions() {
     if (!user) {

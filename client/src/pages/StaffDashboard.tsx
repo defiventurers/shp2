@@ -79,11 +79,24 @@ export default function StaffDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [discountDraft, setDiscountDraft] = useState<Record<string, string>>({});
-  const [adjustedDraft, setAdjustedDraft] = useState<Record<string, string>>({});
-  const [lineDraft, setLineDraft] = useState<Record<string, { quantity: number; price: string }>>({});
+  const [discountDraft, setDiscountDraft] = useState<Record<string, string>>(
+    {}
+  );
+  const [adjustedDraft, setAdjustedDraft] = useState<Record<string, string>>(
+    {}
+  );
+  const [lineDraft, setLineDraft] = useState<
+    Record<string, { quantity: number; price: string }>
+  >({});
   const [requestedDraft, setRequestedDraft] = useState<
-    Record<string, { status: "pending" | "available" | "not_available"; pharmacistPricePerUnit: string; pharmacistNote: string }>
+    Record<
+      string,
+      {
+        status: "pending" | "available" | "not_available";
+        pharmacistPricePerUnit: string;
+        pharmacistNote: string;
+      }
+    >
   >({});
 
   const prevOrderCount = useRef(0);
@@ -113,14 +126,23 @@ export default function StaffDashboard() {
   }
 
   function seedRequestedDraft(rows: Order[]) {
-    const next: Record<string, { status: "pending" | "available" | "not_available"; pharmacistPricePerUnit: string; pharmacistNote: string }> = {};
+    const next: Record<
+      string,
+      {
+        status: "pending" | "available" | "not_available";
+        pharmacistPricePerUnit: string;
+        pharmacistNote: string;
+      }
+    > = {};
 
     for (const order of rows) {
       for (const item of order.requestedItems || []) {
         next[item.id] = {
-          status: item.status || "pending",
+          status: (item.status as any) || "pending",
           pharmacistPricePerUnit:
-            item.pharmacistPricePerUnit == null ? "" : String(item.pharmacistPricePerUnit),
+            item.pharmacistPricePerUnit == null
+              ? ""
+              : String(item.pharmacistPricePerUnit),
           pharmacistNote: String(item.pharmacistNote || ""),
         };
       }
@@ -161,6 +183,7 @@ export default function StaffDashboard() {
     fetchOrders();
     const interval = setInterval(fetchOrders, 20000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function updateStatus(order: Order, status: string) {
@@ -189,8 +212,12 @@ export default function StaffDashboard() {
   async function applyBilling(order: Order) {
     setUpdatingId(order.id);
     try {
-      const discountAmount = Number(discountDraft[order.id] ?? order.discountAmount ?? 0);
-      const adjustedTotal = Number(adjustedDraft[order.id] ?? order.adjustedTotal ?? order.total ?? 0);
+      const discountAmount = Number(
+        discountDraft[order.id] ?? order.discountAmount ?? 0
+      );
+      const adjustedTotal = Number(
+        adjustedDraft[order.id] ?? order.adjustedTotal ?? order.total ?? 0
+      );
 
       const res = await fetch(`${API_BASE}/api/orders/${order.id}/billing`, {
         method: "PATCH",
@@ -255,22 +282,28 @@ export default function StaffDashboard() {
         pharmacistNote: requestedDraft[item.id]?.pharmacistNote || "",
       }));
 
-      const res = await fetch(`${API_BASE}/api/orders/${order.id}/requested-items`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "x-staff-auth": "true",
-        },
-        body: JSON.stringify({ requestedItems: payload }),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/orders/${order.id}/requested-items`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "x-staff-auth": "true",
+          },
+          body: JSON.stringify({ requestedItems: payload }),
+        }
+      );
 
       if (!res.ok) throw new Error();
 
       await fetchOrders();
       toast({ title: "Requested items updated" });
     } catch {
-      toast({ title: "Failed to update requested items", variant: "destructive" });
+      toast({
+        title: "Failed to update requested items",
+        variant: "destructive",
+      });
     } finally {
       setUpdatingId(null);
     }
@@ -313,7 +346,9 @@ export default function StaffDashboard() {
           <h1 className="font-semibold text-xl flex items-center gap-2">
             <Shield className="w-5 h-5 text-[#0A7A3D]" /> Staff Dashboard
           </h1>
-          <p className="text-xs text-muted-foreground">Live orders • auto-refresh every 20s</p>
+          <p className="text-xs text-muted-foreground">
+            Live orders • auto-refresh every 20s
+          </p>
         </div>
         <div className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs">
           <Bell className="w-3 h-3" /> Live
@@ -335,13 +370,18 @@ export default function StaffDashboard() {
                   {new Date(order.createdAt).toLocaleString("en-IN")}
                 </p>
                 <p className="text-sm mt-1">
-                  {order.customerName} • {order.deliveryType === "delivery" ? "Delivery" : "Pickup"}
+                  {order.customerName} •{" "}
+                  {order.deliveryType === "delivery" ? "Delivery" : "Pickup"}
                 </p>
               </div>
 
               <div className="text-right">
-                <p className="text-sm font-semibold">₹{Number(order.adjustedTotal || order.total || 0).toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground capitalize">{order.status}</p>
+                <p className="text-sm font-semibold">
+                  ₹{Number(order.adjustedTotal || order.total || 0).toFixed(2)}
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {order.status}
+                </p>
               </div>
 
               <Button
@@ -349,7 +389,11 @@ export default function StaffDashboard() {
                 variant="ghost"
                 onClick={() => setExpandedId(isOpen ? null : order.id)}
               >
-                {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {isOpen ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
               </Button>
             </div>
 
@@ -371,7 +415,9 @@ export default function StaffDashboard() {
                     </a>
                   </div>
                   {order.deliveryAddress && (
-                    <p className="text-xs text-muted-foreground">📍 {order.deliveryAddress}</p>
+                    <p className="text-xs text-muted-foreground">
+                      📍 {order.deliveryAddress}
+                    </p>
                   )}
                 </div>
 
@@ -380,12 +426,19 @@ export default function StaffDashboard() {
                   {order.prescription ? (
                     <>
                       <p className="text-sm font-medium">
-                        {order.prescription.name || `Prescription ${order.prescription.id.slice(0, 8)}`}
+                        {order.prescription.name ||
+                          `Prescription ${order.prescription.id.slice(0, 8)}`}
                       </p>
-                      {order.prescription.imageUrls && order.prescription.imageUrls.length > 0 ? (
+                      {order.prescription.imageUrls &&
+                      order.prescription.imageUrls.length > 0 ? (
                         <div className="flex gap-2 overflow-x-auto">
                           {order.prescription.imageUrls.map((url, idx) => (
-                            <a key={`${url}-${idx}`} href={url} target="_blank" rel="noreferrer">
+                            <a
+                              key={`${url}-${idx}`}
+                              href={url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
                               <img
                                 src={url}
                                 alt={`Prescription page ${idx + 1}`}
@@ -395,30 +448,42 @@ export default function StaffDashboard() {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground">No prescription images attached.</p>
+                        <p className="text-xs text-muted-foreground">
+                          No prescription images attached.
+                        </p>
                       )}
                     </>
                   ) : (
-                    <p className="text-xs text-muted-foreground">No prescription attached to this order.</p>
+                    <p className="text-xs text-muted-foreground">
+                      No prescription attached to this order.
+                    </p>
                   )}
                 </div>
 
                 {!!order.requestedItems?.length && (
                   <div className="space-y-2 border rounded p-2">
-                    <p className="text-xs text-muted-foreground">Requested Items</p>
+                    <p className="text-xs text-muted-foreground">
+                      Requested Items
+                    </p>
                     {order.requestedItems.map((item) => {
                       const draft = requestedDraft[item.id] || {
                         status: item.status || "pending",
                         pharmacistPricePerUnit:
-                          item.pharmacistPricePerUnit == null ? "" : String(item.pharmacistPricePerUnit),
+                          item.pharmacistPricePerUnit == null
+                            ? ""
+                            : String(item.pharmacistPricePerUnit),
                         pharmacistNote: item.pharmacistNote || "",
                       };
 
                       return (
                         <div key={item.id} className="border rounded p-2 space-y-2">
-                          <p className="text-sm font-medium">{item.name} × {item.quantity}</p>
+                          <p className="text-sm font-medium">
+                            {item.name} × {item.quantity}
+                          </p>
                           {item.customerNotes ? (
-                            <p className="text-xs text-muted-foreground">Customer note: {item.customerNotes}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Customer note: {item.customerNotes}
+                            </p>
                           ) : null}
 
                           <select
@@ -429,7 +494,10 @@ export default function StaffDashboard() {
                                 ...prev,
                                 [item.id]: {
                                   ...draft,
-                                  status: e.target.value as "pending" | "available" | "not_available",
+                                  status: e.target.value as
+                                    | "pending"
+                                    | "available"
+                                    | "not_available",
                                 },
                               }))
                             }
@@ -477,7 +545,11 @@ export default function StaffDashboard() {
                       );
                     })}
 
-                    <Button size="sm" disabled={updatingId === order.id} onClick={() => saveRequestedItems(order)}>
+                    <Button
+                      size="sm"
+                      disabled={updatingId === order.id}
+                      onClick={() => saveRequestedItems(order)}
+                    >
                       Save Requested Items
                     </Button>
                   </div>
@@ -485,10 +557,17 @@ export default function StaffDashboard() {
 
                 {!!order.items.length && (
                   <div className="space-y-2 border rounded p-2">
-                    <p className="text-xs text-muted-foreground">Edit medicines (price + qty)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Edit medicines (price + qty)
+                    </p>
                     {order.items.map((item) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-2 items-center text-sm">
-                        <span className="col-span-6 truncate">{item.medicineName}</span>
+                      <div
+                        key={item.id}
+                        className="grid grid-cols-12 gap-2 items-center text-sm"
+                      >
+                        <span className="col-span-6 truncate">
+                          {item.medicineName}
+                        </span>
                         <input
                           type="number"
                           min="1"
@@ -498,8 +577,12 @@ export default function StaffDashboard() {
                             setLineDraft((prev) => ({
                               ...prev,
                               [item.id]: {
-                                quantity: Math.max(1, Number(e.target.value || 1)),
-                                price: prev[item.id]?.price ?? String(item.price),
+                                quantity: Math.max(
+                                  1,
+                                  Number(e.target.value || 1)
+                                ),
+                                price:
+                                  prev[item.id]?.price ?? String(item.price),
                               },
                             }))
                           }
@@ -514,7 +597,9 @@ export default function StaffDashboard() {
                             setLineDraft((prev) => ({
                               ...prev,
                               [item.id]: {
-                                quantity: prev[item.id]?.quantity ?? Number(item.quantity),
+                                quantity:
+                                  prev[item.id]?.quantity ??
+                                  Number(item.quantity),
                                 price: e.target.value,
                               },
                             }))
@@ -522,7 +607,11 @@ export default function StaffDashboard() {
                         />
                       </div>
                     ))}
-                    <Button size="sm" disabled={updatingId === order.id} onClick={() => saveLineItems(order)}>
+                    <Button
+                      size="sm"
+                      disabled={updatingId === order.id}
+                      onClick={() => saveLineItems(order)}
+                    >
                       Save Line Items
                     </Button>
                   </div>
@@ -542,14 +631,21 @@ export default function StaffDashboard() {
                 </select>
 
                 <div className="space-y-2 border rounded p-2">
-                  <p className="text-xs text-muted-foreground">Billing adjustment</p>
+                  <p className="text-xs text-muted-foreground">
+                    Billing adjustment
+                  </p>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
                     placeholder="Discount amount"
                     value={discountDraft[order.id] ?? order.discountAmount ?? "0"}
-                    onChange={(e) => setDiscountDraft((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                    onChange={(e) =>
+                      setDiscountDraft((prev) => ({
+                        ...prev,
+                        [order.id]: e.target.value,
+                      }))
+                    }
                     className="w-full border rounded p-2 text-sm"
                   />
                   <input
@@ -557,29 +653,55 @@ export default function StaffDashboard() {
                     min="0"
                     step="0.01"
                     placeholder="Final bill price"
-                    value={adjustedDraft[order.id] ?? order.adjustedTotal ?? order.total ?? "0"}
-                    onChange={(e) => setAdjustedDraft((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                    value={
+                      adjustedDraft[order.id] ??
+                      order.adjustedTotal ??
+                      order.total ??
+                      "0"
+                    }
+                    onChange={(e) =>
+                      setAdjustedDraft((prev) => ({
+                        ...prev,
+                        [order.id]: e.target.value,
+                      }))
+                    }
                     className="w-full border rounded p-2 text-sm"
                   />
-                  <Button size="sm" disabled={updatingId === order.id} onClick={() => applyBilling(order)}>
+                  <Button
+                    size="sm"
+                    disabled={updatingId === order.id}
+                    onClick={() => applyBilling(order)}
+                  >
                     Save Billing
                   </Button>
-                  <p className="text-sm">Current Final Total: ₹{Number(order.adjustedTotal || order.total || 0).toFixed(2)}</p>
+                  <p className="text-sm">
+                    Current Final Total: ₹
+                    {Number(order.adjustedTotal || order.total || 0).toFixed(2)}
+                  </p>
                 </div>
 
                 <div className="space-y-2 border rounded p-2">
-                  <p className="text-xs text-muted-foreground">Upload bill before dispatch</p>
+                  <p className="text-xs text-muted-foreground">
+                    Upload bill before dispatch
+                  </p>
                   <label className="inline-flex items-center gap-2 border rounded px-3 py-2 text-sm cursor-pointer">
                     <Upload className="w-3 h-3" /> Upload bill image
                     <input
                       type="file"
                       className="hidden"
                       accept="image/*"
-                      onChange={(e) => uploadBillImage(order, e.target.files?.[0] || null)}
+                      onChange={(e) =>
+                        uploadBillImage(order, e.target.files?.[0] || null)
+                      }
                     />
                   </label>
                   {order.billImageUrl && (
-                    <a className="text-xs text-blue-600 underline" href={order.billImageUrl} target="_blank" rel="noreferrer">
+                    <a
+                      className="text-xs text-blue-600 underline"
+                      href={order.billImageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       View uploaded bill image
                     </a>
                   )}
