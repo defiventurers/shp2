@@ -231,12 +231,30 @@ export function registerOrderRoutes(app: Express) {
 
       const data = isStaff
         ? await db.query.orders.findMany({
-            with: { items: true },
+            with: {
+              items: true,
+              prescription: {
+                columns: {
+                  id: true,
+                  name: true,
+                  imageUrls: true,
+                },
+              },
+            },
             orderBy: (o, { desc }) => [desc(o.createdAt)],
           })
         : await db.query.orders.findMany({
             where: eq(orders.userId, req.user!.id),
-            with: { items: true },
+            with: {
+              items: true,
+              prescription: {
+                columns: {
+                  id: true,
+                  name: true,
+                  imageUrls: true,
+                },
+              },
+            },
             orderBy: (o, { desc }) => [desc(o.createdAt)],
           });
 

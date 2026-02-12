@@ -3,6 +3,8 @@ import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
 import type { Prescription } from "@shared/schema";
 
+const SELECTED_PRESCRIPTION_STORAGE_KEY = "selectedPrescriptionId";
+
 export interface CartContextType {
   // CART
   items: {
@@ -33,6 +35,7 @@ export interface CartContextType {
   // PRESCRIPTIONS
   prescriptions: Prescription[];
   selectedPrescriptionId: string | null;
+  selectedPrescription: Prescription | null;
   setSelectedPrescriptionId: (id: string | null) => void;
   refreshPrescriptions: () => Promise<void>;
 }
@@ -57,10 +60,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
 
+  useEffect(() => {
+    const storedId = localStorage.getItem(SELECTED_PRESCRIPTION_STORAGE_KEY);
+    if (storedId) {
+      setSelectedPrescriptionId(storedId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedPrescriptionId) {
+      localStorage.setItem(SELECTED_PRESCRIPTION_STORAGE_KEY, selectedPrescriptionId);
+    } else {
+      localStorage.removeItem(SELECTED_PRESCRIPTION_STORAGE_KEY);
+    }
+  }, [selectedPrescriptionId]);
+
   async function refreshPrescriptions() {
     if (!user) {
       setPrescriptions([]);
       setSelectedPrescriptionId(null);
+      localStorage.removeItem(SELECTED_PRESCRIPTION_STORAGE_KEY);
       return;
     }
 
@@ -75,7 +94,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const data: Prescription[] = await res.json();
       setPrescriptions(data);
 
-      if (!selectedPrescriptionId && data.length > 0) {
+      if (selectedPrescriptionId) {
+        const exists = data.some((p) => p.id === selectedPrescriptionId);
+        if (!exists) {
+          setSelectedPrescriptionId(data[0]?.id || null);
+        }
+        return;
+      }
+
+      if (data.length > 0) {
         setSelectedPrescriptionId(data[0].id);
       }
     } catch {
@@ -87,6 +114,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshPrescriptions();
   }, [user?.id]);
+
+  const selectedPrescription =
+    prescriptions.find((p) => p.id === selectedPrescriptionId) || null;
 
   return (
     <CartContext.Provider
@@ -107,6 +137,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         // 🩺 PRESCRIPTIONS
         prescriptions,
         selectedPrescriptionId,
+        selectedPrescription,
         setSelectedPrescriptionId,
         refreshPrescriptions,
       }}
