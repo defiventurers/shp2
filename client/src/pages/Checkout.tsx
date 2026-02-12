@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
   AlertTriangle,
@@ -99,6 +99,13 @@ export default function Checkout() {
     setPromoApplied(true);
     toast({ title: "SAVE10 applied", description: `You save ₹${save10Discount || "..."}` });
   }
+
+
+  useEffect(() => {
+    if (placedOrder && items.length > 0) {
+      setPlacedOrder(null);
+    }
+  }, [items, placedOrder]);
 
   async function placeOrder() {
     if (!name.trim() || !/^[6-9]\d{9}$/.test(phone)) {
@@ -336,6 +343,7 @@ export default function Checkout() {
         )}
       </div>
 
+      {!placedOrder && (
       <div className="fixed bottom-16 left-0 right-0 border-t bg-background p-4 space-y-2">
         <div className="text-sm text-muted-foreground flex justify-between">
           <span>Subtotal</span>
@@ -363,6 +371,7 @@ export default function Checkout() {
           Estimated total. Final bill may change based on availability and current pricing. Pharmacist will confirm final amount.
         </p>
       </div>
+      )}
     </div>
   );
 }
