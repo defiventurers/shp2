@@ -24,6 +24,12 @@ type OrderItem = {
   price: string;
 };
 
+type OrderPrescription = {
+  id: string;
+  name?: string | null;
+  imageUrls?: string[] | null;
+};
+
 type Order = {
   id: string;
   orderNumber: string;
@@ -39,6 +45,7 @@ type Order = {
   customerEmail?: string | null;
   createdAt: string;
   items: OrderItem[];
+  prescription?: OrderPrescription | null;
 };
 
 const STATUS_FLOW = ["pending", "confirmed", "processing", "ready", "delivered"];
@@ -280,6 +287,34 @@ export default function StaffDashboard() {
                   </div>
                   {order.deliveryAddress && (
                     <p className="text-xs text-muted-foreground">📍 {order.deliveryAddress}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2 border rounded p-2">
+                  <p className="text-xs text-muted-foreground">Prescription</p>
+                  {order.prescription ? (
+                    <>
+                      <p className="text-sm font-medium">
+                        {order.prescription.name || `Prescription ${order.prescription.id.slice(0, 8)}`}
+                      </p>
+                      {order.prescription.imageUrls && order.prescription.imageUrls.length > 0 ? (
+                        <div className="flex gap-2 overflow-x-auto">
+                          {order.prescription.imageUrls.map((url, idx) => (
+                            <a key={`${url}-${idx}`} href={url} target="_blank" rel="noreferrer">
+                              <img
+                                src={url}
+                                alt={`Prescription page ${idx + 1}`}
+                                className="h-16 w-16 rounded border object-cover"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No prescription images attached.</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No prescription attached to this order.</p>
                   )}
                 </div>
 

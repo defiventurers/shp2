@@ -11,8 +11,12 @@ type Order = {
   id: string;
   orderNumber: string;
   status: string;
+  subtotal?: string;
+  deliveryFee?: string;
   total: string;
   adjustedTotal?: string;
+  discountAmount?: string;
+  promoCode?: string | null;
   createdAt: string;
   deliveryAddress?: string | null;
   items: {
@@ -55,20 +59,38 @@ export default function Profile() {
   }, [user?.name, user?.phone]);
 
   useEffect(() => {
-    if (!user) {
-      setOrders([]);
-      setLoading(false);
-      return;
+    let active = true;
+
+    async function fetchOrders() {
+      if (!user) {
+        if (!active) return;
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const r = await fetch(`${API_BASE}/api/orders`, { credentials: "include" });
+        if (!r.ok) {
+          if (active) setOrders([]);
+          return;
+        }
+        const data = await r.json();
+        if (active) setOrders(data?.orders || data || []);
+      } catch {
+        if (active) setOrders([]);
+      } finally {
+        if (active) setLoading(false);
+      }
     }
 
-    fetch(`${API_BASE}/api/orders`, { credentials: "include" })
-      .then(async (r) => {
-        if (!r.ok) return [];
-        return r.json();
-      })
-      .then((data) => setOrders(data?.orders || data || []))
-      .catch(() => setOrders([]))
-      .finally(() => setLoading(false));
+    setLoading(true);
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 20000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [user?.id]);
 
   async function parseError(res: Response, fallback: string) {
@@ -438,7 +460,27 @@ export default function Profile() {
               ))}
             </ul>
 
-            <div className="font-semibold">₹{Number(order.adjustedTotal || order.total).toFixed(0)}</div>
+            <div className="text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Estimated total</span>
+                <span>₹{Number(order.total || 0).toFixed(2)}</span>
+              </div>
+              {(Number(order.discountAmount || 0) > 0 || !!order.promoCode) && (
+                <div className="flex justify-between text-green-700">
+                  <span>{order.promoCode ? `${order.promoCode} savings` : "Discount"}</span>
+                  <span>-₹{Number(order.discountAmount || 0).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold">
+                <span>Final total</span>
+                <span>₹{Number(order.adjustedTotal || order.total || 0).toFixed(2)}</span>
+              </div>
+              {order.adjustedTotal && Number(order.adjustedTotal) !== Number(order.total) && (
+                <p className="text-xs text-muted-foreground">
+                  Updated by pharmacist based on availability/pricing.
+                </p>
+              )}
+            </div>
           </Card>
         ))}
       </div>

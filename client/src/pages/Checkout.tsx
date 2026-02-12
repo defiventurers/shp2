@@ -19,6 +19,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 const TAX_RATE = 0.12;
 const SAVE10_CODE = "SAVE10";
+const PHARMACIST_WHATSAPP = "919686036540";
 
 export default function Checkout() {
   const { toast } = useToast();
@@ -39,6 +40,15 @@ export default function Checkout() {
   const [promoInput, setPromoInput] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [placedOrder, setPlacedOrder] = useState<{
+    orderNumber: string;
+    status?: string;
+    adjustedTotal?: string;
+    itemSummary: string;
+    estimatedTotal: number;
+    deliveryOptionLabel: string;
+    addressLabel: string;
+  } | null>(null);
 
   const requiresPrescription = useMemo(
     () => items.some((i) => i.medicine.requiresPrescription),
@@ -59,6 +69,24 @@ export default function Checkout() {
   }, [promoApplied, totalInclusive]);
 
   const finalTotal = Math.max(0, Number((totalInclusive - save10Discount).toFixed(2)));
+
+  const whatsappUrl = useMemo(() => {
+    if (!placedOrder) return "";
+    const message = [
+      `Hello Sacred Heart Pharmacy,`,
+      `I have placed an order and wanted to inform the pharmacist.`,
+      `Order ID: ${placedOrder.orderNumber}`,
+      `Customer: ${name.trim()}`,
+      `Phone: ${phone.trim()}`,
+      `Delivery Option: ${placedOrder.deliveryOptionLabel}`,
+      `Address: ${placedOrder.addressLabel}`,
+      `Items:\n${placedOrder.itemSummary}`,
+      `Estimated Total: ₹${placedOrder.estimatedTotal.toFixed(2)}`,
+      `Prescription attached in staff portal: ${selectedPrescription ? selectedPrescription.name || selectedPrescription.id : "Not attached"}`,
+    ].join("\n");
+
+    return `https://wa.me/${PHARMACIST_WHATSAPP}?text=${encodeURIComponent(message)}`;
+  }, [placedOrder, name, phone, selectedPrescription]);
 
   function applyPromo() {
     const normalized = promoInput.trim().toUpperCase();
@@ -118,6 +146,18 @@ export default function Checkout() {
         customerPhone: phone.trim(),
         customerEmail: email?.trim() || null,
         prescriptionId: selectedPrescriptionId || null,
+      });
+
+      setPlacedOrder({
+        orderNumber: data.orderNumber,
+        status: data.status,
+        adjustedTotal: data.adjustedTotal,
+        itemSummary: items
+          .map((item) => `- ${item.medicine.name} x${item.quantity}`)
+          .join("\n"),
+        estimatedTotal: finalTotal,
+        deliveryOptionLabel: deliveryType,
+        addressLabel: deliveryType === "delivery" ? deliveryAddress.trim() : "Store pickup",
       });
 
       toast({
@@ -237,30 +277,73 @@ export default function Checkout() {
         </Card>
 
         {requiresPrescription && (
-          <Card className="p-4 space-y-2">
+          <Card className="p-4 space-y-3">
             {selectedPrescription ? (
-              <div className="flex gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/prescription">Change Prescription</Link>
-                </Button>
-              </div>
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Selected Prescription: {selectedPrescription.name || "Prescription"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(selectedPrescription.imageUrls || []).length} page(s)
+                      </p>
+                    </div>
+                  </div>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/prescription">Change</Link>
+                  </Button>
+                </div>
+                {!!selectedPrescription.imageUrls?.length && (
+                  <div className="flex gap-2 overflow-x-auto">
+                    {selectedPrescription.imageUrls.slice(0, 3).map((url, idx) => (
+                      <img
+                        key={`${url}-${idx}`}
+                        src={url}
+                        className="h-16 w-16 rounded border object-cover"
+                        alt={`Prescription page ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="flex gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Prescription required for this order</p>
+                    <p className="text-xs text-muted-foreground">Please upload/select before placing order.</p>
+                  </div>
+                </div>
                 <Button asChild size="sm" variant="outline">
-                  <Link href="/prescription">Upload Prescription</Link>
+                  <Link href="/prescription">Select</Link>
                 </Button>
               </div>
             )}
+          </Card>
+        )}
+
+        {placedOrder && (
+          <Card className="p-4 space-y-2 border-green-200 bg-green-50">
+            <p className="text-sm font-medium text-green-700">Order #{placedOrder.orderNumber} placed successfully.</p>
+            <Button asChild className="w-full">
+              <a href={whatsappUrl} target="_blank" rel="noreferrer">
+                Inform pharmacist on WhatsApp
+              </a>
+            </Button>
           </Card>
         )}
       </div>
 
       <div className="fixed bottom-16 left-0 right-0 border-t bg-background p-4 space-y-2">
         <div className="text-sm text-muted-foreground flex justify-between">
-          <span>Subtotal + Delivery</span>
-          <span>₹{totalInclusive.toFixed(2)}</span>
+          <span>Subtotal</span>
+          <span>₹{subtotal.toFixed(2)}</span>
+        </div>
+        <div className="text-sm text-muted-foreground flex justify-between">
+          <span>Delivery fee</span>
+          <span>₹{deliveryFee.toFixed(2)}</span>
         </div>
         {promoApplied && (
           <div className="text-sm text-green-700 flex justify-between">
@@ -268,12 +351,16 @@ export default function Checkout() {
             <span>-₹{save10Discount.toFixed(2)}</span>
           </div>
         )}
-        <Button className="w-full" size="lg" onClick={placeOrder} disabled={loading}>
+        <div className="text-sm font-medium flex justify-between">
+          <span>Estimated total</span>
+          <span>₹{finalTotal.toFixed(2)}</span>
+        </div>
+        <Button className="w-full" size="lg" onClick={placeOrder} disabled={loading || !!placedOrder}>
           {loading ? "Placing order..." : `Place Order • ₹${finalTotal.toFixed(2)}`}
         </Button>
         <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
           <MessageCircle className="w-3 h-3" />
-          After placing your order, we will quickly confirm availability and delivery details.
+          Estimated total. Final bill may change based on availability and current pricing. Pharmacist will confirm final amount.
         </p>
       </div>
     </div>
