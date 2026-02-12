@@ -72,7 +72,6 @@ export default function Checkout() {
 
   const finalTotal = Math.max(0, Number((totalInclusive - save10Discount).toFixed(2)));
 
-<<<<<<< codex/determine-re-import-strategy-for-medicines-e3fnq9
   const checkoutHasAnyItems = items.length > 0 || requestedItems.length > 0;
 
   const whatsappUrl = useMemo(() => {
@@ -86,10 +85,6 @@ export default function Checkout() {
       .map((item) => `- ${item.name} x${item.quantity} (price to be confirmed)`)
       .join("\n");
 
-=======
-  const whatsappUrl = useMemo(() => {
-    if (!placedOrder) return "";
->>>>>>> main
     const message = [
       `Hello Sacred Heart Pharmacy,`,
       `I have placed an order and wanted to inform the pharmacist.`,
@@ -98,22 +93,14 @@ export default function Checkout() {
       `Phone: ${phone.trim()}`,
       `Delivery Option: ${placedOrder.deliveryOptionLabel}`,
       `Address: ${placedOrder.addressLabel}`,
-<<<<<<< codex/determine-re-import-strategy-for-medicines-e3fnq9
       inventorySummary ? `Inventory Items:\n${inventorySummary}` : "Inventory Items: None",
       requestSummary ? `Requested Items:\n${requestSummary}` : "Requested Items: None",
-=======
-      `Items:\n${placedOrder.itemSummary}`,
->>>>>>> main
       `Estimated Total: ₹${placedOrder.estimatedTotal.toFixed(2)}`,
       `Prescription attached in staff portal: ${selectedPrescription ? selectedPrescription.name || selectedPrescription.id : "Not attached"}`,
     ].join("\n");
 
     return `https://wa.me/${PHARMACIST_WHATSAPP}?text=${encodeURIComponent(message)}`;
-<<<<<<< codex/determine-re-import-strategy-for-medicines-e3fnq9
   }, [placedOrder, name, phone, selectedPrescription, items, requestedItems]);
-=======
-  }, [placedOrder, name, phone, selectedPrescription]);
->>>>>>> main
 
   function applyPromo() {
     const normalized = promoInput.trim().toUpperCase();
@@ -127,20 +114,11 @@ export default function Checkout() {
     toast({ title: "SAVE10 applied", description: `You save ₹${save10Discount || "..."}` });
   }
 
-<<<<<<< codex/determine-re-import-strategy-for-medicines-e3fnq9
   useEffect(() => {
     if (placedOrder && (items.length > 0 || requestedItems.length > 0)) {
       setPlacedOrder(null);
     }
   }, [items, requestedItems, placedOrder]);
-=======
-
-  useEffect(() => {
-    if (placedOrder && items.length > 0) {
-      setPlacedOrder(null);
-    }
-  }, [items, placedOrder]);
->>>>>>> main
 
   async function placeOrder() {
     if (!checkoutHasAnyItems) {
@@ -200,16 +178,10 @@ export default function Checkout() {
         orderNumber: data.orderNumber,
         status: data.status,
         adjustedTotal: data.adjustedTotal,
-<<<<<<< codex/determine-re-import-strategy-for-medicines-e3fnq9
         itemSummary: [
           ...items.map((item) => `- ${item.medicine.name} x${item.quantity}`),
           ...requestedItems.map((item) => `- ${item.name} x${item.quantity} (price to be confirmed)`),
         ].join("\n"),
-=======
-        itemSummary: items
-          .map((item) => `- ${item.medicine.name} x${item.quantity}`)
-          .join("\n"),
->>>>>>> main
         estimatedTotal: finalTotal,
         deliveryOptionLabel: deliveryType,
         addressLabel: deliveryType === "delivery" ? deliveryAddress.trim() : "Store pickup",
@@ -404,7 +376,6 @@ export default function Checkout() {
             )}
           </Card>
         )}
-<<<<<<< codex/determine-re-import-strategy-for-medicines-e3fnq9
 
         {placedOrder && (
           <Card className="p-4 space-y-2 border-green-200 bg-green-50">
@@ -446,49 +417,6 @@ export default function Checkout() {
             Estimated total. Final bill may change based on availability and current pricing. Pharmacist will confirm final amount.
           </p>
         </div>
-=======
-
-        {placedOrder && (
-          <Card className="p-4 space-y-2 border-green-200 bg-green-50">
-            <p className="text-sm font-medium text-green-700">Order #{placedOrder.orderNumber} placed successfully.</p>
-            <Button asChild className="w-full">
-              <a href={whatsappUrl} target="_blank" rel="noreferrer">
-                Inform pharmacist on WhatsApp
-              </a>
-            </Button>
-          </Card>
-        )}
-      </div>
-
-      {!placedOrder && (
-      <div className="fixed bottom-16 left-0 right-0 border-t bg-background p-4 space-y-2">
-        <div className="text-sm text-muted-foreground flex justify-between">
-          <span>Subtotal</span>
-          <span>₹{subtotal.toFixed(2)}</span>
-        </div>
-        <div className="text-sm text-muted-foreground flex justify-between">
-          <span>Delivery fee</span>
-          <span>₹{deliveryFee.toFixed(2)}</span>
-        </div>
-        {promoApplied && (
-          <div className="text-sm text-green-700 flex justify-between">
-            <span>SAVE10 Discount</span>
-            <span>-₹{save10Discount.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="text-sm font-medium flex justify-between">
-          <span>Estimated total</span>
-          <span>₹{finalTotal.toFixed(2)}</span>
-        </div>
-        <Button className="w-full" size="lg" onClick={placeOrder} disabled={loading || !!placedOrder}>
-          {loading ? "Placing order..." : `Place Order • ₹${finalTotal.toFixed(2)}`}
-        </Button>
-        <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
-          <MessageCircle className="w-3 h-3" />
-          Estimated total. Final bill may change based on availability and current pricing. Pharmacist will confirm final amount.
-        </p>
-      </div>
->>>>>>> main
       )}
     </div>
   );
