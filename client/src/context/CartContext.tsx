@@ -3,6 +3,16 @@ import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
 import type { Prescription } from "@shared/schema";
 
+const SELECTED_PRESCRIPTION_STORAGE_KEY = "selectedPrescriptionId";
+const REQUESTED_ITEMS_STORAGE_KEY = "requestedItems";
+
+export type RequestedItem = {
+  id: string;
+  name: string;
+  quantity: number;
+  customerNotes?: string;
+};
+
 export interface CartContextType {
   // CART
   items: {
@@ -30,9 +40,15 @@ export interface CartContextType {
   requiresPrescription: boolean;
   isLoaded: boolean;
 
+  // REQUESTED ITEMS
+  requestedItems: RequestedItem[];
+  setRequestedItems: (items: RequestedItem[]) => void;
+  clearRequestedItems: () => void;
+
   // PRESCRIPTIONS
   prescriptions: Prescription[];
   selectedPrescriptionId: string | null;
+  selectedPrescription: Prescription | null;
   setSelectedPrescriptionId: (id: string | null) => void;
   refreshPrescriptions: () => Promise<void>;
 }
@@ -40,27 +56,65 @@ export interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  /**
-   * 🛒 CART
-   */
   const cart = useCart();
-
-  /**
-   * 🔐 AUTH
-   */
   const { user } = useAuth();
 
-  /**
-   * 🩺 PRESCRIPTIONS
-   */
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [selectedPrescriptionId, setSelectedPrescriptionId] =
     useState<string | null>(null);
+  const [requestedItems, setRequestedItems] = useState<RequestedItem[]>([]);
+
+  useEffect(() => {
+    const storedId = localStorage.getItem(SELECTED_PRESCRIPTION_STORAGE_KEY);
+    if (storedId) {
+      setSelectedPrescriptionId(storedId);
+    }
+
+    const storedRequested = localStorage.getItem(REQUESTED_ITEMS_STORAGE_KEY);
+    if (storedRequested) {
+      try {
+        const parsed = JSON.parse(storedRequested);
+        if (Array.isArray(parsed)) {
+          const sanitized = parsed
+            .filter((item) => item && typeof item === "object")
+            .map((item) => ({
+              id: String((item as RequestedItem).id || ""),
+              name: String((item as RequestedItem).name || "").trim(),
+              quantity: Math.max(1, Number((item as RequestedItem).quantity) || 1),
+              customerNotes: ((item as RequestedItem).customerNotes || "").trim() || undefined,
+            }))
+            .filter((item) => item.id && item.name);
+
+          setRequestedItems(sanitized);
+        }
+      } catch {
+        setRequestedItems([]);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedPrescriptionId) {
+      localStorage.setItem(SELECTED_PRESCRIPTION_STORAGE_KEY, selectedPrescriptionId);
+    } else {
+      localStorage.removeItem(SELECTED_PRESCRIPTION_STORAGE_KEY);
+    }
+  }, [selectedPrescriptionId]);
+
+  useEffect(() => {
+    localStorage.setItem(REQUESTED_ITEMS_STORAGE_KEY, JSON.stringify(requestedItems));
+  }, [requestedItems]);
+
+  function clearRequestedItems() {
+    setRequestedItems([]);
+    localStorage.removeItem(REQUESTED_ITEMS_STORAGE_KEY);
+  }
 
   async function refreshPrescriptions() {
     if (!user) {
       setPrescriptions([]);
       setSelectedPrescriptionId(null);
+      localStorage.removeItem(SELECTED_PRESCRIPTION_STORAGE_KEY);
       return;
     }
 
@@ -75,7 +129,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const data: Prescription[] = await res.json();
       setPrescriptions(data);
 
-      if (!selectedPrescriptionId && data.length > 0) {
+      if (selectedPrescriptionId) {
+        const exists = data.some((p) => p.id === selectedPrescriptionId);
+        if (!exists) {
+          setSelectedPrescriptionId(data[0]?.id || null);
+        }
+        return;
+      }
+
+      if (data.length > 0) {
         setSelectedPrescriptionId(data[0].id);
       }
     } catch {
@@ -83,15 +145,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // 🔑 FIX: refetch prescriptions when auth resolves
   useEffect(() => {
     refreshPrescriptions();
   }, [user?.id]);
 
+  const selectedPrescription =
+    prescriptions.find((p) => p.id === selectedPrescriptionId) || null;
+
   return (
     <CartContext.Provider
       value={{
-        // 🛒 CART
         items: cart.items,
         addItem: cart.addItem,
         removeItem: cart.removeItem,
@@ -104,9 +167,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         requiresPrescription: cart.requiresPrescription,
         isLoaded: cart.isLoaded,
 
-        // 🩺 PRESCRIPTIONS
+        requestedItems,
+        setRequestedItems,
+        clearRequestedItems,
+
         prescriptions,
         selectedPrescriptionId,
+        selectedPrescription,
         setSelectedPrescriptionId,
         refreshPrescriptions,
       }}

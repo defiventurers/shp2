@@ -158,6 +158,10 @@ export const ordersRelations = relations(orders, ({ many, one }) => ({
     fields: [orders.userId],
     references: [users.id],
   }),
+  prescription: one(prescriptions, {
+    fields: [orders.prescriptionId],
+    references: [prescriptions.id],
+  }),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
