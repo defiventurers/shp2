@@ -8,6 +8,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { OnboardingModal } from "@/components/OnboardingModal"; // ✅ NEW
 import { PostLoginPrescriptionPrompt } from "@/components/PostLoginPrescriptionPrompt";
+import { InstallAppPrompt } from "@/components/InstallAppPrompt";
 
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
@@ -63,6 +64,7 @@ export default function App() {
             {/* ✅ SHOW ONLY FOR CUSTOMER SIDE */}
             {!isStaffRoute && <OnboardingModal />}
             {!isStaffRoute && <PostLoginPrescriptionPrompt />}
+            {!isStaffRoute && <InstallAppPrompt />}
 
             <main className="pb-safe">
               <Router />
